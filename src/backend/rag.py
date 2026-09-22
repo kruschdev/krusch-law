@@ -21,6 +21,31 @@ UPL_DISCLAIMER = (
 )
 
 
+def get_embeddings_batch(queries: List[str]) -> List[List[float]]:
+    """Generate vector embeddings in batch via Ollama API."""
+    if not queries:
+        return []
+    clean_queries = [q.strip() if q and q.strip() else " " for q in queries]
+    payload = {
+        "model": settings.OLLAMA_EMBED_MODEL,
+        "input": clean_queries
+    }
+    try:
+        timeout = max(settings.EMBED_TIMEOUT, settings.EMBED_TIMEOUT * (len(clean_queries) / 8.0))
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(f"{settings.OLLAMA_EMBED_HOST}/api/embed", json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                embeddings = data.get("embeddings", [])
+                if len(embeddings) == len(clean_queries):
+                    return embeddings
+            # Fallback to sequential calls
+            return [get_embedding(q) for q in clean_queries]
+    except Exception as e:
+        logger.warning(f"Batch embedding request failed ({e}), falling back to sequential embedding.")
+        return [get_embedding(q) for q in clean_queries]
+
+
 def get_embedding(query: str) -> List[float]:
     """Generate a vector embedding via Ollama API."""
     if not query or not query.strip():
@@ -66,13 +91,19 @@ def get_embedding(query: str) -> List[float]:
 
 
 def retrieve_laws(
-    query_vector: List[float],
+    query_vector: Optional[List[float]] = None,
+    text_query: Optional[str] = None,
     limit: Optional[int] = None,
     state_filter: Optional[str] = None,
     city_filter: Optional[str] = None,
+    topic_filter: Optional[str] = None,
     db_session: Optional[Session] = None
 ) -> List[Dict]:
-    """Retrieve laws matching the query embedding using cosine similarity."""
+    """
+    Retrieve laws using hybrid search: combining pgvector cosine similarity
+    with full-text lexical ranking (tsvector on PostgreSQL, token match on SQLite),
+    followed by parent-section deduplication.
+    """
     limit = limit or settings.DEFAULT_RETRIEVAL_LIMIT
     close_session = False
     db = db_session
@@ -81,75 +112,129 @@ def retrieve_laws(
         close_session = True
 
     try:
-        vec_str = '[' + ','.join(str(v) for v in query_vector) + ']'
-        
-        query_conditions = ["embedding IS NOT NULL"]
-        params = {"vec": vec_str, "limit": limit}
-        
+        # If query vector is missing but text_query exists, compute vector
+        if query_vector is None and text_query:
+            query_vector = get_embedding(text_query)
+
+        query_conditions = ["is_substantive = 1" if db.bind.dialect.name == "sqlite" else "is_substantive = true"]
+        params: Dict = {"limit": limit * 2}  # Retrieve extra for chunk deduplication
+
         if state_filter:
             query_conditions.append("state = :state")
             params["state"] = state_filter.strip().upper()
         if city_filter:
-            query_conditions.append("LOWER(city_or_county) = LOWER(:city)")
+            query_conditions.append("(LOWER(city_or_county) = LOWER(:city) OR LOWER(city) = LOWER(:city))")
             params["city"] = city_filter.strip()
-            
-        # Whitelist verification for dynamic query clauses
-        allowed_clauses = {
-            "embedding IS NOT NULL",
-            "state = :state",
-            "LOWER(city_or_county) = LOWER(:city)"
-        }
-        for clause in query_conditions:
-            if clause not in allowed_clauses:
-                raise ValueError(f"Unauthorized SQL query clause: {clause}")
+        if topic_filter:
+            query_conditions.append("LOWER(topic) = LOWER(:topic)")
+            params["topic"] = topic_filter.strip()
 
         conditions_str = " AND ".join(query_conditions)
         is_sqlite = db.bind.dialect.name == "sqlite"
-        
+
         if is_sqlite:
-            # Fallback for local unit test fixtures without pgvector extension:
-            # Extract candidates and compute exact cosine similarity in Python for realistic ranking
+            # SQLite fallback: hybrid cosine similarity + lexical keyword scoring
             sql = text(f"""
-                SELECT id, jurisdiction, state, city_or_county, title, section, content, embedding
+                SELECT id, jurisdiction, state, city, county, city_or_county, topic, title, section, content, chunk_index, embedding
                 FROM laws_vectors
                 WHERE {conditions_str}
             """)
             rows = db.execute(sql, params).fetchall()
             results = []
-            norm_q = math.sqrt(sum(a * a for a in query_vector))
+            norm_q = math.sqrt(sum(a * a for a in query_vector)) if query_vector else 0.0
+
+            # Tokenize query for lexical scoring
+            query_tokens = set(re.findall(r'\b[a-zA-Z0-9\.\-]{3,}\b', text_query.lower())) if text_query else set()
+
             for row in rows:
-                sim = 0.0
-                if row.embedding:
+                cos_sim = 0.0
+                if query_vector and row.embedding:
                     try:
                         emb = json.loads(row.embedding) if isinstance(row.embedding, str) else row.embedding
                         dot = sum(a * b for a, b in zip(query_vector, emb))
                         norm_e = math.sqrt(sum(b * b for b in emb))
                         if norm_q > 0 and norm_e > 0:
-                            sim = dot / (norm_q * norm_e)
+                            cos_sim = dot / (norm_q * norm_e)
                     except Exception:
-                        sim = 0.0
+                        cos_sim = 0.0
+
+                lex_score = 0.0
+                if query_tokens:
+                    doc_text = f"{row.title or ''} {row.section or ''} {row.content or ''}".lower()
+                    matches = sum(1 for t in query_tokens if t in doc_text)
+                    lex_score = min(1.0, matches / max(1, len(query_tokens)))
+
+                # Weighted hybrid score: 70% vector semantic, 30% lexical keyword
+                combined_sim = (0.7 * cos_sim) + (0.3 * lex_score) if text_query and query_vector else (cos_sim or lex_score)
+
                 results.append({
                     "id": row.id,
                     "jurisdiction": row.jurisdiction,
                     "state": row.state,
-                    "city_or_county": row.city_or_county,
+                    "city": row.city or row.city_or_county,
+                    "county": row.county,
+                    "city_or_county": row.city_or_county or row.city,
+                    "topic": row.topic,
                     "title": row.title,
                     "section": row.section,
                     "content": row.content,
-                    "similarity": float(sim)
+                    "chunk_index": row.chunk_index,
+                    "similarity": float(combined_sim)
                 })
+
             results.sort(key=lambda x: x["similarity"], reverse=True)
-            return results[:limit]
         else:
-            # Production pgvector cosine distance: 1 - (embedding <=> vec)
-            sql = text(f"""
-                SELECT id, jurisdiction, state, city_or_county, title, section, content,
-                       (1 - (embedding <=> CAST(:vec AS vector))) AS cosine_sim
-                FROM laws_vectors
-                WHERE {conditions_str}
-                ORDER BY embedding <=> CAST(:vec AS vector)
-                LIMIT :limit
-            """)
+            # Production PostgreSQL: Hybrid tsvector + pgvector query
+            vec_str = '[' + ','.join(str(v) for v in query_vector) + ']' if query_vector else None
+            params["vec"] = vec_str
+            clean_text_q = re.sub(r'[^a-zA-Z0-9\s]', ' ', text_query or "").strip()
+            params["text_q"] = clean_text_q if clean_text_q else ""
+
+            if clean_text_q and vec_str:
+                sql = text(f"""
+                    WITH vec_matches AS (
+                        SELECT id, (1 - (embedding <=> CAST(:vec AS vector))) AS cos_sim,
+                               ROW_NUMBER() OVER (ORDER BY embedding <=> CAST(:vec AS vector)) as v_rank
+                        FROM laws_vectors
+                        WHERE {conditions_str} AND embedding IS NOT NULL
+                        LIMIT 50
+                    ),
+                    lex_matches AS (
+                        SELECT id, ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) as l_score,
+                               ROW_NUMBER() OVER (ORDER BY ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) DESC) as l_rank
+                        FROM laws_vectors
+                        WHERE {conditions_str} AND to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')) @@ plainto_tsquery('english', :text_q)
+                        LIMIT 50
+                    )
+                    SELECT l.id, l.jurisdiction, l.state, l.city, l.county, l.city_or_county, l.topic, l.title, l.section, l.content, l.chunk_index,
+                           COALESCE(1.0 / (60 + v.v_rank), 0.0) + COALESCE(1.0 / (60 + lex.l_rank), 0.0) AS hybrid_score,
+                           COALESCE(v.cos_sim, 0.0) as similarity
+                    FROM laws_vectors l
+                    LEFT JOIN vec_matches v ON l.id = v.id
+                    LEFT JOIN lex_matches lex ON l.id = lex.id
+                    WHERE v.id IS NOT NULL OR lex.id IS NOT NULL
+                    ORDER BY hybrid_score DESC
+                    LIMIT :limit
+                """)
+            elif vec_str:
+                sql = text(f"""
+                    SELECT id, jurisdiction, state, city, county, city_or_county, topic, title, section, content, chunk_index,
+                           (1 - (embedding <=> CAST(:vec AS vector))) AS similarity
+                    FROM laws_vectors
+                    WHERE {conditions_str} AND embedding IS NOT NULL
+                    ORDER BY embedding <=> CAST(:vec AS vector)
+                    LIMIT :limit
+                """)
+            else:
+                sql = text(f"""
+                    SELECT id, jurisdiction, state, city, county, city_or_county, topic, title, section, content, chunk_index,
+                           ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) AS similarity
+                    FROM laws_vectors
+                    WHERE {conditions_str} AND to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')) @@ plainto_tsquery('english', :text_q)
+                    ORDER BY similarity DESC
+                    LIMIT :limit
+                """)
+
             rows = db.execute(sql, params).fetchall()
             results = []
             for row in rows:
@@ -157,13 +242,29 @@ def retrieve_laws(
                     "id": row.id,
                     "jurisdiction": row.jurisdiction,
                     "state": row.state,
-                    "city_or_county": row.city_or_county,
+                    "city": row.city or row.city_or_county,
+                    "county": row.county,
+                    "city_or_county": row.city_or_county or row.city,
+                    "topic": row.topic,
                     "title": row.title,
                     "section": row.section,
                     "content": row.content,
-                    "similarity": float(row.cosine_sim) if row.cosine_sim is not None else 0.0
+                    "chunk_index": getattr(row, "chunk_index", 0),
+                    "similarity": float(row.similarity) if getattr(row, "similarity", None) is not None else 0.0
                 })
-            return results
+
+        # Parent-Child deduplication: avoid multiple chunks of identical section crowding out top-k
+        seen_sections: Set[Tuple[str, str, str]] = set()
+        deduped: List[Dict] = []
+        for r in results:
+            sec_key = (r["jurisdiction"], r.get("state") or "", r.get("section") or r.get("title") or str(r["id"]))
+            if sec_key not in seen_sections:
+                seen_sections.add(sec_key)
+                deduped.append(r)
+            if len(deduped) >= limit:
+                break
+
+        return deduped
     except Exception as e:
         logger.error(f"Vector search retrieval error: {e}")
         return []
@@ -202,46 +303,69 @@ def is_section_grounded(cited_sec: str, authorized_sections: Set[str]) -> bool:
 
 def verify_citation_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[bool, List[str], str]:
     """
-    Verify whether statutory citations in the generated brief are grounded in retrieved laws.
+    Verify whether statutory citations and quote spans in the generated brief
+    are grounded in retrieved laws.
     Returns:
-        (is_grounded, ungrounded_citations, advisory_markdown)
+        (is_grounded, ungrounded_items, advisory_markdown)
     """
     if not laws:
         return False, [], ""
 
-    # Aggregate authorized section numbers from retrieved record
+    # Aggregate authorized section numbers and full text corpus
     authorized_sections: Set[str] = set()
+    corpus_text = ""
     for law in laws:
         authorized_sections.update(extract_section_identifiers(law.get("section", "")))
         authorized_sections.update(extract_section_identifiers(law.get("title", "")))
+        corpus_text += " " + (law.get("content") or "")
 
-    # Extract cited section numbers in the generated brief
+    corpus_lower = corpus_text.lower()
+
+    # 1. Extract cited section numbers in the generated brief
     raw_citations = extract_section_identifiers(analysis_text)
     # Disregard single-digit heading numbers ("1", "2", "3", "4") that match outline formatting
     valid_citations = {s for s in raw_citations if len(s) > 1 or (s.isdigit() and int(s) > 10)}
 
-    ungrounded = []
+    ungrounded_cites = []
     for citation in sorted(valid_citations):
         if not is_section_grounded(citation, authorized_sections):
-            ungrounded.append(citation)
+            ungrounded_cites.append(citation)
 
-    if ungrounded:
-        formatted_list = "\n".join(f"> - `Section {c}`" for c in ungrounded)
+    # 2. Extract quotes (20+ chars) from analysis to verify quote-span overlap
+    quotes = re.findall(r'["“]([^"”]{20,})["”]', analysis_text)
+    ungrounded_quotes = []
+    for q in quotes:
+        clean_q = re.sub(r'\s+', ' ', q).strip().lower()
+        # Check if the quote or a substantial portion appears in the authority corpus
+        if clean_q not in corpus_lower and len(clean_q) > 25:
+            # Check 70% word overlap
+            q_words = set(clean_q.split())
+            if q_words and sum(1 for w in q_words if w in corpus_lower) / len(q_words) < 0.6:
+                ungrounded_quotes.append(q[:60] + ("..." if len(q) > 60 else ""))
+
+    issues = []
+    if ungrounded_cites:
+        formatted_cites = "\n".join(f"> - `Section {c}`" for c in ungrounded_cites)
+        issues.append(f"> **Ungrounded Statutory Sections** (not found in retrieved authorities):\n{formatted_cites}")
+    if ungrounded_quotes:
+        formatted_quotes = "\n".join(f"> - *\"{q}\"*" for q in ungrounded_quotes)
+        issues.append(f"> **Unverified Verbatim Quotes** (quote text not found in retrieved authorities):\n{formatted_quotes}")
+
+    if issues:
         notice = (
             "\n\n---\n\n"
-            "> ⚠️ **Citation Grounding Advisory (Potential Hallucination Risk)**:\n"
-            "> The following statutory sections cited in this brief were **not present in the retrieved authority record** "
-            "and may reflect model fabrication or ungrounded training priors:\n"
-            f"{formatted_list}\n"
-            ">\n"
-            "> KruschLaw mandates that counsel independently verify whether these provisions are enacted, controlling, "
-            "and unrepealed before relying upon them in legal pleadings or advisory opinions."
+            "> ⚠️ **Citation & Grounding Advisory (Potential Hallucination Risk)**:\n"
+            "> The following citations or quotes in this brief were **not verified against retrieved authorities**:\n"
+            + "\n>\n".join(issues) +
+            "\n>\n"
+            "> KruschLaw mandates that counsel independently verify whether these provisions and excerpts are authentic, "
+            "controlling, and unrepealed prior to relying upon them."
         )
-        return False, ungrounded, notice
+        return False, ungrounded_cites + ungrounded_quotes, notice
     else:
         notice = (
             "\n\n---\n\n"
-            "> 🛡️ **Citation Grounding Verified**: All statutory citations in this brief correspond directly to retrieved authorities."
+            "> 🛡️ **Citation Grounding Verified**: All statutory citations and textual quotes correspond directly to retrieved authorities."
         )
         return True, [], notice
 

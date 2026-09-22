@@ -1,0 +1,4 @@
+# KruschLaw Frontend Dependencies
+streamlit>=1.31.0
+httpx>=0.26.0
+pandas>=2.1.4

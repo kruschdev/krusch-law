@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -54,8 +55,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 
-from src.backend.db import Base, Case, LawVector
-from src.backend.ingest import ingest_mock_data
+from src.backend.db import Base, Case, LawVector, IngestJob
+from src.backend.ingest import ingest_mock_data, ingest_locus_parquet, parse_header_section_and_title, chunk_statute_content
 from src.backend.main import app, get_db
 
 
@@ -82,13 +83,18 @@ class TestKruschLawPipeline(unittest.TestCase):
         self.db = self.Session()
         self.db.query(Case).delete()
         self.db.query(LawVector).delete()
+        self.db.query(IngestJob).delete()
         self.db.commit()
 
         # Global mock for embedding generation (1024-dim vector)
         self.mock_vector = [0.05] * 1024
         self.mock_embed = MagicMock(return_value=self.mock_vector)
+        self.mock_embed_batch = MagicMock(side_effect=lambda texts: [self.mock_vector] * len(texts))
+
         src.backend.rag.get_embedding = self.mock_embed
+        src.backend.rag.get_embeddings_batch = self.mock_embed_batch
         src.backend.ingest.get_embedding = self.mock_embed
+        src.backend.ingest.get_embeddings_batch = self.mock_embed_batch
         src.backend.main.get_embedding = self.mock_embed
 
         def override_get_db():
@@ -102,6 +108,7 @@ class TestKruschLawPipeline(unittest.TestCase):
         self.client = TestClient(app)
 
     def tearDown(self):
+        src.backend.config.settings.extra_allowed_dirs = []
         self.db.close()
 
     def test_health_endpoint(self):
@@ -124,14 +131,18 @@ class TestKruschLawPipeline(unittest.TestCase):
         laws = self.db.query(LawVector).all()
         self.assertEqual(len(laws), inserted)
 
-        oakland_law = self.db.query(LawVector).filter_by(city_or_county="Oakland").first()
+        oakland_law = self.db.query(LawVector).filter_by(city="Oakland").first()
         self.assertIsNotNone(oakland_law)
         self.assertEqual(oakland_law.state, "CA")
         self.assertIn("Rent Adjustment", oakland_law.title)
+        self.assertEqual(oakland_law.county, "Alameda County")
+        self.assertIsNotNone(oakland_law.source_hash)
 
     def test_case_creation_and_retrieval(self):
         payload = {
             "title": "Oakland Notice of Rent Increase",
+            "matter_number": "MATTER-2026-001",
+            "client_name": "Jane Doe",
             "description": "Tenant issue, 15% rent increase",
             "facts": "Tenant moved into unit in 2024. Landlord issued a 15% rent increase without providing Rent Adjustment notice."
         }
@@ -141,6 +152,8 @@ class TestKruschLawPipeline(unittest.TestCase):
         self.assertEqual(resp.status_code, 201)
         data = resp.json()
         self.assertEqual(data["title"], payload["title"])
+        self.assertEqual(data["matter_number"], "MATTER-2026-001")
+        self.assertEqual(data["client_name"], "Jane Doe")
         self.assertIsNotNone(data["id"])
 
         # Fetch matters
@@ -149,6 +162,37 @@ class TestKruschLawPipeline(unittest.TestCase):
         cases = get_resp.json()
         self.assertEqual(len(cases), 1)
         self.assertEqual(cases[0]["title"], payload["title"])
+
+    def test_case_patch_and_delete(self):
+        payload = {
+            "title": "Initial Title",
+            "facts": "Initial facts statement regarding tenant eviction notice."
+        }
+        create_resp = self.client.post("/api/cases", json=payload)
+        case_id = create_resp.json()["id"]
+
+        # Patch facts - should trigger re-embedding
+        patch_payload = {
+            "title": "Updated Title",
+            "facts": "Updated facts statement requiring re-embedding calculation."
+        }
+        patch_resp = self.client.patch(f"/api/cases/{case_id}", json=patch_payload)
+        self.assertEqual(patch_resp.status_code, 200)
+        self.assertEqual(patch_resp.json()["title"], "Updated Title")
+
+        # Verify updated values in db
+        case_obj = self.db.query(Case).filter_by(id=case_id).first()
+        self.assertEqual(case_obj.title, "Updated Title")
+        self.assertEqual(case_obj.facts, patch_payload["facts"])
+
+        # Soft Delete
+        del_resp = self.client.delete(f"/api/cases/{case_id}")
+        self.assertEqual(del_resp.status_code, 200)
+        self.assertEqual(del_resp.json()["status"], "deleted")
+
+        # Verify excluded from active list
+        get_resp = self.client.get("/api/cases")
+        self.assertEqual(len(get_resp.json()), 0)
 
     @patch('src.backend.main.generate_legal_analysis')
     def test_consult_pipeline(self, mock_analysis):
@@ -196,26 +240,53 @@ class TestKruschLawPipeline(unittest.TestCase):
         second_count = ingest_mock_data(self.db)
         self.assertEqual(second_count, 0)
 
-    def test_parquet_ingestion_with_schema_mapping(self):
-        import tempfile
-        import pandas as pd
-        from src.backend.ingest import ingest_locus_parquet
+    def test_parse_header_and_chunking(self):
+        # Test section parsing
+        sec, title = parse_header_section_and_title("8.22.030 - Notice of Rent Adjustment Program.")
+        self.assertEqual(sec, "Section 8.22.030")
+        self.assertIn("Notice of Rent Adjustment", title)
 
-        # Create a temporary parquet file with custom columns
+        sec2, title2 = parse_header_section_and_title("Sec. 1.05.010 General Penalties")
+        self.assertEqual(sec2, "Section 1.05.010")
+
+        # Test chunking of long content
+        long_content = "Paragraph 1: Statutory basis.\n\n" + ("Long legal text element. " * 150) + "\n\nParagraph 3: Final penalty clause."
+        chunks = chunk_statute_content(
+            header="Test Header",
+            content=long_content,
+            jurisdiction="Oakland Municipal Code",
+            section="Section 8.22.030",
+            max_chars=500
+        )
+        self.assertGreater(len(chunks), 1)
+        self.assertEqual(chunks[0]["chunk_index"], 0)
+        self.assertIn("Oakland Municipal Code", chunks[0]["chunk_text"])
+        self.assertIsNotNone(chunks[0]["source_hash"])
+
+    def test_locus_parquet_ingestion_with_real_columns(self):
+        import pandas as pd
+
+        # Create a temporary parquet file with LOCUS-v1 columns
         test_df = pd.DataFrame([
             {
-                "state_code": "CA",
-                "jurisdiction_name": "Berkeley",
-                "ordinance_text": "No tenant may be evicted without an owner-occupancy relocation payment.",
-                "sec": "Section 13.76.130",
-                "chapter": "Rent Stabilization"
+                "header": "8.22.010 - Purpose and Findings",
+                "content": "This chapter is enacted to protect residential tenants from arbitrary evictions.",
+                "state": "CA",
+                "city": "Oakland",
+                "county": "Alameda County",
+                "topic": "Housing & Tenant Protections",
+                "function": "Regulation",
+                "is_substantive": True
             },
             {
-                "state_code": "CA",
-                "jurisdiction_name": "San Jose",
-                "ordinance_text": "Tenant Protection Ordinance requires just cause and formal written notice.",
-                "sec": "Section 17.23.1250",
-                "chapter": "Tenant Protections"
+                "header": "8.22.020 - Table of Contents",
+                "content": "1. Purpose\n2. Rent limits",
+                "state": "CA",
+                "city": "Oakland",
+                "county": "Alameda County",
+                "topic": "Housing & Tenant Protections",
+                "function": "TOC",
+                "is_substantive": False  # Non-substantive should be skipped by default
             }
         ])
 
@@ -223,20 +294,28 @@ class TestKruschLawPipeline(unittest.TestCase):
             temp_path = f.name
             test_df.to_parquet(temp_path)
 
+        # Allow temp dir dynamically for test execution
+        temp_dir = os.path.dirname(temp_path)
+        src.backend.config.settings.extra_allowed_dirs.append(temp_dir)
+
         try:
             inserted = ingest_locus_parquet(temp_path, db=self.db, limit=10)
-            self.assertEqual(inserted, 2)
+            # Only the substantive row should be ingested
+            self.assertEqual(inserted, 1)
 
             # Check inserted record
-            berkeley = self.db.query(LawVector).filter_by(city_or_county="Berkeley").first()
-            self.assertIsNotNone(berkeley)
-            self.assertEqual(berkeley.state, "CA")
-            self.assertEqual(berkeley.section, "Section 13.76.130")
+            oakland_sub = self.db.query(LawVector).filter_by(section="Section 8.22.010").first()
+            self.assertIsNotNone(oakland_sub)
+            self.assertEqual(oakland_sub.state, "CA")
+            self.assertEqual(oakland_sub.city, "Oakland")
+            self.assertEqual(oakland_sub.county, "Alameda County")
+            self.assertEqual(oakland_sub.topic, "Housing & Tenant Protections")
+            self.assertTrue(oakland_sub.is_substantive)
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
-    def test_citation_grounding_verified(self):
+    def test_citation_and_quote_grounding_verified(self):
         from src.backend.rag import verify_citation_grounding
         retrieved_laws = [
             {
@@ -244,18 +323,20 @@ class TestKruschLawPipeline(unittest.TestCase):
                 "title": "Oakland Rent Adjustment Program",
                 "section": "Section 8.22.030",
                 "jurisdiction": "Oakland Municipal Code",
-                "content": "Landlords must provide notice..."
+                "content": "Landlords must provide tenants with written notice of the Rent Adjustment Program."
             }
         ]
+        # Grounded citations and exact verbatim quote from retrieved text
         grounded_analysis = (
-            "Under Section 8.22.030 of the Oakland Municipal Code, the landlord must provide statutory notice."
+            "Under Section 8.22.030 of the Oakland Municipal Code, the landlord violated the law. "
+            "Specifically, \"Landlords must provide tenants with written notice of the Rent Adjustment Program.\""
         )
         is_grounded, ungrounded, notice = verify_citation_grounding(grounded_analysis, retrieved_laws)
         self.assertTrue(is_grounded)
         self.assertEqual(len(ungrounded), 0)
         self.assertIn("Citation Grounding Verified", notice)
 
-    def test_citation_grounding_hallucination_detected(self):
+    def test_citation_and_quote_grounding_flagged(self):
         from src.backend.rag import verify_citation_grounding
         retrieved_laws = [
             {
@@ -263,82 +344,127 @@ class TestKruschLawPipeline(unittest.TestCase):
                 "title": "Oakland Rent Adjustment Program",
                 "section": "Section 8.22.030",
                 "jurisdiction": "Oakland Municipal Code",
-                "content": "Landlords must provide notice..."
+                "content": "Landlords must provide tenants with notice."
             }
         ]
-        # Analysis citing an ungrounded statutory section (Section 1942)
-        hallucinated_analysis = (
-            "Pursuant to Section 8.22.030, notice is required. Additionally, under Section 1942, "
-            "the tenant may exercise repair-and-deduct remedies."
+        # Ungrounded section (Section 999.9) and fabricated 30+ char verbatim quote
+        fabricated_analysis = (
+            "Pursuant to Section 8.22.030 and Section 999.9, the court held that "
+            "\"all tenants shall immediately receive an unconditional punitive damage award of twenty thousand dollars.\""
         )
-        is_grounded, ungrounded, notice = verify_citation_grounding(hallucinated_analysis, retrieved_laws)
+        is_grounded, ungrounded, notice = verify_citation_grounding(fabricated_analysis, retrieved_laws)
         self.assertFalse(is_grounded)
-        self.assertIn("1942", ungrounded)
-        self.assertIn("Citation Grounding Advisory", notice)
-        self.assertIn("Section 1942", notice)
+        self.assertIn("999.9", ungrounded)
+        self.assertIn("Citation & Grounding Advisory", notice)
 
     def test_parquet_path_traversal_rejection(self):
-        from src.backend.ingest import ingest_locus_parquet
-        # Attempt to access an unauthorized path outside allowed directories
         disallowed_path = "/home/krusch/unauthorized_directory/sample.parquet"
         with self.assertRaises(ValueError) as ctx:
             ingest_locus_parquet(disallowed_path, db=self.db)
         self.assertIn("Security Exception", str(ctx.exception))
 
-        # Test API endpoint response when path is disallowed
         resp = self.client.post("/api/ingest/parquet", json={"file_path": disallowed_path, "limit": 5})
         self.assertEqual(resp.status_code, 400)
         self.assertIn("Security Exception", resp.json()["detail"])
 
-    def test_vector_similarity_ranking_sqlite(self):
+    def test_vector_and_lexical_similarity_ranking(self):
         from src.backend.rag import retrieve_laws
-        # Query vector: [1.0, 0.0, 0.0, ...]
+
         q_vec = [0.0] * 1024
         q_vec[0] = 1.0
 
-        # Close vector: [0.9, 0.1, 0.0, ...]
         close_vec = [0.0] * 1024
         close_vec[0] = 0.9
-        close_vec[1] = 0.1
 
-        # Far vector: [0.0, 1.0, 0.0, ...]
         far_vec = [0.0] * 1024
         far_vec[1] = 1.0
 
         law1 = LawVector(
-            jurisdiction="Code A", state="CA", city_or_county="Oakland",
-            title="Close Statute", section="Sec 1", content="Text 1",
-            embedding=close_vec
+            jurisdiction="Code A", state="CA", city="Oakland",
+            title="Rent Increase Notice Requirement", section="Sec 1",
+            content="Notice of rent adjustment must be served in writing.",
+            embedding=close_vec, is_substantive=True
         )
         law2 = LawVector(
-            jurisdiction="Code B", state="CA", city_or_county="Oakland",
-            title="Far Statute", section="Sec 2", content="Text 2",
-            embedding=far_vec
+            jurisdiction="Code B", state="CA", city="Oakland",
+            title="Unrelated Traffic Regulation", section="Sec 2",
+            content="Bicycles shall yield to pedestrians in crosswalks.",
+            embedding=far_vec, is_substantive=True
         )
         self.db.add_all([law1, law2])
         self.db.commit()
 
-        results = retrieve_laws(query_vector=q_vec, limit=2, db_session=self.db)
+        # Query with both vector and lexical terms
+        results = retrieve_laws(
+            query_vector=q_vec,
+            text_query="rent increase notice adjustment",
+            limit=2,
+            db_session=self.db
+        )
         self.assertEqual(len(results), 2)
-        # Verify ranking order: close statute must rank higher than far statute
-        self.assertEqual(results[0]["title"], "Close Statute")
-        self.assertEqual(results[1]["title"], "Far Statute")
+        # Rent statute must rank first
+        self.assertEqual(results[0]["title"], "Rent Increase Notice Requirement")
         self.assertGreater(results[0]["similarity"], results[1]["similarity"])
 
+    def test_laws_search_explorer_endpoint(self):
+        law = LawVector(
+            jurisdiction="Oakland Code", state="CA", city="Oakland",
+            title="Relocation Assistance", section="Section 8.22.450",
+            content="Landlords must pay relocation fees when withdrawing units from rental market.",
+            embedding=self.mock_vector, is_substantive=True
+        )
+        self.db.add(law)
+        self.db.commit()
+
+        resp = self.client.get("/api/laws?q=relocation+fees&city=Oakland")
+        self.assertEqual(resp.status_code, 200)
+        results = resp.json()
+        self.assertGreaterEqual(len(results), 1)
+        self.assertEqual(results[0]["section"], "Section 8.22.450")
+
+    def test_async_ingest_job_dispatch(self):
+        import pandas as pd
+
+        test_df = pd.DataFrame([{
+            "header": "1.01.010 - Title",
+            "content": "This code shall be known as the Municipal Code.",
+            "state": "CA",
+            "city": "Oakland",
+            "is_substantive": True
+        }])
+
+        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as f:
+            temp_path = f.name
+            test_df.to_parquet(temp_path)
+
+        temp_dir = os.path.dirname(temp_path)
+        src.backend.config.settings.extra_allowed_dirs.append(temp_dir)
+
+        try:
+            resp = self.client.post("/api/ingest/parquet/async", json={"file_path": temp_path, "limit": 10})
+            self.assertEqual(resp.status_code, 202)
+            job_data = resp.json()
+            job_id = job_data["job_id"]
+            self.assertIsNotNone(job_id)
+
+            # Check job status endpoint
+            status_resp = self.client.get(f"/api/ingest/jobs/{job_id}")
+            self.assertEqual(status_resp.status_code, 200)
+            self.assertIn(status_resp.json()["status"], ["pending", "running", "completed"])
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
     def test_api_key_authentication_enforcement(self):
-        # Configure API key
         src.backend.config.settings.API_KEY = "test_confidential_key"
         try:
-            # 1. Unauthenticated request must fail with 401
             unauth_resp = self.client.get("/api/cases")
             self.assertEqual(unauth_resp.status_code, 401)
             self.assertIn("Unauthorized", unauth_resp.json()["detail"])
 
-            # 2. Invalid API key must fail with 401
             invalid_resp = self.client.get("/api/cases", headers={"X-API-Key": "wrong_key"})
             self.assertEqual(invalid_resp.status_code, 401)
 
-            # 3. Valid API key succeeds
             valid_resp = self.client.get("/api/cases", headers={"X-API-Key": "test_confidential_key"})
             self.assertEqual(valid_resp.status_code, 200)
         finally:
@@ -347,4 +473,3 @@ class TestKruschLawPipeline(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

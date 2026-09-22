@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     LLM_TIMEOUT: float = float(os.getenv("LLM_TIMEOUT", "120.0"))
     DEFAULT_RETRIEVAL_LIMIT: int = int(os.getenv("DEFAULT_RETRIEVAL_LIMIT", "5"))
 
+    # Batching & Performance
+    EMBED_BATCH_SIZE: int = int(os.getenv("EMBED_BATCH_SIZE", "16"))
+
     # Security & Air-Gap Boundaries
     API_KEY: Optional[str] = os.getenv("API_KEY", None)
     CORS_ORIGINS: str = os.getenv(
@@ -33,8 +36,9 @@ class Settings(BaseSettings):
     )
     ALLOWED_INGEST_DIRS: str = os.getenv(
         "ALLOWED_INGEST_DIRS",
-        "/app/data,/app/data/ingest,/tmp"
+        "/app/data,/app/data/ingest"
     )
+    extra_allowed_dirs: list[str] = []
 
     @property
     def cors_origins_list(self) -> list[str]:
@@ -42,7 +46,10 @@ class Settings(BaseSettings):
 
     @property
     def allowed_ingest_dirs_list(self) -> list[str]:
-        return [os.path.abspath(d.strip()) for d in self.ALLOWED_INGEST_DIRS.split(",") if d.strip()]
+        dirs = [os.path.abspath(d.strip()) for d in self.ALLOWED_INGEST_DIRS.split(",") if d.strip()]
+        for extra in self.extra_allowed_dirs:
+            dirs.append(os.path.abspath(extra.strip()))
+        return dirs
 
     @property
     def is_sqlite(self) -> bool:

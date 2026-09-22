@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "krusch-law"
+version = "0.2.0-dev"
+description = "Air-Gapped, Privacy-First Legal RAG & Ordinance Intelligence Engine (Research Prototype)"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "krusch", email = "security@krusch.io" }
+]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Legal Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
+    "sqlalchemy>=2.0.25",
+    "pgvector>=0.2.4",
+    "psycopg2-binary>=2.9.9",
+    "httpx>=0.26.0",
+    "pandas>=2.1.4",
+    "pyarrow>=14.0.2",
+]
+
+[project.optional-dependencies]
+frontend = [
+    "streamlit>=1.31.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.2.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+exclude = [".venv", "__pycache__"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]

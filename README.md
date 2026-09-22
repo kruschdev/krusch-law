@@ -1,11 +1,11 @@
 # ⚖️ KruschLaw
 
-> **Private, Air-Gapped Legal RAG & Ordinance Intelligence Engine (Research Prototype)**  
+> **Air-Gapped Sovereign Legal RAG & Ordinance Intelligence Engine (Research Prototype)**  
 > *Query local municipal codes, statutes, and client matter records with 100% on-premise privacy and zero cloud data leakage.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Version: 0.2.0-dev](https://img.shields.io/badge/Version-0.2.0--dev%20(Prototype)-orange.svg)](https://github.com/kruschdev/krusch-law)
-[![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![Python 3.11 | 3.12](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.31+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![pgvector](https://img.shields.io/badge/PostgreSQL-pgvector%2016-336791.svg?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
@@ -13,29 +13,37 @@
 
 ---
 
+> [!WARNING]
+> **Experimental Research Prototype & Legal Limitations**:  
+> KruschLaw is an open-source technical prototype exploring sovereign on-premise retrieval-augmented generation. It is **NOT** a law firm, does **NOT** provide legal advice, and does **NOT** replace certified legal reporters.
+> - **No Shepardizing / KeyCite**: KruschLaw does not track subsequent appellate history, statutory amendments, or repeals.
+> - **Demo Paraphrases**: Built-in seed ordinances are short, paraphrased fixtures designed solely for automated unit testing and interface demonstration.
+> - **OCR Quality**: External OCR corpora (such as LOCUS-v1) are subject to scanning artifacts and unverified text.
+> - **Mandatory Review**: Admitted counsel must independently verify all cited authorities and factual reasoning prior to taking any formal legal action.
+
+---
+
 ## 🏛️ Why KruschLaw?
 
-Law firms, legal aid organizations, and corporate legal departments face an impossible dilemma:
-1. **Public Cloud LLMs**: Expose privileged client communications and confidential matter facts to external vendor logging, violating attorney-client privilege and state bar ethics rules.
-2. **Manual Research**: Sifting through thousands of municipal ordinances, county codes, and changing statutes consumes dozens of non-billable hours.
+Law firms, legal aid organizations, and corporate legal departments face a critical dilemma:
+1. **Public Cloud LLMs**: Expose privileged client communications and confidential matter facts to external vendor logging and retention, conflicting with attorney-client privilege and state bar ethics rules.
+2. **Manual Research**: Sifting through thousands of municipal ordinances, county codes, and changing statutes consumes non-billable hours.
 
-**KruschLaw** is an open-source experimental research prototype exploring sovereign, on-premise legal retrieval. It is engineered to test local retrieval-augmented generation (RAG) running entirely on private infrastructure without third-party API exposure.
+**KruschLaw** is a privacy-first research prototype evaluating whether local open-weight models (`qwen2.5:14b`, `bge-large`), coupled with hybrid PostgreSQL search (`pgvector` + `tsvector`), can deliver trustworthy, citation-grounded statutory analysis within an air-gapped perimeter.
 
 ---
 
 ## 🚀 Key Features
 
-* 🛡️ **100% Air-Gapped & Sovereign**: Zero cloud dependencies, external CDNs, or telemetry calls. Port bindings default strictly to `127.0.0.1` for host containment.
-* 🔐 **Matter Authorization Layer**: Protects client facts and intake records with optional `API_KEY` header verification (`X-API-Key`).
-* ⚡ **Production HNSW Vector Indexing**: Automatically builds `pgvector` HNSW indexes (`m=16, ef_construction=64`) on startup to ensure sub-millisecond retrieval on large-scale municipal corpora.
-* 🔍 **Semantic Ordinance & Statute Retrieval**: Matches client factual narratives against municipal codes, state statutes, and administrative rules using `pgvector` cosine similarity.
-* 🛡️ **Citation-Constrained Grounding Guardrail**: Automated post-generation scanner that extracts statutory section citations from model output and verifies them against retrieved authorities. Flags hallucinated sections with explicit advisories.
-* 📦 **LOCUS-v1 Parquet & Municipal Ingestion**: Built-in engine to parse and normalize large-scale municipal law datasets with automatic schema resolution and sandboxed directory controls.
-* 💼 **Confidential Matter Portfolio**: Securely log, manage, and vectorize client case matters with local 1024-dim dense embeddings (`bge-large`).
-* 📋 **Structured 4-Part Legal Briefs**: Automatically generates citation-backed analyses formatted into Executive Summary, Statutory Authorities, Factual Matrix Analysis, and Strategic Next Steps using local instruction models (`qwen2.5:14b`).
-* 🔬 **Dynamic Security Diagnostics**: `/health` actively inspects runtime network topologies to verify that Ollama inference hosts reside strictly on loopback or private RFC1918 subnets.
-* ⚖️ **UPL & Ethics Guardrails**: Adheres to strict Unauthorized Practice of Law (UPL) guidelines and ABA Model Rule 1.1 duty of technological competence, ensuring all outputs feature prominent professional review disclaimers.
-
+* 🛡️ **Air-Gapped Privacy Perimeter**: Zero telemetry, external CDNs, or third-party API calls. Port bindings default strictly to `127.0.0.1`.
+* 🔍 **Hybrid Retrieval Engine**: Combines full-text lexical ranking (`tsvector` / `ts_rank_cd`) with dense vector cosine similarity (`pgvector` HNSW) using Reciprocal Rank Fusion (RRF).
+* 📑 **LOCUS-v1 Parquet Adapter**: First-class support for HuggingFace `LocalLaws/LOCUS-v1` datasets (`header`, `content`, `state`, `city`, `county`, `topic`, `is_substantive`).
+* 🧩 **Section-Aware Chunking & Deduplication**: Breaks multi-thousand character statutes into element-aware chunks with heading prefixes (`[{jurisdiction} {section}] {header}`) and SHA-256 content deduplication.
+* 🛡️ **Dual-Check Grounding Guardrail**: Verifies both statutory section identifiers and 20+ character quote-spans against retrieved authorities to flag hallucinations.
+* ⚡ **Batch Embeddings & Async Jobs**: Leverages Ollama batch embedding (`/api/embed`) and background worker queues (`/api/ingest/jobs/{id}`).
+* 💼 **Matter Lifecycle Management**: Log, view, update (`PATCH`), and soft-delete (`DELETE`) client matters with automatic embedding synchronization.
+* 📋 **Markdown Brief Export**: Export generated 4-part legal briefs directly into structured Markdown (`.md`).
+* 🔬 **Network Isolation Diagnostics**: Runtime `/health` inspection dynamically tests loopback and RFC1918 private network bindings.
 
 ---
 
@@ -59,8 +67,22 @@ Law firms, legal aid organizations, and corporate legal departments face an impo
             ┌──────────────────────▼───────┐       ┌────────▼────────────────────┐
             │   PostgreSQL 16 + pgvector   │       │      Local Ollama Node      │
             │   (Laws & Case Fact Vectors) │       │  ├─ bge-large (Embeddings)  │
-            │        127.0.0.1:5435        │       │  └─ qwen2.5:14b (LLM)       │
+            │        127.0.0.1:5435        │       │  └─ qwen2.5:14b / 7b (LLM)  │
             └──────────────────────────────┘       └─────────────────────────────┘
+```
+
+---
+
+## 💻 Hardware Requirements & Model Matrix
+
+| Profile | Recommended Model | Minimum Hardware | Suitable Use Case |
+|---|---|---|---|
+| **CPU / Lightweight** | `qwen2.5:7b` or `llama3.1:8b` | 16GB System RAM | Laptops, CPU-only servers, initial prototyping |
+| **GPU / Standard** | `qwen2.5:14b` | 12GB+ VRAM (RTX 3060/4070 or Mac 16GB+) | High-precision legal synthesis & issue spotting |
+
+To switch models, configure `OLLAMA_LLM_MODEL` in your `.env` file:
+```env
+OLLAMA_LLM_MODEL=qwen2.5:7b
 ```
 
 ---
@@ -69,7 +91,7 @@ Law firms, legal aid organizations, and corporate legal departments face an impo
 
 ### Prerequisites
 * [Docker](https://docs.docker.com/get-docker/) & Docker Compose
-* [Ollama](https://ollama.com/) running locally with the required models pulled:
+* [Ollama](https://ollama.com/) running locally with required models:
   ```bash
   ollama pull bge-large
   ollama pull qwen2.5:14b
@@ -80,97 +102,89 @@ Law firms, legal aid organizations, and corporate legal departments face an impo
 git clone https://github.com/kruschdev/krusch-law.git
 cd krusch-law
 
-# Copy environment template
 cp .env.example .env
 ```
 
-### 2. Launch the Stack
+### 2. Launch Stack
 ```bash
 docker compose up --build -d
 ```
 
-Verify services are healthy:
+Verify endpoints:
 * **Frontend UI**: [http://localhost:8505](http://localhost:8505)
 * **Backend API Docs**: [http://localhost:8085/docs](http://localhost:8085/docs)
-* **Health Check**: [http://localhost:8085/health](http://localhost:8085/health)
+* **Health & Diagnostics**: [http://localhost:8085/health](http://localhost:8085/health)
 
 ---
 
-## 📥 Ingesting Legal Data
+## 📥 Ingestion & Datasets
 
-### Option A: Built-in California Seed Ordinances
-In the web dashboard sidebar, click **"🚀 Seed California Ordinances"** (or run via curl):
+### Option A: Paraphrased Demo Fixtures
+Click **"🚀 Seed Paraphrased Demo Fixtures"** in the sidebar (or run via curl):
 ```bash
 curl -X POST http://localhost:8085/api/ingest/mock
 ```
-This loads and embeds sample tenant rights, eviction control, and municipal noise ordinances for Oakland, San Francisco, and Los Angeles.
+*Loads 6 sample tenant rights and municipal noise fixtures for Oakland, SF, and LA.*
 
-### Option B: Ingesting LOCUS-v1 Municipal Codes (Parquet)
-Download municipal law extracts (such as LOCUS-v1 or municipal open-data sets) into your project or container volume:
-```bash
-curl -X POST http://localhost:8085/api/ingest/parquet \
-  -H "Content-Type: application/json" \
-  -d '{"file_path": "/path/to/ordinances.parquet", "limit": 250}'
-```
+### Option B: LOCUS-v1 Parquet Ingestion
+KruschLaw provides an adapter for municipal laws from the [LOCUS-v1 dataset](https://huggingface.co/datasets/LocalLaws/LOCUS-v1):
 
----
+> [!IMPORTANT]
+> **LOCUS-v1 License Notice**:  
+> LOCUS-v1 is released under **Creative Commons Attribution-NonCommercial 4.0 International (CC-BY-NC-4.0)**. It is licensed strictly for non-commercial academic and research evaluation. Commercial law firms must verify data rights before operational use.
 
-## 💼 Law Office Evaluation & Trial Guide
+1. Download a LOCUS-v1 Parquet slice into `./data/ingest/`:
+   ```bash
+   cp /path/to/ordinances.parquet ./data/ingest/
+   ```
+2. Ingest synchronously:
+   ```bash
+   curl -X POST http://localhost:8085/api/ingest/parquet \
+     -H "Content-Type: application/json" \
+     -d '{"file_path": "/app/data/ingest/ordinances.parquet", "limit": 250}'
+   ```
+3. Or dispatch as an asynchronous background job:
+   ```bash
+   curl -X POST http://localhost:8085/api/ingest/parquet/async \
+     -H "Content-Type: application/json" \
+     -d '{"file_path": "/app/data/ingest/ordinances.parquet", "limit": 1000}'
+   ```
+   Check job status:
+   ```bash
+   curl http://localhost:8085/api/ingest/jobs/<JOB_ID>
+   ```
 
-If you are evaluating KruschLaw within a law practice:
-
-1. **Hardware Recommendation**: A dedicated desktop or workstation with an NVIDIA RTX GPU (12GB+ VRAM) or Apple Silicon Mac (M2/M3/M4 with 16GB+ unified memory).
-2. **Confidential Test Matter**:
-   - Navigate to the **Matter Portfolio** tab.
-   - Enter a factual scenario (e.g. *A residential tenant was issued a notice of rent increase exceeding statutory limits without required disclosures*).
-   - Click **Save & Generate Matter Embedding**.
-3. **Generate Precedent Consultation**:
-   - Open the **Precedent Consultation** tab, select the matter, set jurisdiction filters (`State: CA`), and click **Generate Sovereign Legal Brief**.
-   - Review the matched legal sections and the resulting analysis brief.
+*Security note: Ingestion paths outside `/app/data` are rejected by sandbox policy (`ALLOWED_INGEST_DIRS`).*
 
 ---
 
 ## 🔒 Security & Air-Gap Verification
 
-To verify that KruschLaw does not transmit data outside your local environment:
-* Monitor container network traffic using `docker stats` or `tcpdump`.
-* KruschLaw contains **zero** third-party tracking, analytics, or external telemetry libraries.
-* Inspect `src/backend/rag.py` to confirm that all embedding and generation calls target your local `OLLAMA_BASE_URL`.
+* **Strict Sandboxing**: Parquet dataset paths must reside in `ALLOWED_INGEST_DIRS` (`/app/data`, `/app/data/ingest`). `/tmp` is excluded by default.
+* **Matter Authorization**: Set `API_KEY` in `.env` to enforce `X-API-Key` headers on all case and consult endpoints.
+* **Zero Egress**: Monitor traffic with `tcpdump` or `docker stats` to verify zero outbound network calls.
+* **Security Contact**: Report vulnerabilities privately to **security@krusch.io**.
 
 ---
 
-## ⚖️ Ethics, Professional Responsibility & Verification
+## ⚖️ Ethics & Professional Responsibility (ABA Model Rule 1.1)
 
-> [!IMPORTANT]
-> **Unauthorized Practice of Law (UPL) Notice**:  
-> KruschLaw is an offline artificial intelligence decision-support and issue-spotting system. It is designed to assist admitted attorneys, legal researchers, and self-represented litigants in organizing facts and identifying candidate municipal ordinances and statutes. **KruschLaw is not an attorney, is not a law firm, and does not provide formal legal advice or representation.** All statutory interpretations, section applicability, and analytical conclusions must be independently verified by a licensed attorney admitted to the relevant bar before filing or serving legal documents.
-
-### Duty of Competence & Citation Verification (ABA Model Rule 1.1)
-Lawyers maintain a strict ethical obligation of competence when utilizing generative AI tools in legal practice (*see* ABA Formal Opinion 512; State Bar of California Formal Opinion No. 2023-207):
-* **Grounding Guardrails**: KruschLaw implements automated post-generation citation parsing (`verify_citation_grounding`). If the model references a statute or municipal section not contained within the retrieved dataset, the output is stamped with an explicit `⚠️ Citation Grounding Advisory`.
-* **Zero Hallucination Tolerance**: Attorneys must never submit generative output to a court or administrative tribunal without verifying that cited authorities exist, are currently in force, and have not been amended or preempted.
-* **Privilege Preservation**: By keeping all matter facts on-premise within localhost-bound sockets, KruschLaw eliminates third-party disclosure under the work-product doctrine and FRE 502 / Cal. Evid. Code § 954.
+Attorneys maintain a strict ethical duty of technological competence (*see* ABA Formal Opinion 512; State Bar of CA Formal Opinion 2023-207):
+* **Automated Guardrails**: KruschLaw scans generated briefs (`verify_citation_grounding`). Sections or quotes not present in retrieved context are flagged with an explicit advisory.
+* **Verification Mandate**: Outputs must be Shepardized and reviewed by admitted counsel prior to filing or advising clients.
 
 ---
 
-## 📊 Evaluation & Retrieval Quality
+## 🧪 Automated Testing
 
-KruschLaw evaluates statutory issue-spotting performance using a local fixture suite:
-* **Precision@k & Citation Accuracy**: Verified against known landlord-tenant fact patterns to ensure retrieved sections (e.g. Oakland OMC § 8.22.030, CA Civ. Code § 1950.5) match controlling legal provisions.
-* **Automated Regression Suite**: Unit tests run without cloud dependencies via in-memory SQLite and mocked vector math:
-  ```bash
-  python -m unittest tests/test_pipeline.py
-  ```
-
-
----
-
-## 🤝 Contributing
-
-We welcome community contributions, additional municipal code ingest parsers, and performance optimizations. Please see [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and development workflow.
+Run the offline regression suite:
+```bash
+python -m unittest discover tests
+```
 
 ---
 
 ## 📜 License
 
 KruschLaw is open-source software licensed under the **[MIT License](LICENSE)**.
+Third-party datasets (such as LOCUS-v1) remain governed by their respective licenses (e.g. CC-BY-NC-4.0).
