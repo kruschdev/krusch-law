@@ -24,12 +24,23 @@ cd krusch-law
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+
+# Install all development and runtime dependencies:
+pip install -e ".[dev,frontend]"
+# Or install separately:
+# pip install -r requirements-backend.txt
+# pip install -r requirements-frontend.txt
 ```
 
-### 3. Run Automated Tests
+### 3. Code Style & Linting
+We use [Ruff](https://github.com/astral-sh/ruff) for fast formatting and linting:
 ```bash
-python3 -m unittest tests/test_pipeline.py
+ruff check src/ tests/
+```
+
+### 4. Run Automated Tests
+```bash
+python3 -m unittest discover tests
 ```
 
 All tests execute in-memory with SQLite fixtures and mock vectors—no running PostgreSQL or Ollama instance is required.

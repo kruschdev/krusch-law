@@ -470,6 +470,114 @@ class TestKruschLawPipeline(unittest.TestCase):
         finally:
             src.backend.config.settings.API_KEY = None
 
+    def test_mcp_initialize_and_tools_list(self):
+        from src.mcp.server import process_request
+
+        # 1. Initialize
+        init_req = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+        init_resp = process_request(init_req)
+        self.assertEqual(init_resp["id"], 1)
+        self.assertEqual(init_resp["result"]["serverInfo"]["name"], "kruschlaw-mcp")
+
+        # 2. Tools list
+        tools_req = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+        tools_resp = process_request(tools_req)
+        self.assertEqual(tools_resp["id"], 2)
+        tool_names = [t["name"] for t in tools_resp["result"]["tools"]]
+        self.assertIn("search_ordinances", tool_names)
+        self.assertIn("get_section", tool_names)
+        self.assertIn("log_matter", tool_names)
+        self.assertIn("draft_brief", tool_names)
+
+    @patch('src.mcp.server.generate_legal_analysis')
+    def test_mcp_tool_execution(self, mock_analysis):
+        from src.mcp.server import process_request
+
+        mock_analysis.return_value = (
+            "### Executive Summary\nTenant rights analysis.\n\n"
+            "### Applicable Legal Authority\nOakland Municipal Code Section 8.22.030\n\n"
+            "### Next Steps\nReview notice."
+        )
+
+        # 1. Ingest seed ordinances
+        ingest_mock_data(self.db)
+
+        # 2. Tool call: log_matter
+        log_req = {
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "tools/call",
+            "params": {
+                "name": "log_matter",
+                "arguments": {
+                    "title": "MCP Test Matter",
+                    "facts": "Tenant was issued rent increase without notice in Oakland.",
+                    "matter_number": "MCP-001"
+                }
+            }
+        }
+        log_resp = process_request(log_req)
+        self.assertEqual(log_resp["id"], 10)
+        log_content = json.loads(log_resp["result"]["content"][0]["text"])
+        self.assertEqual(log_content["status"], "created")
+        case_id = log_content["case_id"]
+
+        # 3. Tool call: search_ordinances
+        search_req = {
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "tools/call",
+            "params": {
+                "name": "search_ordinances",
+                "arguments": {
+                    "query": "Rent Adjustment Program notice",
+                    "city": "Oakland"
+                }
+            }
+        }
+        search_resp = process_request(search_req)
+        self.assertEqual(search_resp["id"], 11)
+        search_content = json.loads(search_resp["result"]["content"][0]["text"])
+        self.assertGreaterEqual(search_content["total_matches"], 1)
+
+        # 4. Tool call: get_section
+        get_sec_req = {
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "tools/call",
+            "params": {
+                "name": "get_section",
+                "arguments": {
+                    "section": "Section 8.22.030"
+                }
+            }
+        }
+        get_sec_resp = process_request(get_sec_req)
+        self.assertEqual(get_sec_resp["id"], 12)
+        sec_content = json.loads(get_sec_resp["result"]["content"][0]["text"])
+        self.assertTrue(sec_content["found"])
+        self.assertEqual(sec_content["section"], "Section 8.22.030")
+
+        # 5. Tool call: draft_brief
+        brief_req = {
+            "jsonrpc": "2.0",
+            "id": 13,
+            "method": "tools/call",
+            "params": {
+                "name": "draft_brief",
+                "arguments": {
+                    "case_id": case_id,
+                    "city": "Oakland"
+                }
+            }
+        }
+        brief_resp = process_request(brief_req)
+        self.assertEqual(brief_resp["id"], 13)
+        brief_content = json.loads(brief_resp["result"]["content"][0]["text"])
+        self.assertEqual(brief_content["staged_status"], "READY_FOR_ATTORNEY_REVIEW")
+        self.assertIn("Tenant rights analysis", brief_content["brief_content"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
