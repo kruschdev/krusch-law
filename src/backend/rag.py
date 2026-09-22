@@ -1,6 +1,7 @@
+import re
 import logging
 import httpx
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple, Set
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -90,6 +91,16 @@ def retrieve_laws(
             query_conditions.append("LOWER(city_or_county) = LOWER(:city)")
             params["city"] = city_filter.strip()
             
+        # Whitelist verification for dynamic query clauses
+        allowed_clauses = {
+            "embedding IS NOT NULL",
+            "state = :state",
+            "LOWER(city_or_county) = LOWER(:city)"
+        }
+        for clause in query_conditions:
+            if clause not in allowed_clauses:
+                raise ValueError(f"Unauthorized SQL query clause: {clause}")
+
         conditions_str = " AND ".join(query_conditions)
         is_sqlite = db.bind.dialect.name == "sqlite"
         
@@ -135,6 +146,80 @@ def retrieve_laws(
             db.close()
 
 
+def extract_section_identifiers(text_content: str) -> Set[str]:
+    """Extract normalized section numbers and statutory identifiers from legal text."""
+    if not text_content:
+        return set()
+    patterns = [
+        r'(?:§+|Section|Sec\.)\s*([0-9]+[A-Za-z0-9\.\-]*)',
+        r'\b(?:CC|Civ\.\s*Code|Gov\.\s*Code|Health\s*&\s*Saf\.\s*Code|Admin\.\s*Code)\s*§*\s*([0-9]+[A-Za-z0-9\.\-]*)',
+    ]
+    sections = set()
+    for pattern in patterns:
+        matches = re.finditer(pattern, text_content, re.IGNORECASE)
+        for m in matches:
+            sec = m.group(1).strip().rstrip('.,;:')
+            if sec:
+                sections.add(sec)
+    return sections
+
+
+def is_section_grounded(cited_sec: str, authorized_sections: Set[str]) -> bool:
+    """Check if a cited section matches or derives from an authorized section."""
+    cited_norm = re.sub(r'[\(\)\[\]]', '', cited_sec).lower()
+    for auth in authorized_sections:
+        auth_norm = re.sub(r'[\(\)\[\]]', '', auth).lower()
+        if cited_norm == auth_norm or cited_norm.startswith(auth_norm) or auth_norm.startswith(cited_norm):
+            return True
+    return False
+
+
+def verify_citation_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[bool, List[str], str]:
+    """
+    Verify whether statutory citations in the generated brief are grounded in retrieved laws.
+    Returns:
+        (is_grounded, ungrounded_citations, advisory_markdown)
+    """
+    if not laws:
+        return False, [], ""
+
+    # Aggregate authorized section numbers from retrieved record
+    authorized_sections: Set[str] = set()
+    for law in laws:
+        authorized_sections.update(extract_section_identifiers(law.get("section", "")))
+        authorized_sections.update(extract_section_identifiers(law.get("title", "")))
+
+    # Extract cited section numbers in the generated brief
+    raw_citations = extract_section_identifiers(analysis_text)
+    # Disregard single-digit heading numbers ("1", "2", "3", "4") that match outline formatting
+    valid_citations = {s for s in raw_citations if len(s) > 1 or (s.isdigit() and int(s) > 10)}
+
+    ungrounded = []
+    for citation in sorted(valid_citations):
+        if not is_section_grounded(citation, authorized_sections):
+            ungrounded.append(citation)
+
+    if ungrounded:
+        formatted_list = "\n".join(f"> - `Section {c}`" for c in ungrounded)
+        notice = (
+            "\n\n---\n\n"
+            "> ⚠️ **Citation Grounding Advisory (Potential Hallucination Risk)**:\n"
+            "> The following statutory sections cited in this brief were **not present in the retrieved authority record** "
+            "and may reflect model fabrication or ungrounded training priors:\n"
+            f"{formatted_list}\n"
+            ">\n"
+            "> KruschLaw mandates that counsel independently verify whether these provisions are enacted, controlling, "
+            "and unrepealed before relying upon them in legal pleadings or advisory opinions."
+        )
+        return False, ungrounded, notice
+    else:
+        notice = (
+            "\n\n---\n\n"
+            "> 🛡️ **Citation Grounding Verified**: All statutory citations in this brief correspond directly to retrieved authorities."
+        )
+        return True, [], notice
+
+
 def generate_legal_analysis(case_facts: str, case_title: str, laws: List[Dict]) -> str:
     """Generate structured legal analysis grounding client matter facts with retrieved laws."""
     if not laws:
@@ -168,7 +253,11 @@ def generate_legal_analysis(case_facts: str, case_title: str, laws: List[Dict]) 
     system_prompt = (
         "You are KruschLaw, an air-gapped, privacy-first legal research engine designed for law firms. "
         "Your task is to produce a rigorous, citation-grounded preliminary case analysis based ONLY on the provided "
-        "statutes, municipal ordinances, and factual statement. Do not hallucinate authorities.\n\n"
+        "statutes, municipal ordinances, and factual statement.\n\n"
+        "CRITICAL INSTRUCTIONS:\n"
+        "- Ground all legal assertions strictly in the provided authority record.\n"
+        "- Do NOT cite or invent statutory sections that do not appear in the retrieved context.\n"
+        "- If an issue is not governed by the retrieved laws, explicitly state that no local authority was retrieved.\n\n"
         "Analyze the case using the following mandatory headings:\n"
         "1. **Executive Summary**: Core legal conclusion in 2-3 sentences.\n"
         "2. **Applicable Legal Authority & Statutory Citations**: Cite each relevant section by name and number.\n"
@@ -206,8 +295,11 @@ Draft the legal analysis following the required headings. Conclude with an ethic
             resp.raise_for_status()
             analysis_text = resp.json().get("response", "").strip()
             
-            # Append formal UPL disclaimer
-            full_response = f"{analysis_text}\n\n---\n\n> ⚖️ **Ethical & Regulatory Notice**:\n> {UPL_DISCLAIMER}"
+            # Grounding verification guardrail
+            _, _, grounding_notice = verify_citation_grounding(analysis_text, laws)
+
+            # Append grounding notice and formal UPL disclaimer
+            full_response = f"{analysis_text}{grounding_notice}\n\n---\n\n> ⚖️ **Ethical & Regulatory Notice**:\n> {UPL_DISCLAIMER}"
             return full_response
             
     except httpx.ConnectError as e:
@@ -219,3 +311,4 @@ Draft the legal analysis following the required headings. Conclude with an ethic
         )
     except Exception as e:
         return f"### ❌ Error Generating Analysis\n\nAn unexpected error occurred during analysis generation: {str(e)}"
+

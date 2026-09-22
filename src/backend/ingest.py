@@ -4,6 +4,7 @@ from typing import Optional, List, Dict
 import pandas as pd
 from sqlalchemy.orm import Session
 
+from .config import settings
 from .db import SessionLocal, LawVector
 from .rag import get_embedding
 
@@ -135,7 +136,14 @@ def ingest_locus_parquet(file_path: str, db: Optional[Session] = None, limit: in
     Ingest municipal ordinances and local laws from a LOCUS-v1 or compatible Parquet dataset.
     Automatically normalizes heterogeneous schema columns.
     """
-    if not os.path.exists(file_path):
+    abs_path = os.path.abspath(file_path)
+    allowed_dirs = settings.allowed_ingest_dirs_list
+    if not any(abs_path == d or abs_path.startswith(d + os.sep) for d in allowed_dirs):
+        raise ValueError(
+            f"Security Exception: Ingestion path '{file_path}' is outside permitted directory boundaries ({settings.ALLOWED_INGEST_DIRS})."
+        )
+
+    if not os.path.exists(abs_path):
         raise FileNotFoundError(f"Parquet file not found at: {file_path}")
 
     own_session = False

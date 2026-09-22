@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-kruschlaw}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kruschlaw_secret}
     ports:
-      - "${DATABASE_PORT:-5435}:5432"
+      - "${DATABASE_BIND_IP:-127.0.0.1}:${DATABASE_PORT:-5435}:5432"
     volumes:
       - kruschlaw_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,10 +29,10 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-kruschlaw}:${POSTGRES_PASSWORD:-kruschlaw_secret}@db:5432/${POSTGRES_DB:-kruschlaw_db}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - OLLAMA_EMBED_HOST=${OLLAMA_EMBED_HOST:-http://host.docker.internal:11434}
-      - OLLAMA_LLM_MODEL=${OLLAMA_LLM_MODEL:-qwen2.5-coder:14b}
+      - OLLAMA_LLM_MODEL=${OLLAMA_LLM_MODEL:-qwen2.5:14b}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-bge-large}
     ports:
-      - "${BACKEND_PORT:-8085}:8000"
+      - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_PORT:-8085}:8000"
     volumes:
       - ./src:/app/src
     extra_hosts:
@@ -50,7 +50,7 @@ services:
     environment:
       - BACKEND_URL=${BACKEND_URL:-http://backend:8000}
     ports:
-      - "${FRONTEND_PORT:-8505}:8501"
+      - "${FRONTEND_BIND_IP:-127.0.0.1}:${FRONTEND_PORT:-8505}:8501"
     volumes:
       - ./src:/app/src
     depends_on:

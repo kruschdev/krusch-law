@@ -24,35 +24,38 @@ Law firms, legal aid organizations, and corporate legal departments face an impo
 
 ## 🚀 Key Features
 
-* 🛡️ **100% Air-Gapped & Sovereign**: Zero cloud dependencies or external API calls. Runs seamlessly on local workstations, private LAN servers, or air-gapped laptops.
+* 🛡️ **100% Air-Gapped & Sovereign**: Zero cloud dependencies, external CDNs, or telemetry calls. Port bindings default strictly to `127.0.0.1` for host containment.
 * 🔍 **Semantic Ordinance & Statute Retrieval**: Matches client factual narratives against municipal codes, state statutes, and administrative rules using `pgvector` cosine similarity.
-* 📦 **LOCUS-v1 Parquet & Municipal Ingestion**: Built-in engine to parse and normalize large-scale municipal law datasets with automatic schema resolution.
+* 🛡️ **Citation-Constrained Grounding Guardrail**: Automated post-generation scanner that extracts statutory section citations from model output and verifies them against retrieved authorities. Flags hallucinated sections with explicit advisories.
+* 📦 **LOCUS-v1 Parquet & Municipal Ingestion**: Built-in engine to parse and normalize large-scale municipal law datasets with automatic schema resolution and sandboxed directory controls.
 * 💼 **Confidential Matter Portfolio**: Securely log, manage, and vectorize client case matters with local 1024-dim dense embeddings (`bge-large`).
-* 📋 **Structured 4-Part Legal Briefs**: Automatically generates citation-backed analyses formatted into Executive Summary, Statutory Authorities, Factual Matrix Analysis, and Strategic Next Steps.
-* ⚖️ **UPL & Ethics Guardrails**: Adheres to strict Unauthorized Practice of Law (UPL) guidelines, ensuring all outputs feature prominent professional review disclaimers.
+* 📋 **Structured 4-Part Legal Briefs**: Automatically generates citation-backed analyses formatted into Executive Summary, Statutory Authorities, Factual Matrix Analysis, and Strategic Next Steps using local instruction models (`qwen2.5:14b`).
+* ⚖️ **UPL & Ethics Guardrails**: Adheres to strict Unauthorized Practice of Law (UPL) guidelines and ABA Model Rule 1.1 duty of technological competence, ensuring all outputs feature prominent professional review disclaimers.
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-                               ┌─────────────────────────────┐
-                               │   KruschLaw Web Interface   │
-                               │    (Streamlit / Port 8505)  │
-                               └──────────────┬──────────────┘
-                                              │ REST
-                               ┌──────────────▼──────────────┐
-                               │     KruschLaw Backend       │
-                               │     (FastAPI / Port 8085)   │
-                               └───┬─────────────────────┬───┘
-                                   │                     │
-                    SQL / pgvector │                     │ Local HTTP
-                                   │                     │
-            ┌──────────────────────▼───────┐    ┌────────▼────────────────────┐
-            │   PostgreSQL 16 + pgvector   │    │      Local Ollama Node      │
-            │   (Laws & Case Fact Vectors) │    │  ├─ bge-large (Embeddings)  │
-            │          Port 5435           │    │  └─ qwen2.5-coder:14b (LLM) │
-            └──────────────────────────────┘    └─────────────────────────────┘
+                               ┌────────────────────────────────┐
+                               │    KruschLaw Web Interface     │
+                               │  (Streamlit / 127.0.0.1:8505)  │
+                               │   *Offline System Font Stack*  │
+                               └──────────────┬─────────────────┘
+                                              │ REST (CORS Restricted)
+                               ┌──────────────▼─────────────────┐
+                               │      KruschLaw Backend         │
+                               │   (FastAPI / 127.0.0.1:8085)   │
+                               │   *Lifespan Schemas & Guard*   │
+                               └───┬────────────────────────┬───┘
+                                   │                        │
+                    SQL / pgvector │                        │ Local HTTP
+                                   │                        │
+            ┌──────────────────────▼───────┐       ┌────────▼────────────────────┐
+            │   PostgreSQL 16 + pgvector   │       │      Local Ollama Node      │
+            │   (Laws & Case Fact Vectors) │       │  ├─ bge-large (Embeddings)  │
+            │        127.0.0.1:5435        │       │  └─ qwen2.5:14b (LLM)       │
+            └──────────────────────────────┘       └─────────────────────────────┘
 ```
 
 ---
@@ -64,7 +67,7 @@ Law firms, legal aid organizations, and corporate legal departments face an impo
 * [Ollama](https://ollama.com/) running locally with the required models pulled:
   ```bash
   ollama pull bge-large
-  ollama pull qwen2.5-coder:14b
+  ollama pull qwen2.5:14b
   ```
 
 ### 1. Clone & Configure
@@ -131,11 +134,29 @@ To verify that KruschLaw does not transmit data outside your local environment:
 
 ---
 
-## ⚖️ Ethics & Legal Notice
+## ⚖️ Ethics, Professional Responsibility & Verification
 
 > [!IMPORTANT]
 > **Unauthorized Practice of Law (UPL) Notice**:  
-> KruschLaw is an artificial intelligence decision-support and research system. It is designed to assist qualified attorneys, legal researchers, and self-represented litigants in organizing facts and identifying applicable statutory authorities. **KruschLaw is not an attorney and does not provide formal legal advice.** All statutory interpretations and case analyses must be verified by a licensed attorney admitted to the relevant bar before filing or serving legal documents.
+> KruschLaw is an offline artificial intelligence decision-support and issue-spotting system. It is designed to assist admitted attorneys, legal researchers, and self-represented litigants in organizing facts and identifying candidate municipal ordinances and statutes. **KruschLaw is not an attorney, is not a law firm, and does not provide formal legal advice or representation.** All statutory interpretations, section applicability, and analytical conclusions must be independently verified by a licensed attorney admitted to the relevant bar before filing or serving legal documents.
+
+### Duty of Competence & Citation Verification (ABA Model Rule 1.1)
+Lawyers maintain a strict ethical obligation of competence when utilizing generative AI tools in legal practice (*see* ABA Formal Opinion 512; State Bar of California Formal Opinion No. 2023-207):
+* **Grounding Guardrails**: KruschLaw implements automated post-generation citation parsing (`verify_citation_grounding`). If the model references a statute or municipal section not contained within the retrieved dataset, the output is stamped with an explicit `⚠️ Citation Grounding Advisory`.
+* **Zero Hallucination Tolerance**: Attorneys must never submit generative output to a court or administrative tribunal without verifying that cited authorities exist, are currently in force, and have not been amended or preempted.
+* **Privilege Preservation**: By keeping all matter facts on-premise within localhost-bound sockets, KruschLaw eliminates third-party disclosure under the work-product doctrine and FRE 502 / Cal. Evid. Code § 954.
+
+---
+
+## 📊 Evaluation & Retrieval Quality
+
+KruschLaw evaluates statutory issue-spotting performance using a local fixture suite:
+* **Precision@k & Citation Accuracy**: Verified against known landlord-tenant fact patterns to ensure retrieved sections (e.g. Oakland OMC § 8.22.030, CA Civ. Code § 1950.5) match controlling legal provisions.
+* **Automated Regression Suite**: Unit tests run without cloud dependencies via in-memory SQLite and mocked vector math:
+  ```bash
+  python -m unittest tests/test_pipeline.py
+  ```
+
 
 ---
 

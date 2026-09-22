@@ -14,10 +14,13 @@ KruschLaw is specifically engineered for high-stakes environments where attorney
 
 For law offices and corporate environments seeking maximal isolation:
 
-1. **Firewall / Egress Filtering**: Configure your host or container firewall (`iptables` / `ufw`) to block all outbound WAN traffic from the KruschLaw containers. The system functions entirely offline.
-2. **Credential Rotation**: Never use default passwords. Generate strong, unique credentials for `POSTGRES_PASSWORD` in `.env`.
-3. **Network Binding**: Ensure `docker-compose.yml` port mappings bind strictly to `127.0.0.1` or your private VPN interface (e.g. `127.0.0.1:8505:8501`) rather than `0.0.0.0` if deployed on a multi-tenant network.
-4. **Volume Encryption**: Deploy the Docker volumes on an encrypted file system (LUKS on Linux, FileVault on macOS, or BitLocker on Windows).
+1. **Localhost Network Binding**: Ports in `docker-compose.yml` bind strictly to `127.0.0.1` by default (`DATABASE_BIND_IP`, `BACKEND_BIND_IP`, `FRONTEND_BIND_IP`), preventing unauthenticated LAN exposure. If remote access is required, deploy an authenticated TLS reverse proxy (e.g., Caddy or Nginx with client certs / OAuth).
+2. **Offline Web Application**: The web dashboard is engineered with zero CDN dependencies. Web fonts rely exclusively on the client's local system typography stack, eliminating external HTTP requests upon page load.
+3. **Ingest Directory Sandboxing**: Parquet dataset ingestion enforces directory whitelist validation (`ALLOWED_INGEST_DIRS`), preventing path traversal or unauthorized local file exposure.
+4. **Credential Rotation**: Never use default passwords. Generate strong, unique credentials for `POSTGRES_PASSWORD` in `.env`.
+5. **Firewall / Egress Filtering**: For true air-gapping, enforce an operator egress firewall policy (`ufw default deny outgoing`) or Docker internal network isolation. The application operates 100% offline.
+6. **Volume Encryption**: Deploy persistent database volumes on an encrypted storage volume (LUKS on Linux, FileVault on macOS, or BitLocker on Windows).
+
 
 ---
 

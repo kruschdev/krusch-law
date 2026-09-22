@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from typing import Optional, List
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,18 +14,32 @@ from .ingest import ingest_mock_data, ingest_locus_parquet
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("kruschlaw.api")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database schemas and pgvector extensions on service boot."""
+    logger.info("Initializing KruschLaw database schemas...")
+    try:
+        init_db()
+        logger.info("Database schemas initialized successfully.")
+    except Exception as e:
+        logger.error(f"Error during database startup initialization: {e}")
+    yield
+
+
 app = FastAPI(
     title="KruschLaw API",
     description="Air-Gapped, Privacy-First Legal RAG & Ordinance Intelligence Engine",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
-# Enable CORS for frontend clients
+# Enable CORS restricted to configured internal origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,17 +53,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-@app.on_event("startup")
-def on_startup():
-    """Initialize database schemas and extensions on service boot."""
-    logger.info("Initializing KruschLaw database schemas...")
-    try:
-        init_db()
-        logger.info("Database schemas initialized successfully.")
-    except Exception as e:
-        logger.error(f"Error during database startup initialization: {e}")
 
 
 # --- Pydantic Request & Response Schemas ---
@@ -196,6 +200,9 @@ def ingest_parquet(payload: ParquetIngestRequest, db: Session = Depends(get_db))
         return IngestResponse(status="success", inserted_records=inserted)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        logger.warning(f"Invalid Parquet ingest request: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:

@@ -16,12 +16,11 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8085")
 # Cyber-Legal Design Aesthetics
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
-
+    /* True Air-Gapped Offline Font Stack (Zero Outbound Network Calls) */
     .stApp {
         background: radial-gradient(circle at 50% 0%, #0d1527, #030712 100%);
         color: #f1f5f9;
-        font-family: 'Inter', -apple-system, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     }
 
     /* Top Nav Container */
@@ -100,7 +99,7 @@ st.markdown("""
         font-size: 0.82rem;
         color: #94a3b8;
         margin-bottom: 0.65rem;
-        font-family: 'JetBrains Mono', monospace;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
     .law-card-body {
         font-size: 0.92rem;

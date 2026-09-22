@@ -232,6 +232,61 @@ class TestKruschLawPipeline(unittest.TestCase):
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    def test_citation_grounding_verified(self):
+        from src.backend.rag import verify_citation_grounding
+        retrieved_laws = [
+            {
+                "id": 1,
+                "title": "Oakland Rent Adjustment Program",
+                "section": "Section 8.22.030",
+                "jurisdiction": "Oakland Municipal Code",
+                "content": "Landlords must provide notice..."
+            }
+        ]
+        grounded_analysis = (
+            "Under Section 8.22.030 of the Oakland Municipal Code, the landlord must provide statutory notice."
+        )
+        is_grounded, ungrounded, notice = verify_citation_grounding(grounded_analysis, retrieved_laws)
+        self.assertTrue(is_grounded)
+        self.assertEqual(len(ungrounded), 0)
+        self.assertIn("Citation Grounding Verified", notice)
+
+    def test_citation_grounding_hallucination_detected(self):
+        from src.backend.rag import verify_citation_grounding
+        retrieved_laws = [
+            {
+                "id": 1,
+                "title": "Oakland Rent Adjustment Program",
+                "section": "Section 8.22.030",
+                "jurisdiction": "Oakland Municipal Code",
+                "content": "Landlords must provide notice..."
+            }
+        ]
+        # Analysis citing an ungrounded statutory section (Section 1942)
+        hallucinated_analysis = (
+            "Pursuant to Section 8.22.030, notice is required. Additionally, under Section 1942, "
+            "the tenant may exercise repair-and-deduct remedies."
+        )
+        is_grounded, ungrounded, notice = verify_citation_grounding(hallucinated_analysis, retrieved_laws)
+        self.assertFalse(is_grounded)
+        self.assertIn("1942", ungrounded)
+        self.assertIn("Citation Grounding Advisory", notice)
+        self.assertIn("Section 1942", notice)
+
+    def test_parquet_path_traversal_rejection(self):
+        from src.backend.ingest import ingest_locus_parquet
+        # Attempt to access an unauthorized path outside allowed directories
+        disallowed_path = "/home/krusch/unauthorized_directory/sample.parquet"
+        with self.assertRaises(ValueError) as ctx:
+            ingest_locus_parquet(disallowed_path, db=self.db)
+        self.assertIn("Security Exception", str(ctx.exception))
+
+        # Test API endpoint response when path is disallowed
+        resp = self.client.post("/api/ingest/parquet", json={"file_path": disallowed_path, "limit": 5})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Security Exception", resp.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
