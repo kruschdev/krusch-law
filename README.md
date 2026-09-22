@@ -158,12 +158,32 @@ KruschLaw provides an adapter for municipal laws from the [LOCUS-v1 dataset](htt
 
 ---
 
-## 🔒 Security & Air-Gap Verification
+## 🔌 Model Context Protocol (MCP) Integration
 
-* **Strict Sandboxing**: Parquet dataset paths must reside in `ALLOWED_INGEST_DIRS` (`/app/data`, `/app/data/ingest`). `/tmp` is excluded by default.
-* **Matter Authorization**: Set `API_KEY` in `.env` to enforce `X-API-Key` headers on all case and consult endpoints.
-* **Zero Egress**: Monitor traffic with `tcpdump` or `docker stats` to verify zero outbound network calls.
-* **Security Contact**: Report vulnerabilities privately to **security@krusch.io**.
+KruschLaw includes a native stdio MCP server (`src/mcp/server.py`) exposing air-gapped legal intelligence tools to AI coding agents (Claude Code, Antigravity, Cursor):
+
+| Tool | Parameters | Description |
+|---|---|---|
+| `search_ordinances` | `query`, `state`, `city`, `topic`, `limit` | Hybrid full-text (`tsvector`) and vector search across local ordinances |
+| `get_section` | `section`, `jurisdiction` | Retrieve complete section body, header, and metadata |
+| `log_matter` | `title`, `facts`, `matter_number`, `client_name` | Securely log and vectorize client matter narrative on-premise |
+| `draft_brief` | `case_id`, `facts`, `title`, `city`, `limit` | Stage 4-part legal brief with citation grounding for human attorney review |
+
+### Connecting to Claude Code or Antigravity
+
+Add to your `mcpServers` configuration (`claude_desktop_config.json` or Antigravity settings):
+```json
+{
+  "mcpServers": {
+    "kruschlaw": {
+      "command": "/path/to/krusch-law/.venv/bin/python",
+      "args": ["-m", "src.mcp.server"],
+      "cwd": "/path/to/krusch-law"
+    }
+  }
+}
+```
+*Note: In accordance with professional responsibility standards, `draft_brief` stages briefs for human attorney approval—it never auto-files.*
 
 ---
 
