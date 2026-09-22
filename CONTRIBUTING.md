@@ -16,7 +16,7 @@ Thank you for your interest in improving KruschLaw! We welcome contributions fro
 
 ### 1. Fork & Clone
 ```bash
-git clone https://github.com/your-username/krusch-law.git
+git clone https://github.com/kruschdev/krusch-law.git
 cd krusch-law
 ```
 

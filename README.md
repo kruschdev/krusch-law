@@ -69,7 +69,7 @@ Law firms, legal aid organizations, and corporate legal departments face an impo
 
 ### 1. Clone & Configure
 ```bash
-git clone https://github.com/your-org/krusch-law.git
+git clone https://github.com/kruschdev/krusch-law.git
 cd krusch-law
 
 # Copy environment template
