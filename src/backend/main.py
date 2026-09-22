@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from .config import settings, is_loopback_or_private_host
 from .db import init_db, SessionLocal, Case, IngestJob
-from .rag import get_embedding, retrieve_laws, generate_legal_analysis, UPL_DISCLAIMER
+from .rag import get_embedding, retrieve_laws, generate_legal_analysis, UPL_DISCLAIMER, RetrievalError
 from .ingest import ingest_mock_data, ingest_locus_parquet, process_parquet_job
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -486,15 +486,19 @@ def consult_matter(
             raise HTTPException(status_code=503, detail=f"Ollama embedding failure: {str(e)}")
 
     # Retrieve matching laws using hybrid search
-    matched_laws = retrieve_laws(
-        query_vector=case.embedding,
-        text_query=case.facts,
-        limit=limit,
-        state_filter=state,
-        city_filter=city,
-        topic_filter=topic,
-        db_session=db
-    )
+    try:
+        matched_laws = retrieve_laws(
+            query_vector=case.embedding,
+            text_query=case.facts,
+            limit=limit,
+            state_filter=state,
+            city_filter=city,
+            topic_filter=topic,
+            db_session=db
+        )
+    except RetrievalError as e:
+        logger.error(f"Statutory retrieval failure for matter #{case_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Database retrieval failure: {str(e)}")
 
     # Generate structured analysis
     analysis_text = generate_legal_analysis(

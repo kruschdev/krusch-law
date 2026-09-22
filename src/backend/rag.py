@@ -21,6 +21,11 @@ UPL_DISCLAIMER = (
 )
 
 
+class RetrievalError(RuntimeError):
+    """Raised when statutory or ordinance search against the database fails."""
+    pass
+
+
 def get_embeddings_batch(queries: List[str]) -> List[List[float]]:
     """Generate vector embeddings in batch via Ollama API."""
     if not queries:
@@ -266,8 +271,8 @@ def retrieve_laws(
 
         return deduped
     except Exception as e:
-        logger.error(f"Vector search retrieval error: {e}")
-        return []
+        logger.error(f"Vector search retrieval error: {e}", exc_info=True)
+        raise RetrievalError(f"Database statutory retrieval failed: {str(e)}") from e
     finally:
         if close_session:
             db.close()
