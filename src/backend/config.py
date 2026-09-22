@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     DEFAULT_RETRIEVAL_LIMIT: int = int(os.getenv("DEFAULT_RETRIEVAL_LIMIT", "5"))
 
     # Security & Air-Gap Boundaries
+    API_KEY: Optional[str] = os.getenv("API_KEY", None)
     CORS_ORIGINS: str = os.getenv(
         "CORS_ORIGINS",
         "http://localhost:8505,http://127.0.0.1:8505,http://localhost:3000,http://127.0.0.1:3000"
@@ -51,5 +52,28 @@ class Settings(BaseSettings):
         env_file = ".env"
         extra = "ignore"
 
+
+def is_loopback_or_private_host(url_or_host: str) -> bool:
+    """Inspect whether a configured host/URL resides strictly on loopback or private networks."""
+    import ipaddress
+    import urllib.parse
+    if not url_or_host:
+        return False
+    try:
+        if "://" in url_or_host:
+            hostname = urllib.parse.urlparse(url_or_host).hostname or ""
+        else:
+            hostname = url_or_host
+        
+        hostname = hostname.strip().lower()
+        if hostname in ("localhost", "127.0.0.1", "::1", "host.docker.internal", "db", "backend", "frontend"):
+            return True
+        ip = ipaddress.ip_address(hostname)
+        return ip.is_loopback or ip.is_private
+    except Exception:
+        return False
+
+
 settings = Settings()
+
 

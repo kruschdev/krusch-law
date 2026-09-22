@@ -12,6 +12,16 @@ st.set_page_config(
 )
 
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8085")
+DEFAULT_API_KEY = os.getenv("API_KEY", "")
+
+
+def get_auth_headers() -> dict:
+    """Return authorization headers with configured API key if available."""
+    key = st.session_state.get("api_key", DEFAULT_API_KEY)
+    headers = {}
+    if key:
+        headers["X-API-Key"] = key.strip()
+    return headers
 
 # Cyber-Legal Design Aesthetics
 st.markdown("""
@@ -151,8 +161,8 @@ st.markdown("""
             <span class="brand-subtitle">Private, Air-Gapped Legal RAG & Ordinance Engine</span>
         </div>
         <div style="display: flex; gap: 10px;">
-            <div class="badge-pill">🛡️ Air-Gapped</div>
-            <div class="badge-pill">🔒 Zero Cloud Leakage</div>
+            <div class="badge-pill">🔬 v0.2.0-dev (Prototype)</div>
+            <div class="badge-pill">🔒 Local Inference</div>
         </div>
     </div>
 """, unsafe_allow_html=True)
@@ -160,7 +170,7 @@ st.markdown("""
 # Ethical & Legal Compliance Notice
 st.markdown("""
     <div class="disclaimer-card">
-        ⚖️ <strong>Legal & Ethical Notice:</strong> KruschLaw is an open-source, offline AI assistant designed for preliminary legal research, statutory cross-referencing, and issue-spotting. It does <strong>not</strong> provide binding legal advice or establish an attorney-client relationship. All citations and reasoning must be reviewed by a licensed attorney.
+        ⚖️ <strong>Legal & Ethical Notice:</strong> KruschLaw is an open-source, offline AI research prototype designed for preliminary statutory exploration and issue-spotting. It does <strong>not</strong> provide binding legal advice or establish an attorney-client relationship. All citations and reasoning must be reviewed by an admitted attorney.
     </div>
 """, unsafe_allow_html=True)
 
@@ -180,7 +190,21 @@ with st.sidebar:
     st.markdown("### 🏛️ Control Plane")
     
     if is_healthy:
+        sec = health_info.get("security", {})
+        auth_active = sec.get("auth_enabled", False)
         st.success(f"🟢 Backend Online (`{health_info.get('models', {}).get('reasoning')}`)")
+        
+        if auth_active:
+            st.info("🔒 Matter Authorization Active")
+            user_key = st.text_input(
+                "API Access Key",
+                value=st.session_state.get("api_key", DEFAULT_API_KEY),
+                type="password",
+                help="Provided via API_KEY env var or entered here"
+            )
+            st.session_state["api_key"] = user_key
+        else:
+            st.caption("ℹ️ Dev Mode: Open Access (No API_KEY set)")
     else:
         st.error(f"🔴 Backend Offline at `{BACKEND_URL}`")
         st.caption("Verify the backend service is running via `docker compose up backend`.")
@@ -193,7 +217,11 @@ with st.sidebar:
     if st.button("🚀 Seed California Ordinances", use_container_width=True):
         with st.spinner("Embedding and ingesting municipal tenant & noise rules..."):
             try:
-                resp = httpx.post(f"{BACKEND_URL}/api/ingest/mock", timeout=60.0)
+                resp = httpx.post(
+                    f"{BACKEND_URL}/api/ingest/mock",
+                    headers=get_auth_headers(),
+                    timeout=60.0
+                )
                 if resp.status_code == 200:
                     inserted = resp.json().get("inserted_records", 0)
                     st.success(f"Ingested {inserted} California ordinance provisions!")
@@ -216,6 +244,7 @@ with st.sidebar:
                     resp = httpx.post(
                         f"{BACKEND_URL}/api/ingest/parquet",
                         json={"file_path": parquet_path, "limit": limit_num},
+                        headers=get_auth_headers(),
                         timeout=300.0
                     )
                     if resp.status_code == 200:
@@ -271,6 +300,7 @@ with tab1:
                             resp = httpx.post(
                                 f"{BACKEND_URL}/api/cases",
                                 json={"title": title, "description": desc, "facts": facts},
+                                headers=get_auth_headers(),
                                 timeout=45.0
                             )
                             if resp.status_code == 201:
@@ -286,7 +316,11 @@ with tab1:
         st.write("Browse existing matters stored securely on-premise.")
 
         try:
-            resp = httpx.get(f"{BACKEND_URL}/api/cases", timeout=10.0)
+            resp = httpx.get(
+                f"{BACKEND_URL}/api/cases",
+                headers=get_auth_headers(),
+                timeout=10.0
+            )
             if resp.status_code == 200:
                 cases = resp.json()
                 if not cases:
@@ -311,7 +345,11 @@ with tab2:
     # Load cases for selection dropdown
     matter_options = {}
     try:
-        resp = httpx.get(f"{BACKEND_URL}/api/cases", timeout=10.0)
+        resp = httpx.get(
+            f"{BACKEND_URL}/api/cases",
+            headers=get_auth_headers(),
+            timeout=10.0
+        )
         if resp.status_code == 200:
             for c in resp.json():
                 matter_options[f"#{c['id']} — {c['title']}"] = c['id']
@@ -341,7 +379,12 @@ with tab2:
                     if city_filter:
                         params["city"] = city_filter
 
-                    resp = httpx.get(f"{BACKEND_URL}/api/consult", params=params, timeout=180.0)
+                    resp = httpx.get(
+                        f"{BACKEND_URL}/api/consult",
+                        params=params,
+                        headers=get_auth_headers(),
+                        timeout=180.0
+                    )
                     if resp.status_code == 200:
                         data = resp.json()
 
@@ -398,12 +441,18 @@ with tab3:
                 try:
                     # Create a temporary search matter to leverage consult backend
                     temp_matter = {"title": "Explorer Query", "description": "Explorer", "facts": search_query}
-                    resp = httpx.post(f"{BACKEND_URL}/api/cases", json=temp_matter, timeout=30.0)
+                    resp = httpx.post(
+                        f"{BACKEND_URL}/api/cases",
+                        json=temp_matter,
+                        headers=get_auth_headers(),
+                        timeout=30.0
+                    )
                     if resp.status_code == 201:
                         temp_id = resp.json()["id"]
                         consult_resp = httpx.get(
                             f"{BACKEND_URL}/api/consult",
                             params={"case_id": temp_id, "limit": search_limit},
+                            headers=get_auth_headers(),
                             timeout=60.0
                         )
                         if consult_resp.status_code == 200:
@@ -430,3 +479,4 @@ with tab3:
                         st.error(f"Search embedding failed: {resp.text}")
                 except Exception as e:
                     st.error(f"Search failure: {e}")
+

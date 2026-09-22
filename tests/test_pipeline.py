@@ -110,7 +110,11 @@ class TestKruschLawPipeline(unittest.TestCase):
         data = resp.json()
         self.assertEqual(data["status"], "healthy")
         self.assertEqual(data["service"], "kruschlaw-backend")
-        self.assertTrue(data["air_gapped"])
+        self.assertEqual(data["version"], "0.2.0-dev")
+        self.assertIn("security", data)
+        self.assertIn("auth_enabled", data["security"])
+        self.assertIn("ollama_host_is_local_or_private", data["security"])
+        self.assertIn("embed_host_is_local_or_private", data["security"])
 
     def test_mock_ordinance_ingestion(self):
         inserted = ingest_mock_data(self.db)
@@ -285,6 +289,60 @@ class TestKruschLawPipeline(unittest.TestCase):
         resp = self.client.post("/api/ingest/parquet", json={"file_path": disallowed_path, "limit": 5})
         self.assertEqual(resp.status_code, 400)
         self.assertIn("Security Exception", resp.json()["detail"])
+
+    def test_vector_similarity_ranking_sqlite(self):
+        from src.backend.rag import retrieve_laws
+        # Query vector: [1.0, 0.0, 0.0, ...]
+        q_vec = [0.0] * 1024
+        q_vec[0] = 1.0
+
+        # Close vector: [0.9, 0.1, 0.0, ...]
+        close_vec = [0.0] * 1024
+        close_vec[0] = 0.9
+        close_vec[1] = 0.1
+
+        # Far vector: [0.0, 1.0, 0.0, ...]
+        far_vec = [0.0] * 1024
+        far_vec[1] = 1.0
+
+        law1 = LawVector(
+            jurisdiction="Code A", state="CA", city_or_county="Oakland",
+            title="Close Statute", section="Sec 1", content="Text 1",
+            embedding=close_vec
+        )
+        law2 = LawVector(
+            jurisdiction="Code B", state="CA", city_or_county="Oakland",
+            title="Far Statute", section="Sec 2", content="Text 2",
+            embedding=far_vec
+        )
+        self.db.add_all([law1, law2])
+        self.db.commit()
+
+        results = retrieve_laws(query_vector=q_vec, limit=2, db_session=self.db)
+        self.assertEqual(len(results), 2)
+        # Verify ranking order: close statute must rank higher than far statute
+        self.assertEqual(results[0]["title"], "Close Statute")
+        self.assertEqual(results[1]["title"], "Far Statute")
+        self.assertGreater(results[0]["similarity"], results[1]["similarity"])
+
+    def test_api_key_authentication_enforcement(self):
+        # Configure API key
+        src.backend.config.settings.API_KEY = "test_confidential_key"
+        try:
+            # 1. Unauthenticated request must fail with 401
+            unauth_resp = self.client.get("/api/cases")
+            self.assertEqual(unauth_resp.status_code, 401)
+            self.assertIn("Unauthorized", unauth_resp.json()["detail"])
+
+            # 2. Invalid API key must fail with 401
+            invalid_resp = self.client.get("/api/cases", headers={"X-API-Key": "wrong_key"})
+            self.assertEqual(invalid_resp.status_code, 401)
+
+            # 3. Valid API key succeeds
+            valid_resp = self.client.get("/api/cases", headers={"X-API-Key": "test_confidential_key"})
+            self.assertEqual(valid_resp.status_code, 200)
+        finally:
+            src.backend.config.settings.API_KEY = None
 
 
 if __name__ == "__main__":

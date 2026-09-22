@@ -1,4 +1,6 @@
 import re
+import json
+import math
 import logging
 import httpx
 from typing import List, Dict, Optional, Tuple, Set
@@ -105,14 +107,39 @@ def retrieve_laws(
         is_sqlite = db.bind.dialect.name == "sqlite"
         
         if is_sqlite:
-            # Fallback for local unit test fixtures without pgvector extension
+            # Fallback for local unit test fixtures without pgvector extension:
+            # Extract candidates and compute exact cosine similarity in Python for realistic ranking
             sql = text(f"""
-                SELECT id, jurisdiction, state, city_or_county, title, section, content,
-                       1.0 AS cosine_sim
+                SELECT id, jurisdiction, state, city_or_county, title, section, content, embedding
                 FROM laws_vectors
                 WHERE {conditions_str}
-                LIMIT :limit
             """)
+            rows = db.execute(sql, params).fetchall()
+            results = []
+            norm_q = math.sqrt(sum(a * a for a in query_vector))
+            for row in rows:
+                sim = 0.0
+                if row.embedding:
+                    try:
+                        emb = json.loads(row.embedding) if isinstance(row.embedding, str) else row.embedding
+                        dot = sum(a * b for a, b in zip(query_vector, emb))
+                        norm_e = math.sqrt(sum(b * b for b in emb))
+                        if norm_q > 0 and norm_e > 0:
+                            sim = dot / (norm_q * norm_e)
+                    except Exception:
+                        sim = 0.0
+                results.append({
+                    "id": row.id,
+                    "jurisdiction": row.jurisdiction,
+                    "state": row.state,
+                    "city_or_county": row.city_or_county,
+                    "title": row.title,
+                    "section": row.section,
+                    "content": row.content,
+                    "similarity": float(sim)
+                })
+            results.sort(key=lambda x: x["similarity"], reverse=True)
+            return results[:limit]
         else:
             # Production pgvector cosine distance: 1 - (embedding <=> vec)
             sql = text(f"""
@@ -123,21 +150,20 @@ def retrieve_laws(
                 ORDER BY embedding <=> CAST(:vec AS vector)
                 LIMIT :limit
             """)
-
-        rows = db.execute(sql, params).fetchall()
-        results = []
-        for row in rows:
-            results.append({
-                "id": row.id,
-                "jurisdiction": row.jurisdiction,
-                "state": row.state,
-                "city_or_county": row.city_or_county,
-                "title": row.title,
-                "section": row.section,
-                "content": row.content,
-                "similarity": float(row.cosine_sim) if row.cosine_sim is not None else 0.0
-            })
-        return results
+            rows = db.execute(sql, params).fetchall()
+            results = []
+            for row in rows:
+                results.append({
+                    "id": row.id,
+                    "jurisdiction": row.jurisdiction,
+                    "state": row.state,
+                    "city_or_county": row.city_or_county,
+                    "title": row.title,
+                    "section": row.section,
+                    "content": row.content,
+                    "similarity": float(row.cosine_sim) if row.cosine_sim is not None else 0.0
+                })
+            return results
     except Exception as e:
         logger.error(f"Vector search retrieval error: {e}")
         return []

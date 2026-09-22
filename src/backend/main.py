@@ -1,12 +1,13 @@
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional, List
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Security
+from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
-from .config import settings
+from .config import settings, is_loopback_or_private_host
 from .db import init_db, SessionLocal, Case
 from .rag import get_embedding, retrieve_laws, generate_legal_analysis, UPL_DISCLAIMER
 from .ingest import ingest_mock_data, ingest_locus_parquet
@@ -17,11 +18,11 @@ logger = logging.getLogger("kruschlaw.api")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database schemas and pgvector extensions on service boot."""
-    logger.info("Initializing KruschLaw database schemas...")
+    """Initialize database schemas, extensions, and HNSW indexes on service boot."""
+    logger.info("Initializing KruschLaw database schemas and HNSW indexes...")
     try:
         init_db()
-        logger.info("Database schemas initialized successfully.")
+        logger.info("Database schemas and indexes initialized successfully.")
     except Exception as e:
         logger.error(f"Error during database startup initialization: {e}")
     yield
@@ -29,12 +30,27 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="KruschLaw API",
-    description="Air-Gapped, Privacy-First Legal RAG & Ordinance Intelligence Engine",
-    version="1.0.0",
+    description="Air-Gapped, Privacy-First Legal RAG & Ordinance Intelligence Engine (Research Prototype)",
+    version="0.2.0-dev",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan
 )
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def verify_api_key(api_key: Optional[str] = Security(api_key_header)) -> Optional[str]:
+    """Verify optional API Key authentication. Enforced if API_KEY is configured in settings."""
+    if not settings.API_KEY:
+        return None  # Unauthenticated in local development mode
+    if not api_key or api_key.strip() != settings.API_KEY.strip():
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Missing or invalid X-API-Key header. Client matter data is protected."
+        )
+    return api_key
+
 
 # Enable CORS restricted to configured internal origins
 app.add_middleware(
@@ -112,11 +128,23 @@ class ConsultResponse(BaseModel):
 
 @app.get("/health", tags=["System"])
 def health_check():
-    """Health check endpoint for container probes and uptime monitors."""
+    """Health check endpoint with verified runtime security and inference inspection."""
+    ollama_local = is_loopback_or_private_host(settings.OLLAMA_BASE_URL)
+    embed_local = is_loopback_or_private_host(settings.OLLAMA_EMBED_HOST)
     return {
         "status": "healthy",
         "service": "kruschlaw-backend",
-        "air_gapped": True,
+        "version": "0.2.0-dev",
+        "security": {
+            "auth_enabled": bool(settings.API_KEY),
+            "ollama_host_is_local_or_private": ollama_local,
+            "embed_host_is_local_or_private": embed_local,
+            "network_isolation_assessment": (
+                "Verified loopback / private network inference endpoints."
+                if (ollama_local and embed_local)
+                else "Caution: One or more inference endpoints resolve outside private subnets."
+            )
+        },
         "models": {
             "embeddings": settings.OLLAMA_EMBED_MODEL,
             "reasoning": settings.OLLAMA_LLM_MODEL
@@ -125,7 +153,11 @@ def health_check():
 
 
 @app.post("/api/cases", response_model=CaseResponse, status_code=201, tags=["Cases"])
-def create_case(payload: CaseCreate, db: Session = Depends(get_db)):
+def create_case(
+    payload: CaseCreate,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
     """
     Log a new legal matter. Automatically generates a 1024-dim embedding of the factual narrative
     via the local Ollama node.
@@ -161,7 +193,10 @@ def create_case(payload: CaseCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/cases", response_model=List[CaseResponse], tags=["Cases"])
-def get_cases(db: Session = Depends(get_db)):
+def get_cases(
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
     """Retrieve all previously logged client matters, ordered by creation date."""
     try:
         cases = db.query(Case).order_by(Case.created_at.desc()).all()
@@ -180,7 +215,10 @@ def get_cases(db: Session = Depends(get_db)):
 
 
 @app.post("/api/ingest/mock", response_model=IngestResponse, tags=["Ingestion"])
-def ingest_mock_ordinances(db: Session = Depends(get_db)):
+def ingest_mock_ordinances(
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
     """Seed the database with verified California municipal ordinances and tenant rights statutes."""
     try:
         inserted = ingest_mock_data(db)
@@ -193,7 +231,11 @@ def ingest_mock_ordinances(db: Session = Depends(get_db)):
 
 
 @app.post("/api/ingest/parquet", response_model=IngestResponse, tags=["Ingestion"])
-def ingest_parquet(payload: ParquetIngestRequest, db: Session = Depends(get_db)):
+def ingest_parquet(
+    payload: ParquetIngestRequest,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
     """Ingest municipal ordinances from an on-premise LOCUS-v1 Parquet file."""
     try:
         inserted = ingest_locus_parquet(payload.file_path, db=db, limit=payload.limit)
@@ -216,7 +258,8 @@ def consult_matter(
     limit: Optional[int] = Query(5, ge=1, le=20, description="Maximum number of laws to retrieve"),
     state: Optional[str] = Query(None, description="Two-letter state filter (e.g. CA)"),
     city: Optional[str] = Query(None, description="City or county filter (e.g. Oakland)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
 ):
     """
     Perform semantic vector matching against local laws and generate a 4-part legal analysis brief

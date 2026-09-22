@@ -46,7 +46,7 @@ class LawVector(Base):
 
 
 def init_db(target_engine=None):
-    """Initialize database tables and pgvector extension if PostgreSQL."""
+    """Initialize database tables, pgvector extension, and HNSW indexes if PostgreSQL."""
     eng = target_engine or engine
     dialect_name = eng.dialect.name
     
@@ -56,3 +56,19 @@ def init_db(target_engine=None):
             conn.commit()
             
     Base.metadata.create_all(bind=eng)
+
+    if dialect_name == "postgresql":
+        with eng.connect() as conn:
+            # Create HNSW cosine indexes for sub-millisecond retrieval on large statutory dumps
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS laws_vectors_embedding_hnsw_idx 
+                ON laws_vectors USING hnsw (embedding vector_cosine_ops)
+                WITH (m = 16, ef_construction = 64);
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS cases_embedding_hnsw_idx 
+                ON cases USING hnsw (embedding vector_cosine_ops)
+                WITH (m = 16, ef_construction = 64);
+            """))
+            conn.commit()
+

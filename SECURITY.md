@@ -20,6 +20,8 @@ For law offices and corporate environments seeking maximal isolation:
 4. **Credential Rotation**: Never use default passwords. Generate strong, unique credentials for `POSTGRES_PASSWORD` in `.env`.
 5. **Firewall / Egress Filtering**: For true air-gapping, enforce an operator egress firewall policy (`ufw default deny outgoing`) or Docker internal network isolation. The application operates 100% offline.
 6. **Volume Encryption**: Deploy persistent database volumes on an encrypted storage volume (LUKS on Linux, FileVault on macOS, or BitLocker on Windows).
+7. **Matter Authorization (API Key)**: Set `API_KEY` in `.env` to enforce token authentication (`X-API-Key`) across all case logging, review, and consultation endpoints, preventing unauthenticated matter exposure on shared office networks.
+
 
 
 ---

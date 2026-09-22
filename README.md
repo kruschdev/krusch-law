@@ -1,9 +1,10 @@
 # ⚖️ KruschLaw
 
-> **Private, Air-Gapped Legal RAG & Ordinance Intelligence Engine**  
+> **Private, Air-Gapped Legal RAG & Ordinance Intelligence Engine (Research Prototype)**  
 > *Query local municipal codes, statutes, and client matter records with 100% on-premise privacy and zero cloud data leakage.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Version: 0.2.0-dev](https://img.shields.io/badge/Version-0.2.0--dev%20(Prototype)-orange.svg)](https://github.com/kruschdev/krusch-law)
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.31+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io)
@@ -18,19 +19,23 @@ Law firms, legal aid organizations, and corporate legal departments face an impo
 1. **Public Cloud LLMs**: Expose privileged client communications and confidential matter facts to external vendor logging, violating attorney-client privilege and state bar ethics rules.
 2. **Manual Research**: Sifting through thousands of municipal ordinances, county codes, and changing statutes consumes dozens of non-billable hours.
 
-**KruschLaw** eliminates this compromise. It is a completely self-contained, air-gapped legal retrieval-augmented generation (RAG) system running entirely on your local infrastructure. **Zero bytes of client data leave your network.**
+**KruschLaw** is an open-source experimental research prototype exploring sovereign, on-premise legal retrieval. It is engineered to test local retrieval-augmented generation (RAG) running entirely on private infrastructure without third-party API exposure.
 
 ---
 
 ## 🚀 Key Features
 
 * 🛡️ **100% Air-Gapped & Sovereign**: Zero cloud dependencies, external CDNs, or telemetry calls. Port bindings default strictly to `127.0.0.1` for host containment.
+* 🔐 **Matter Authorization Layer**: Protects client facts and intake records with optional `API_KEY` header verification (`X-API-Key`).
+* ⚡ **Production HNSW Vector Indexing**: Automatically builds `pgvector` HNSW indexes (`m=16, ef_construction=64`) on startup to ensure sub-millisecond retrieval on large-scale municipal corpora.
 * 🔍 **Semantic Ordinance & Statute Retrieval**: Matches client factual narratives against municipal codes, state statutes, and administrative rules using `pgvector` cosine similarity.
 * 🛡️ **Citation-Constrained Grounding Guardrail**: Automated post-generation scanner that extracts statutory section citations from model output and verifies them against retrieved authorities. Flags hallucinated sections with explicit advisories.
 * 📦 **LOCUS-v1 Parquet & Municipal Ingestion**: Built-in engine to parse and normalize large-scale municipal law datasets with automatic schema resolution and sandboxed directory controls.
 * 💼 **Confidential Matter Portfolio**: Securely log, manage, and vectorize client case matters with local 1024-dim dense embeddings (`bge-large`).
 * 📋 **Structured 4-Part Legal Briefs**: Automatically generates citation-backed analyses formatted into Executive Summary, Statutory Authorities, Factual Matrix Analysis, and Strategic Next Steps using local instruction models (`qwen2.5:14b`).
+* 🔬 **Dynamic Security Diagnostics**: `/health` actively inspects runtime network topologies to verify that Ollama inference hosts reside strictly on loopback or private RFC1918 subnets.
 * ⚖️ **UPL & Ethics Guardrails**: Adheres to strict Unauthorized Practice of Law (UPL) guidelines and ABA Model Rule 1.1 duty of technological competence, ensuring all outputs feature prominent professional review disclaimers.
+
 
 ---
 
