@@ -72,9 +72,17 @@ KruschLaw consumes **KruschNexus** as its native document ingestion and citation
 3. **No Automated Court Filings**: KruschLaw is an advisory research prototype. All generated briefs require independent Shepardizing and human attorney verification under CCP § 128.7 and CRPC 3.3.
 4. **Citation Accountability**: Every generated assertion must link back to physical page numbers and section headers extracted by KruschNexus.
 
+## 4. KruschContext MCP Ecosystem Integration
+
+KruschLaw is integrated into the fleet agentic ecosystem via **KruschContext MCP**:
+- **Modular Companion Extension**: `krusch-context-mcp/src/extensions/law/` provides decoupled access via `npm run start:law` or `--extensions=law`.
+- **L2 Neural Semantic Routing**: Natural language statutory questions automatically route to KruschLaw tools (`krusch_law_search_ordinances`, `krusch_law_get_section`, `krusch_law_draft_brief`, `krusch_law_verify_grounding`).
+- **Proactive Trajectory Grounding**: KruschContext's `proactive_nudge` detects statutory citations and checks governing authorities before agent operations execute.
+- **Matter Memory & State Briefing**: Case factual records, procedural deadlines, and legal theories persist across sessions in KruschContext's Lakebase (`.agent/memory.db`) with active superseding and invalidation.
+
 ---
 
-## 4. Testing & Verification
+## 5. Testing & Verification
 
 Run the complete test suite (in-memory SQLite + mock Ollama, 0 external network dependencies):
 ```bash
