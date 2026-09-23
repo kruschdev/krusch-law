@@ -2,7 +2,7 @@ import uuid
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional, List
-from fastapi import FastAPI, Depends, HTTPException, Query, Security, BackgroundTasks, status
+from fastapi import FastAPI, Depends, HTTPException, Query, Security, BackgroundTasks, status, UploadFile, File, Form
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -130,6 +130,24 @@ class IngestJobStatusResponse(BaseModel):
     error_message: Optional[str] = None
     created_at: str
     updated_at: Optional[str] = None
+
+
+class DocumentIngestRequest(BaseModel):
+    file_path: str
+    matter_id: Optional[int] = None
+    doc_type: Optional[str] = "matter_facts"
+
+
+class DocumentIngestResponse(BaseModel):
+    status: str
+    filename: str
+    matter_id: Optional[int] = None
+    doc_type: Optional[str] = "matter_facts"
+    pages_in: int
+    chunks_out: int
+    records_inserted: int
+    ocr_pages: List[int] = []
+    duration_ms: float
 
 
 class LawItem(BaseModel):
@@ -408,6 +426,70 @@ def ingest_parquet(
     except Exception as e:
         logger.error(f"Parquet ingest error: {e}")
         raise HTTPException(status_code=500, detail=f"Parquet ingestion failed: {str(e)}")
+
+
+@app.post("/api/ingest/document", response_model=DocumentIngestResponse, tags=["Ingestion"])
+def ingest_document(
+    payload: DocumentIngestRequest,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Ingest a lawyer's document (PDF with OCR, DOCX, EML, TXT, MD) via KruschNexus's
+    ingestion pipeline directly into KruschLaw's legal corpus.
+    """
+    try:
+        from .ingest import ingest_matter_document
+        report = ingest_matter_document(
+            file_path=payload.file_path,
+            matter_id=payload.matter_id,
+            doc_type=payload.doc_type,
+            db=db
+        )
+        return DocumentIngestResponse(**report)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        logger.warning(f"Invalid document ingest request: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Document ingest error: {e}")
+        raise HTTPException(status_code=500, detail=f"Document ingestion failed: {str(e)}")
+
+
+@app.post("/api/ingest/upload", response_model=DocumentIngestResponse, tags=["Ingestion"])
+async def upload_document(
+    file: UploadFile = File(...),
+    matter_id: Optional[int] = Form(None),
+    doc_type: str = Form("matter_facts"),
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Directly upload a lawyer's document (PDF with OCR, DOCX, EML, TXT, MD)
+    via KruschNexus's parsing and chunking pipeline directly into KruschLaw's legal corpus.
+    """
+    try:
+        from .ingest import ingest_uploaded_matter_file
+        contents = await file.read()
+        report = ingest_uploaded_matter_file(
+            file_bytes=contents,
+            filename=file.filename or "uploaded_document",
+            matter_id=matter_id,
+            doc_type=doc_type,
+            db=db
+        )
+        return DocumentIngestResponse(**report)
+    except ValueError as e:
+        logger.warning(f"Invalid uploaded document request: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except ConnectionError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Document upload ingest error: {e}")
+        raise HTTPException(status_code=500, detail=f"Document upload ingestion failed: {str(e)}")
 
 
 @app.post("/api/ingest/parquet/async", response_model=AsyncIngestResponse, status_code=202, tags=["Ingestion"])

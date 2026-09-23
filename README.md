@@ -40,6 +40,7 @@ Law firms, legal aid organizations, and corporate legal departments face a criti
 
 * 🔒 **Localhost-Bound Default Topology**: Services bind strictly to `127.0.0.1` by default. Zero third-party telemetry, tracking pixels, or external CDN dependencies.
 * 🔍 **Hybrid Retrieval Engine**: Combines PostgreSQL full-text lexical ranking (`tsvector` / `ts_rank_cd`) with dense vector cosine similarity (`pgvector` HNSW) using Reciprocal Rank Fusion (RRF).
+* 📄 **KruschNexus Sovereign Ingestion Spine**: Built-in integration with KruschNexus (`parse_document` & `chunk_document_pages`), delivering layout-aware PDF (with local Poppler & Tesseract OCR fallback), DOCX, EML, Markdown, and TXT parsing with page-true and section-true citations (`§ 1950.5`, `Section 8.22.030`).
 * 📑 **LOCUS-v1 Parquet Adapter**: Normalized adapter for HuggingFace `LocalLaws/LOCUS-v1` datasets (`header`, `content`, `state`, `city`, `county`, `topic`, `is_substantive`).
 * 🧩 **Section-Aware Chunking & Deduplication**: Breaks multi-thousand character statutes into element-aware chunks with heading prefixes (`[{jurisdiction} {section}] {header}`) and SHA-256 content deduplication.
 * 🛡️ **Citation & Quote Grounding Scanner**: Automated post-generation scanner checking statutory section identifiers and 20+ character verbatim quotes against retrieved context, stamping ungrounded citations with warning advisories.
@@ -158,6 +159,28 @@ KruschLaw provides an adapter for municipal laws from the [LOCUS-v1 dataset](htt
    ```
 
 *Security note: Ingestion paths outside `/app/data` are rejected by sandbox policy (`ALLOWED_INGEST_DIRS`).*
+
+### Option C: KruschNexus Sovereign Document Ingestion (PDF / DOCX / EML / MD / TXT)
+Ingest lawyer discovery documents, contracts, and filings using the integrated KruschNexus engine with page-true and section-true citations:
+
+1. **Direct File Upload via UI**:
+   Drag and drop any PDF, DOCX, EML, Markdown, or TXT file into the **"📄 KruschNexus Document Ingestion"** sidebar panel or attach it directly to an active matter in the **Matter Portfolio** tab.
+
+2. **Multipart File Upload via REST**:
+   ```bash
+   curl -X POST http://localhost:8085/api/ingest/upload \
+     -F "file=@/path/to/contract.pdf" \
+     -F "matter_id=1" \
+     -F "doc_type=matter_facts"
+   ```
+
+3. **Path-Based Sandboxed Ingestion**:
+   ```bash
+   curl -X POST http://localhost:8085/api/ingest/document \
+     -H "Content-Type: application/json" \
+     -d '{"file_path": "/app/data/ingest/lease.docx", "matter_id": 1, "doc_type": "work_product"}'
+   ```
+   *Returns extraction metrics: `pages_in`, `chunks_out`, `records_inserted`, `ocr_pages`, and `duration_ms`.*
 
 ---
 

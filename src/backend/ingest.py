@@ -2,7 +2,7 @@ import os
 import re
 import hashlib
 import logging
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Any
 import pandas as pd
 from sqlalchemy.orm import Session
 
@@ -467,3 +467,187 @@ def process_parquet_job(job_id: str, file_path: str, limit: int = 250):
             pass
     finally:
         db.close()
+
+
+def ingest_matter_document(
+    file_path: str,
+    matter_id: Optional[int] = None,
+    doc_type: str = "matter_facts",
+    db: Optional[Session] = None
+) -> Dict[str, Any]:
+    """
+    Ingest a lawyer's document (PDF with local OCR fallback, DOCX, EML, TXT, MD)
+    using the KruschNexus parser and chunking engine into KruschLaw's LawVector corpus.
+    Preserves exact 1-based page numbers and section headers.
+    """
+    import sys
+    import time
+    abs_path = os.path.abspath(file_path)
+    allowed_dirs = settings.allowed_ingest_dirs_list
+    if not any(abs_path == d or abs_path.startswith(d + os.sep) for d in allowed_dirs):
+        raise ValueError(
+            f"Security Exception: Ingestion path '{file_path}' is outside permitted directory boundaries ({settings.ALLOWED_INGEST_DIRS})."
+        )
+
+    if not os.path.exists(abs_path):
+        raise FileNotFoundError(f"Document file not found at: {file_path}")
+
+    start_time = time.time()
+    filename = os.path.basename(file_path)
+
+    # Bridge to KruschNexus parser and chunking engine
+    nexus_src = os.getenv("KRUSCH_NEXUS_PATH", "/home/krusch/homelab/projects/krusch-nexus/src")
+    if nexus_src not in sys.path and os.path.isdir(nexus_src):
+        sys.path.insert(0, nexus_src)
+
+    from krusch_nexus.parsers import parse_document
+    from krusch_nexus.chunking import chunk_document_pages
+
+    parsed_doc = parse_document(abs_path, filename)
+    if not parsed_doc or not parsed_doc.pages:
+        raise ValueError(f"No text extracted from document '{filename}'")
+
+    pages = parsed_doc.pages
+    total_pages = len(pages)
+    ocr_pages = [p.page_number for p in pages if getattr(p, "ocr_applied", False) and p.page_number is not None]
+
+    file_hash = parsed_doc.file_hash
+    if not file_hash:
+        with open(abs_path, "rb") as f:
+            file_hash = hashlib.sha256(f.read()).hexdigest()
+
+    # Structural chunking via KruschNexus
+    chunks = chunk_document_pages(
+        pages=pages,
+        filename=filename,
+        file_hash=file_hash,
+        max_chars=2000,
+        overlap_chars=150,
+        base_metadata={"matter_id": matter_id, "doc_type": doc_type}
+    )
+
+    own_session = False
+    if db is None:
+        db = SessionLocal()
+        own_session = True
+
+    inserted = 0
+    try:
+        batch_chunks = []
+        for ch in chunks:
+            exists = db.query(LawVector.id).filter(LawVector.source_hash == ch.source_hash).first()
+            if not exists:
+                header_display = ch.header or "Section"
+                sec_str = ch.citation if getattr(ch, "citation", None) else (
+                    f"p. {ch.page_number} § {header_display}" if ch.page_number is not None else f"§ {header_display}"
+                )
+                src_hdr = (
+                    f"[{filename} - p.{ch.page_number}] {header_display}"
+                    if ch.page_number is not None
+                    else f"[{filename}] {header_display}"
+                )
+                batch_chunks.append({
+                    "jurisdiction": "Matter Corpus",
+                    "state": "Local",
+                    "city": "Matter",
+                    "county": f"Matter #{matter_id}" if matter_id else "General Matter",
+                    "city_or_county": f"Matter #{matter_id}" if matter_id else "General Matter",
+                    "topic": doc_type,
+                    "title": filename,
+                    "section": sec_str,
+                    "content": ch.text,
+                    "source_header": src_hdr,
+                    "source_hash": ch.source_hash,
+                    "chunk_index": ch.chunk_index,
+                    "is_substantive": True
+                })
+
+        if batch_chunks:
+            texts = [c["content"] for c in batch_chunks]
+            embeddings = get_embeddings_batch(texts)
+            for item_dict, emb in zip(batch_chunks, embeddings):
+                item_dict["embedding"] = emb
+                db.add(LawVector(**item_dict))
+                inserted += 1
+            db.commit()
+
+        elapsed_ms = round((time.time() - start_time) * 1000, 2)
+        return {
+            "status": "completed",
+            "filename": filename,
+            "matter_id": matter_id,
+            "doc_type": doc_type,
+            "pages_in": total_pages,
+            "chunks_out": len(chunks),
+            "records_inserted": inserted,
+            "ocr_pages": ocr_pages,
+            "duration_ms": elapsed_ms
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error during matter document ingestion: {e}")
+        raise
+    finally:
+        if own_session:
+            db.close()
+
+
+def ingest_uploaded_matter_file(
+    file_bytes: bytes,
+    filename: str,
+    matter_id: Optional[int] = None,
+    doc_type: str = "matter_facts",
+    db: Optional[Session] = None
+) -> Dict[str, Any]:
+    """
+    Safely stage and ingest an uploaded matter document into KruschLaw's legal corpus
+    using KruschNexus's parsing and structural chunking engine.
+    """
+    import uuid
+    allowed_exts = {".pdf", ".docx", ".doc", ".eml", ".msg", ".html", ".htm", ".txt", ".md", ".csv"}
+    clean_name = os.path.basename(filename)
+    ext = os.path.splitext(clean_name)[1].lower()
+    if ext not in allowed_exts:
+        raise ValueError(
+            f"Unsupported document format '{ext}'. Supported formats: {', '.join(sorted(allowed_exts))}"
+        )
+
+    allowed_dirs = settings.allowed_ingest_dirs_list
+    target_dir = None
+    for d in allowed_dirs:
+        try:
+            os.makedirs(d, exist_ok=True)
+            if os.access(d, os.W_OK):
+                target_dir = d
+                break
+        except Exception:
+            continue
+
+    if not target_dir:
+        target_dir = os.path.abspath(
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "ingest")
+        )
+        os.makedirs(target_dir, exist_ok=True)
+
+    temp_filename = f"{uuid.uuid4().hex[:8]}_{clean_name}"
+    staged_path = os.path.join(target_dir, temp_filename)
+
+    try:
+        with open(staged_path, "wb") as f:
+            f.write(file_bytes)
+
+        report = ingest_matter_document(
+            file_path=staged_path,
+            matter_id=matter_id,
+            doc_type=doc_type,
+            db=db
+        )
+        report["filename"] = clean_name
+        return report
+    finally:
+        if os.path.exists(staged_path):
+            try:
+                os.remove(staged_path)
+            except Exception:
+                pass
+

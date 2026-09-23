@@ -577,6 +577,53 @@ class TestKruschLawPipeline(unittest.TestCase):
         self.assertEqual(brief_content["staged_status"], "READY_FOR_ATTORNEY_REVIEW")
         self.assertIn("Tenant rights analysis", brief_content["brief_content"])
 
+    def test_matter_document_ingest_via_nexus_pipeline(self):
+        """Verify KruschLaw ingests lawyer documents (PDF/MD/TXT) using KruschNexus parsers and chunking."""
+        import tempfile
+        doc_content = (
+            "# Lease Exhibit A\n\n"
+            "## Section 14.1 Security Deposit Return\n"
+            "The landlord must return all unused security deposit funds within 21 calendar days of vacating.\n\n"
+            "## Section 14.2 Itemized Statement of Deductions\n"
+            "An itemized statement of repairs and deductions must be provided to the tenant.\n"
+        )
+        with tempfile.NamedTemporaryFile(suffix=".md", delete=False, mode="w", encoding="utf-8") as f:
+            f.write(doc_content)
+            temp_path = f.name
+
+        temp_dir = os.path.dirname(temp_path)
+        src.backend.config.settings.extra_allowed_dirs.append(temp_dir)
+
+        try:
+            resp = self.client.post("/api/ingest/document", json={
+                "file_path": temp_path,
+                "matter_id": 101,
+                "doc_type": "work_product"
+            })
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["status"], "completed")
+            self.assertEqual(data["pages_in"], 1)
+            self.assertGreaterEqual(data["chunks_out"], 1)
+            self.assertGreaterEqual(data["records_inserted"], 1)
+
+            # Query the search endpoint to confirm the matter chunk is retrievable
+            search_resp = self.client.get("/api/laws?q=security+deposit+return&city=Matter")
+            self.assertEqual(search_resp.status_code, 200)
+            matches = search_resp.json()
+            self.assertIn("Section 14.1", matches[0]["content"])
+            self.assertIn("Section 14.1", matches[0]["section"])
+
+            # Query for the second section
+            search_resp2 = self.client.get("/api/laws?q=Itemized+Statement+of+Deductions&city=Matter")
+            self.assertEqual(search_resp2.status_code, 200)
+            matches2 = search_resp2.json()
+            self.assertGreaterEqual(len(matches2), 1)
+            self.assertIn("Section 14.2", matches2[0]["section"])
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
 
 if __name__ == "__main__":
     unittest.main()

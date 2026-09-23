@@ -33,6 +33,7 @@ dependencies = [
     "httpx>=0.26.0",
     "pandas>=2.1.4",
     "pyarrow>=14.0.2",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

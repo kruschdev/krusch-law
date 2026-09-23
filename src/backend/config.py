@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     @property
     def allowed_ingest_dirs_list(self) -> list[str]:
         dirs = [os.path.abspath(d.strip()) for d in self.ALLOWED_INGEST_DIRS.split(",") if d.strip()]
+        # Include repo local data directory if present
+        local_data = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data"))
+        if local_data not in dirs:
+            dirs.append(local_data)
+            dirs.append(os.path.join(local_data, "ingest"))
         for extra in self.extra_allowed_dirs:
             dirs.append(os.path.abspath(extra.strip()))
         return dirs

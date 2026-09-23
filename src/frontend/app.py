@@ -232,6 +232,69 @@ with st.sidebar:
                 st.error(f"Connection error: {e}")
 
     st.markdown("---")
+    st.markdown("#### 📄 KruschNexus Document Ingestion")
+    st.caption("Universal sovereign ingest: PDF (with OCR), DOCX, EML, MD, TXT.")
+
+    upload_file = st.file_uploader(
+        "Upload Legal Document",
+        type=["pdf", "docx", "eml", "msg", "txt", "md", "csv"],
+        help="Upload contracts, discovery, or case filings directly into the local vector store."
+    )
+    doc_type_choice = st.selectbox(
+        "Document Classification",
+        ["matter_facts", "work_product", "authority"],
+        format_func=lambda x: {
+            "matter_facts": "📁 Matter Facts / Evidence",
+            "work_product": "⚖️ Attorney Work Product",
+            "authority": "📜 Controlling Authority"
+        }.get(x, x)
+    )
+    active_matters = fetch_cases_list()
+    matter_choices = {"None (General Knowledge)": None}
+    for m in active_matters:
+        matter_choices[f"#{m['id']} — {m['title'][:25]}..."] = m['id']
+    chosen_matter_label = st.selectbox("Assign to Matter", list(matter_choices.keys()))
+    chosen_matter_id = matter_choices[chosen_matter_label]
+
+    if st.button("🚀 Ingest via KruschNexus", use_container_width=True):
+        if not upload_file:
+            st.warning("Please select a file to upload.")
+        else:
+            with st.spinner(f"Parsing '{upload_file.name}' with KruschNexus and embedding chunks..."):
+                try:
+                    file_bytes = upload_file.getvalue()
+                    files_payload = {
+                        "file": (upload_file.name, file_bytes, upload_file.type or "application/octet-stream")
+                    }
+                    data_payload = {
+                        "doc_type": doc_type_choice
+                    }
+                    if chosen_matter_id is not None:
+                        data_payload["matter_id"] = str(chosen_matter_id)
+
+                    resp = httpx.post(
+                        f"{BACKEND_URL}/api/ingest/upload",
+                        files=files_payload,
+                        data=data_payload,
+                        headers=get_auth_headers(),
+                        timeout=180.0
+                    )
+                    if resp.status_code == 200:
+                        res = resp.json()
+                        st.success(
+                            f"✅ Ingested **{res['filename']}**!\n\n"
+                            f"• **Pages:** {res['pages_in']}\n"
+                            f"• **Chunks:** {res['chunks_out']}\n"
+                            f"• **Vectors Inserted:** {res['records_inserted']}\n"
+                            f"• **OCR Pages:** {res.get('ocr_pages') or 'None'}\n"
+                            f"• **Latency:** {res['duration_ms']:.1f}ms"
+                        )
+                    else:
+                        st.error(f"Ingestion failed ({resp.status_code}): {resp.text}")
+                except Exception as e:
+                    st.error(f"Connection error: {e}")
+
+    st.markdown("---")
     st.markdown("#### 📦 LOCUS Parquet Ingestion")
     st.caption("LOCUS-v1 is licensed under **CC-BY-NC-4.0** (non-commercial research only).")
     parquet_path = st.text_input("Parquet Path in `/app/data`", placeholder="/app/data/ingest/ordinances.parquet")
@@ -361,6 +424,39 @@ with tab1:
                     st.markdown(f"**Recorded:** `{c['created_at']}`")
                     st.text_area("Facts Summary", c['facts'], height=100, disabled=True, key=f"fact_{c['id']}")
 
+                    st.markdown("##### 📎 Ingest Document for this Matter (KruschNexus)")
+                    doc_upload = st.file_uploader(
+                        f"Attach Document to #{c['id']}",
+                        type=["pdf", "docx", "eml", "msg", "txt", "md"],
+                        key=f"doc_up_{c['id']}"
+                    )
+                    doc_kind = st.selectbox(
+                        "Document Type",
+                        ["matter_facts", "work_product", "authority"],
+                        key=f"kind_{c['id']}"
+                    )
+                    if st.button(f"📥 Parse & Ingest into Matter #{c['id']}", key=f"ingest_btn_{c['id']}"):
+                        if doc_upload:
+                            with st.spinner("Processing through KruschNexus engine..."):
+                                try:
+                                    resp = httpx.post(
+                                        f"{BACKEND_URL}/api/ingest/upload",
+                                        files={"file": (doc_upload.name, doc_upload.getvalue(), doc_upload.type or "application/octet-stream")},
+                                        data={"matter_id": str(c['id']), "doc_type": doc_kind},
+                                        headers=get_auth_headers(),
+                                        timeout=180.0
+                                    )
+                                    if resp.status_code == 200:
+                                        res = resp.json()
+                                        st.success(f"✅ Ingested {res['filename']} ({res['pages_in']} pages, {res['chunks_out']} chunks)")
+                                    else:
+                                        st.error(f"Error ({resp.status_code}): {resp.text}")
+                                except Exception as e:
+                                    st.error(f"Failed to ingest: {e}")
+                        else:
+                            st.warning("Please choose a file to attach.")
+
+                    st.markdown("---")
                     if st.button(f"🗑️ Delete Matter #{c['id']}", key=f"del_{c['id']}"):
                         try:
                             del_resp = httpx.delete(
