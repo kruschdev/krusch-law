@@ -608,15 +608,30 @@ with tab2:
                                 )
                             with exp_c2:
                                 try:
-                                    from src.backend.export import generate_brief_docx
-                                    docx_data = generate_brief_docx(
-                                        brief_content=data["analysis"],
-                                        matter_title=data.get("case", {}).get("title", f"Matter #{case_id}"),
-                                        matter_number=f"MATTER-{case_id:04d}",
-                                        claims_audit=claims_audit,
-                                        retrieved_laws=data.get("retrieved_laws", []),
-                                        disclaimer=data.get("disclaimer", "")
+                                    docx_resp = httpx.post(
+                                        f"{BACKEND_URL}/api/consult/export/docx",
+                                        json={
+                                            "brief_content": data["analysis"],
+                                            "matter_title": data.get("case", {}).get("title", f"Matter #{case_id}"),
+                                            "matter_number": f"MATTER-{case_id:04d}",
+                                            "claims_audit": claims_audit,
+                                            "retrieved_laws": data.get("retrieved_laws", [])
+                                        },
+                                        headers=get_auth_headers(),
+                                        timeout=30.0
                                     )
+                                    if docx_resp.status_code == 200:
+                                        docx_data = docx_resp.content
+                                    else:
+                                        from src.backend.export import generate_brief_docx
+                                        docx_data = generate_brief_docx(
+                                            brief_content=data["analysis"],
+                                            matter_title=data.get("case", {}).get("title", f"Matter #{case_id}"),
+                                            matter_number=f"MATTER-{case_id:04d}",
+                                            claims_audit=claims_audit,
+                                            retrieved_laws=data.get("retrieved_laws", []),
+                                            disclaimer=data.get("disclaimer", "")
+                                        )
                                     st.download_button(
                                         label="📄 Export Word (.docx)",
                                         data=docx_data,
