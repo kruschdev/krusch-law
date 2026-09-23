@@ -30,9 +30,28 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-NEXUS_SRC = "/home/krusch/homelab/projects/krusch-nexus/src"
-if NEXUS_SRC not in sys.path and os.path.isdir(NEXUS_SRC):
-    sys.path.insert(0, NEXUS_SRC)
+NEXUS_DIR = os.getenv("KRUSCH_NEXUS_DIR")
+if not NEXUS_DIR:
+    candidates = [
+        "/home/krusch/homelab/projects/krusch-nexus",
+        os.path.join(PROJECT_ROOT, "krusch-nexus"),
+        os.path.join(os.path.dirname(PROJECT_ROOT), "krusch-nexus"),
+    ]
+    for c in candidates:
+        if os.path.isdir(c):
+            NEXUS_DIR = c
+            break
+
+if NEXUS_DIR:
+    NEXUS_SRC = os.path.join(NEXUS_DIR, "src")
+    FIXTURES_DIR = os.path.join(NEXUS_DIR, "tests", "fixtures")
+    if NEXUS_SRC not in sys.path and os.path.isdir(NEXUS_SRC):
+        sys.path.insert(0, NEXUS_SRC)
+else:
+    NEXUS_SRC = os.getenv("KRUSCH_NEXUS_PATH")
+    if NEXUS_SRC and NEXUS_SRC not in sys.path and os.path.isdir(NEXUS_SRC):
+        sys.path.insert(0, NEXUS_SRC)
+    FIXTURES_DIR = None
 
 # Mock pgvector before SQLAlchemy imports so SQLite can treat Vector as JSON/TEXT
 from sqlalchemy.types import UserDefinedType
@@ -77,14 +96,16 @@ from src.backend.db import Base, Case, LawVector
 from src.backend.ingest import ingest_matter_document, ingest_uploaded_matter_file
 from src.backend.main import app, get_db
 
-FIXTURES_DIR = "/home/krusch/homelab/projects/krusch-nexus/tests/fixtures"
-
-
 class TestNexusIntegration(unittest.TestCase):
     """Integration test suite for KruschLaw + KruschNexus ingestion pipeline."""
 
     @classmethod
     def setUpClass(cls):
+        try:
+            import krusch_nexus
+        except ImportError:
+            raise unittest.SkipTest("krusch_nexus is not available in the current environment")
+
         cls.engine = create_engine(
             "sqlite:///:memory:",
             connect_args={"check_same_thread": False},
@@ -170,6 +191,8 @@ class TestNexusIntegration(unittest.TestCase):
 
     def test_02_ingest_docx_policy_fixture(self):
         """Verify ingestion of a real DOCX fixture from KruschNexus."""
+        if not FIXTURES_DIR or not os.path.exists(FIXTURES_DIR):
+            self.skipTest("KruschNexus fixtures directory not available")
         docx_path = os.path.join(FIXTURES_DIR, "policy_manual.docx")
         if not os.path.exists(docx_path):
             self.skipTest(f"Fixture {docx_path} not found")
@@ -197,6 +220,8 @@ class TestNexusIntegration(unittest.TestCase):
 
     def test_03_ingest_pdf_contract_fixture(self):
         """Verify ingestion of a real PDF fixture with page tracking from KruschNexus."""
+        if not FIXTURES_DIR or not os.path.exists(FIXTURES_DIR):
+            self.skipTest("KruschNexus fixtures directory not available")
         pdf_path = os.path.join(FIXTURES_DIR, "sample_contract.pdf")
         if not os.path.exists(pdf_path):
             self.skipTest(f"Fixture {pdf_path} not found")

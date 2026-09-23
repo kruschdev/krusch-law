@@ -579,6 +579,13 @@ class TestKruschLawPipeline(unittest.TestCase):
 
     def test_matter_document_ingest_via_nexus_pipeline(self):
         """Verify KruschLaw ingests lawyer documents (PDF/MD/TXT) using KruschNexus parsers and chunking."""
+        try:
+            import krusch_nexus
+        except ImportError:
+            nexus_src = os.getenv("KRUSCH_NEXUS_PATH", "/home/krusch/homelab/projects/krusch-nexus/src")
+            if not os.path.isdir(nexus_src):
+                self.skipTest("krusch_nexus is not available in the current environment")
+
         import tempfile
         doc_content = (
             "# Lease Exhibit A\n\n"

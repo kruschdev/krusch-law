@@ -30,11 +30,13 @@ services:
       - OLLAMA_LLM_MODEL=${OLLAMA_LLM_MODEL:-qwen2.5:14b}
       - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-bge-large}
       - API_KEY=${API_KEY:-}
+      - KRUSCH_NEXUS_PATH=${KRUSCH_NEXUS_PATH:-/nexus/src}
     ports:
       - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_PORT:-8085}:8000"
     volumes:
       - ./src:/app/src
       - ./data:/app/data
+      - ${KRUSCH_NEXUS_DIR:-../krusch-nexus}:/nexus:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

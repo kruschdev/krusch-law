@@ -496,12 +496,23 @@ def ingest_matter_document(
     filename = os.path.basename(file_path)
 
     # Bridge to KruschNexus parser and chunking engine
-    nexus_src = os.getenv("KRUSCH_NEXUS_PATH", "/home/krusch/homelab/projects/krusch-nexus/src")
-    if nexus_src not in sys.path and os.path.isdir(nexus_src):
-        sys.path.insert(0, nexus_src)
-
-    from krusch_nexus.parsers import parse_document
-    from krusch_nexus.chunking import chunk_document_pages
+    try:
+        from krusch_nexus.parsers import parse_document
+        from krusch_nexus.chunking import chunk_document_pages
+    except ImportError:
+        candidate_paths = [
+            os.getenv("KRUSCH_NEXUS_PATH"),
+            "/nexus/src",
+            "/home/krusch/homelab/projects/krusch-nexus/src",
+            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "krusch-nexus", "src"),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "krusch-nexus", "src"),
+        ]
+        for p in candidate_paths:
+            if p and os.path.isdir(p) and p not in sys.path:
+                sys.path.insert(0, p)
+                break
+        from krusch_nexus.parsers import parse_document
+        from krusch_nexus.chunking import chunk_document_pages
 
     parsed_doc = parse_document(abs_path, filename)
     if not parsed_doc or not parsed_doc.pages:
