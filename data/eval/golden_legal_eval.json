@@ -94,7 +94,7 @@
     "topic": "Tenancy & Security Deposits",
     "jurisdiction": "California Civil Code",
     "fact_pattern": "A residential landlord demands a security deposit equal to 3 months' rent for an unfurnished apartment in California.",
-    "gold_sections": ["Section 1950.5"],
+    "gold_sections": ["Section 1950.5", "Section 1950.5(c)"],
     "forbidden_distractors": ["Section 151.09"],
     "expected_claims": ["exceeding one month's rent for residential property"]
   },

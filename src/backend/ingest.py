@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import time
+import json
 import hashlib
 import logging
 from typing import Optional, List, Dict, Tuple, Any
@@ -38,10 +39,13 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "parent_section": "Chapter 8.22",
         "hierarchy_level": "definitions",
         "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
         "jurisdiction_level": "city",
+        "status": "enacted",
         "effective_date": datetime(2020, 2, 1),
         "repealed": False,
         "preempted_by": None,
+        "applies_if": json.dumps({"city": "Oakland", "county": "Alameda County", "unincorporated": False, "property_type": "residential"}),
         "source_url": "https://library.municode.com/ca/oakland/codes/code_of_ordinances?nodeId=TIT8HESA_CH8.22REBAPRO",
         "content": (
             "For the purposes of Chapter 8.22, the following terms are defined: "
@@ -65,11 +69,14 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "definitions_ref": "Section 8.22.020",
         "exceptions_ref": "Section 8.22.030(B)",
         "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
         "jurisdiction_level": "city",
+        "status": "enacted",
         "effective_date": datetime(2020, 2, 1),
         "amended_date": datetime(2023, 4, 15),
         "repealed": False,
         "preempted_by": None,
+        "applies_if": json.dumps({"city": "Oakland", "county": "Alameda County", "unincorporated": False, "property_type": "residential"}),
         "source_url": "https://library.municode.com/ca/oakland/codes/code_of_ordinances?nodeId=TIT8HESA_CH8.22REBAPRO_8.22.030REINNOFE",
         "content": (
             "Landlords must provide tenants with written notice of the Rent Adjustment Program (RAP), "
@@ -90,11 +97,15 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "parent_section": "Section 8.22.030",
         "hierarchy_level": "exceptions",
         "definitions_ref": "Section 8.22.020",
+        "exception_to": "Section 8.22.030",
         "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
         "jurisdiction_level": "city",
+        "status": "enacted",
         "effective_date": datetime(2020, 2, 1),
         "repealed": False,
         "preempted_by": None,
+        "applies_if": json.dumps({"city": "Oakland", "county": "Alameda County", "unincorporated": False, "property_type": "residential"}),
         "source_url": "https://library.municode.com/ca/oakland/codes/code_of_ordinances?nodeId=TIT8HESA_CH8.22REBAPRO_8.22.030REINNOFE",
         "content": (
             "Exceptions to the general notice requirement: (1) Dwelling units constructed after January 1, 1983 are exempt "
@@ -116,10 +127,13 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "hierarchy_level": "section",
         "definitions_ref": "Section 8.22.020",
         "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
         "jurisdiction_level": "city",
+        "status": "enacted",
         "effective_date": datetime(2021, 1, 1),
         "repealed": False,
         "preempted_by": None,
+        "applies_if": json.dumps({"city": "Oakland", "county": "Alameda County", "unincorporated": False, "property_type": "residential"}),
         "source_url": "https://library.municode.com/ca/oakland/codes/code_of_ordinances?nodeId=TIT8HESA_CH8.22REBAPRO_8.22.360JUCAEV",
         "content": (
             "A landlord shall not endeavor to recover possession of a rental unit except upon one of the "
@@ -127,6 +141,33 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
             "to cure, owner occupancy in good faith, or permanent withdrawal under the Ellis Act. "
             "Any notice of termination must state with specificity the enumerated statutory cause relied upon and inform the tenant of "
             "their right to advice from the Rent Board."
+        )
+    },
+    {
+        "jurisdiction": "Alameda County Code",
+        "state": "CA",
+        "city": None,
+        "county": "Alameda County",
+        "city_or_county": "Alameda County (Unincorporated)",
+        "topic": "Housing & Rent",
+        "title": "Alameda County Unincorporated Tenant Protection Standards",
+        "section": "Section 6.04.050",
+        "parent_section": "Chapter 6.04",
+        "hierarchy_level": "section",
+        "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
+        "jurisdiction_level": "county",
+        "status": "enacted",
+        "effective_date": datetime(2021, 5, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "applies_if": json.dumps({"county": "Alameda County", "unincorporated": True, "property_type": "residential"}),
+        "source_url": "https://library.municode.com/ca/alameda_county/codes/code_of_ordinances",
+        "content": (
+            "In the unincorporated communities of Alameda County (including Castro Valley, San Lorenzo, and Ashland), "
+            "county standards and state statutes govern residential tenancies. Municipal rent control and Rent Adjustment Program (RAP) "
+            "ordinances of adjacent incorporated cities (including Oakland Municipal Code Chapter 8.22) do NOT apply to parcels "
+            "situated within unincorporated county islands."
         )
     },
     {
@@ -141,10 +182,13 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "parent_section": "Article 29",
         "hierarchy_level": "section",
         "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
         "jurisdiction_level": "city",
+        "status": "enacted",
         "effective_date": datetime(2018, 5, 10),
         "repealed": False,
         "preempted_by": None,
+        "applies_if": json.dumps({"city": "San Francisco", "county": "San Francisco County", "unincorporated": False}),
         "source_url": "https://codelibrary.amlegal.com/codes/san_francisco/latest/sf_police/0-0-0-2909",
         "content": (
             "No person shall produce or cause to be produced sound from any source that exceeds the ambient "
@@ -164,10 +208,13 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "parent_section": "Chapter 41A",
         "hierarchy_level": "section",
         "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
         "jurisdiction_level": "city",
+        "status": "enacted",
         "effective_date": datetime(2019, 7, 1),
         "repealed": False,
         "preempted_by": None,
+        "applies_if": json.dumps({"city": "San Francisco", "county": "San Francisco County", "unincorporated": False}),
         "source_url": "https://codelibrary.amlegal.com/codes/san_francisco/latest/sf_admin/0-0-0-41A5",
         "content": (
             "Only primary permanent residents may list residential units for transient occupancy (less than 30 consecutive days). "
@@ -187,10 +234,13 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "parent_section": "Chapter XV",
         "hierarchy_level": "section",
         "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
         "jurisdiction_level": "city",
+        "status": "enacted",
         "effective_date": datetime(2022, 1, 1),
         "repealed": False,
         "preempted_by": None,
+        "applies_if": json.dumps({"city": "Los Angeles", "county": "Los Angeles County", "unincorporated": False}),
         "source_url": "https://codelibrary.amlegal.com/codes/los_angeles/latest/lamc/0-0-0-15109",
         "content": (
             "Under the Rent Stabilization Ordinance (RSO), a landlord seeking possession for owner-occupancy or permanent "
@@ -210,7 +260,9 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "parent_section": "Chapter 2",
         "hierarchy_level": "section",
         "authority_class": "controlling_statute",
+        "instrument_type": "statute",
         "jurisdiction_level": "state",
+        "status": "enacted",
         "effective_date": datetime(2024, 7, 1),
         "amended_date": datetime(2024, 7, 1),
         "repealed": False,
@@ -235,7 +287,9 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "parent_section": "Section 1950.5",
         "hierarchy_level": "subsection",
         "authority_class": "controlling_statute",
+        "instrument_type": "statute",
         "jurisdiction_level": "state",
+        "status": "enacted",
         "effective_date": datetime(2024, 7, 1),
         "repealed": False,
         "preempted_by": None,
@@ -253,13 +307,126 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "city": "Statewide",
         "county": None,
         "city_or_county": "Statewide",
+        "topic": "Tenancy & Security Deposits",
+        "title": "AB 12 One-Month Security Deposit Maximum",
+        "section": "Section 1950.5(c)",
+        "parent_section": "Section 1950.5",
+        "hierarchy_level": "subsection",
+        "authority_class": "controlling_statute",
+        "instrument_type": "statute",
+        "jurisdiction_level": "state",
+        "status": "enacted",
+        "effective_date": datetime(2024, 7, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "preempts": json.dumps(["Section 1950.5 (Pre-2024)"]),
+        "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1950.5.&lawCode=CIV",
+        "content": (
+            "Under California Civil Code § 1950.5(c) as amended by Stats. 2023, ch. 290 (AB 12), "
+            "effective July 1, 2024, a landlord may not demand or receive security, however denominated, "
+            "in an amount or value in excess of an amount equal to one month's rent, in the case of unfurnished or furnished residential property. "
+            "This statutory cap preempts and supersedes all prior allowances for two months' rent."
+        )
+    },
+    # Conflict Fixture: Repealed Pre-AB 12 Two-Month Deposit Rule
+    {
+        "jurisdiction": "California Civil Code",
+        "state": "CA",
+        "city": "Statewide",
+        "county": None,
+        "city_or_county": "Statewide",
+        "topic": "Tenancy & Security Deposits",
+        "title": "Repealed Two-Month Security Deposit Maximum",
+        "section": "Section 1950.5 (Pre-2024)",
+        "parent_section": "Chapter 2",
+        "hierarchy_level": "section",
+        "authority_class": "controlling_statute",
+        "instrument_type": "statute",
+        "jurisdiction_level": "state",
+        "status": "repealed",
+        "effective_date": datetime(2013, 1, 1),
+        "effective_to": datetime(2024, 6, 30),
+        "repealed": True,
+        "preempted_by": "Cal. Civ. Code § 1950.5(c) as amended by Stats. 2023, ch. 290 (AB 12)",
+        "source_url": "https://leginfo.legislature.ca.gov",
+        "content": (
+            "[REPEALED / SUPERSEDED] Prior to July 1, 2024, a landlord could lawfully demand a security deposit equal to "
+            "two months' rent for an unfurnished residential unit, or three months' rent for a furnished unit. "
+            "Effective July 1, 2024, AB 12 amended Civil Code § 1950.5(c) to strictly cap security deposits at one month's rent."
+        )
+    },
+    # Conflict Fixture: California Tenant Protection Act of 2019 (AB 1482)
+    {
+        "jurisdiction": "California Civil Code",
+        "state": "CA",
+        "city": "Statewide",
+        "county": None,
+        "city_or_county": "Statewide",
+        "topic": "Eviction & Just Cause",
+        "title": "Tenant Protection Act of 2019 Mandatory Just Cause Eviction",
+        "section": "Section 1946.2",
+        "parent_section": "Chapter 2",
+        "hierarchy_level": "section",
+        "exceptions_ref": "Section 1946.2(e)",
+        "authority_class": "controlling_statute",
+        "instrument_type": "statute",
+        "jurisdiction_level": "state",
+        "status": "enacted",
+        "effective_date": datetime(2020, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1946.2.&lawCode=CIV",
+        "content": (
+            "After a tenant has continuously and lawfully occupied a residential real property for 12 months, "
+            "the owner of the residential real property shall not terminate the tenancy without just cause, "
+            "which shall be stated in the written notice to terminate. Just cause includes at-fault grounds such as non-payment "
+            "and no-fault grounds such as intent to occupy by the owner or owner's spouse, children, or parents."
+        )
+    },
+    # Conflict Fixture: Statutory Exceptions to Just Cause (Owner-occupied duplex / single family home)
+    {
+        "jurisdiction": "California Civil Code",
+        "state": "CA",
+        "city": "Statewide",
+        "county": None,
+        "city_or_county": "Statewide",
+        "topic": "Eviction & Just Cause",
+        "title": "Statutory Exemptions from Mandatory Just Cause",
+        "section": "Section 1946.2(e)",
+        "parent_section": "Section 1946.2",
+        "hierarchy_level": "exceptions",
+        "exception_to": "Section 1946.2",
+        "authority_class": "controlling_statute",
+        "instrument_type": "statute",
+        "jurisdiction_level": "state",
+        "status": "enacted",
+        "effective_date": datetime(2020, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1946.2.&lawCode=CIV",
+        "content": (
+            "This section shall not apply to the following types of residential real properties: "
+            "(1) Housing accommodations in which the tenant shares bathroom or kitchen facilities with the owner who maintains "
+            "their principal residence there. (2) A single-family owner-occupied residence where the owner leases no more than "
+            "two bedrooms. (3) A duplex in which the owner occupied one of the units as their principal residence at the beginning "
+            "of the tenancy and continues in occupancy."
+        )
+    },
+    {
+        "jurisdiction": "California Civil Code",
+        "state": "CA",
+        "city": "Statewide",
+        "county": None,
+        "city_or_county": "Statewide",
         "topic": "Tenancy & Privacy",
         "title": "Landlord Right of Entry Notice Requirements",
         "section": "Section 1954",
         "parent_section": "Chapter 2",
         "hierarchy_level": "section",
         "authority_class": "controlling_statute",
+        "instrument_type": "statute",
         "jurisdiction_level": "state",
+        "status": "enacted",
         "effective_date": datetime(2019, 1, 1),
         "repealed": False,
         "preempted_by": None,
@@ -284,8 +451,11 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "parent_section": "Chapter 2",
         "hierarchy_level": "section",
         "authority_class": "controlling_statute",
+        "instrument_type": "statute",
         "jurisdiction_level": "state",
+        "status": "repealed",
         "effective_date": datetime(1982, 1, 1),
+        "effective_to": datetime(2019, 12, 31),
         "repealed": True,
         "preempted_by": "Cal. Civ. Code § 1946.2 (California Tenant Protection Act of 2019)",
         "source_url": "https://leginfo.legislature.ca.gov",
@@ -431,11 +601,20 @@ def ingest_mock_data(db: Optional[Session] = None) -> int:
                     parent_section=item.get("parent_section"),
                     hierarchy_level=item.get("hierarchy_level", "section"),
                     authority_class=item.get("authority_class", "municipal_ordinance"),
+                    instrument_type=item.get("instrument_type", "statute"),
                     jurisdiction_level=item.get("jurisdiction_level", "city"),
                     effective_date=item.get("effective_date"),
+                    effective_from=item.get("effective_from") or item.get("effective_date"),
+                    effective_to=item.get("effective_to"),
                     amended_date=item.get("amended_date"),
+                    status=item.get("status", "repealed" if item.get("repealed") else "enacted"),
                     repealed=item.get("repealed", False),
                     preempted_by=item.get("preempted_by"),
+                    preempts=item.get("preempts"),
+                    implements_ref=item.get("implements_ref"),
+                    defines_terms=item.get("defines_terms"),
+                    exception_to=item.get("exception_to"),
+                    applies_if=item.get("applies_if"),
                     source_url=item.get("source_url"),
                     definitions_ref=item.get("definitions_ref"),
                     exceptions_ref=item.get("exceptions_ref")

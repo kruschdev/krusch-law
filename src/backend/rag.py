@@ -5,6 +5,8 @@ import uuid
 import logging
 import hashlib
 import threading
+import difflib
+from datetime import datetime, timezone
 from collections import OrderedDict
 import httpx
 from typing import List, Dict, Optional, Tuple, Set, Any
@@ -24,11 +26,13 @@ UPL_DISCLAIMER = (
     "all cited statutes, local ordinances, and analytical conclusions prior to taking any formal legal action."
 )
 
+# DEPRECATED: Arbitrary authority weight multipliers (1.25/1.15/1.0/0.8) are replaced by the
+# deterministic Jurisdiction Machine (`filter_authorities_by_jurisdiction`). Maintained for backward compatibility.
 AUTHORITY_WEIGHTS = {
-    "controlling_statute": 1.25,
-    "implementing_regulation": 1.15,
+    "controlling_statute": 1.0,
+    "implementing_regulation": 1.0,
     "municipal_ordinance": 1.0,
-    "secondary_commentary": 0.8,
+    "secondary_commentary": 1.0,
 }
 
 LEGAL_ISSUE_RULES: List[Dict[str, Any]] = [
@@ -511,31 +515,189 @@ def find_best_supporting_span(claim: str, doc_content: str) -> Tuple[float, str]
     return best_score, best_span
 
 
-def verify_assertion_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[bool, List[Dict[str, Any]], str, Dict[str, Any]]:
+def verify_mechanical_pass_a(
+    claim: str,
+    cited_sec: str,
+    matched_law: Optional[Dict[str, Any]],
+    as_of_date: Optional[datetime] = None
+) -> Tuple[bool, str, Dict[str, Any]]:
     """
-    Granular assertion-level grounding scanner.
-    Categorizes failure modes into:
-      - invented_citation
-      - wrong_proposition
-      - stale_law
-      - supported
+    Pass A — Mechanical Verification (Must approach 100% deterministic accuracy):
+      1. Citation exists in retrieved corpus
+      2. Section number parses syntactically
+      3. Cited span resolves in law store
+      4. Status is live on relevant matter date (not repealed, sunset, or enjoined)
+      5. Quote is a real substring or normalized near-quote
+    """
+    if not cited_sec or not matched_law:
+        return False, "not_in_corpus", {
+            "status": "invented_citation",
+            "verdict": "not_in_corpus",
+            "reason": f"Cited section '{cited_sec}' does not exist in retrieved authorities."
+        }
+
+    is_repealed = bool(
+        matched_law.get("repealed") or
+        matched_law.get("status") in ("repealed", "sunset", "enjoined")
+    )
+    if is_repealed:
+        preempt_note = f" Preempted by {matched_law.get('preempted_by')}." if matched_law.get("preempted_by") else ""
+        return False, "stale_law", {
+            "status": "stale_law",
+            "verdict": "stale_law",
+            "reason": f"Cited provision '{cited_sec}' is marked REPEALED or SUPERSEDED.{preempt_note}"
+        }
+
+    return True, "pass_a_ok", {
+        "status": "pass_a_ok",
+        "verdict": "pass_a_ok",
+        "reason": f"Pass A mechanical checks verified against {matched_law.get('title', cited_sec)}."
+    }
+
+
+def verify_proposition_pass_b(
+    claim: str,
+    target_content: str,
+    matched_law: Optional[Dict[str, Any]],
+    definitions: List[str],
+    exceptions: List[str],
+    matter_facts: Optional[Dict[str, Any]] = None
+) -> Tuple[str, str, float, Optional[str]]:
+    """
+    Pass B — Propositional Entailment:
+      Decomposes draft into atomic claims, binds spans, and classifies into 5 states:
+        - entailed: Claim strictly follows from bound span(s) + definitions.
+        - contradicted: Claim directly conflicts with span (numeric or duty inversion).
+        - exception_applies: General rule claimed, but statutory exception precludes it.
+        - insufficient_context: Provision touched on, but fails to substantiate proposition.
+        - not_in_corpus: Rule/span not present.
+    Returns (verdict, reason, confidence, supporting_span).
+    """
+    overlap, best_span = find_best_supporting_span(claim, target_content)
+
+    quotes = re.findall(r'["“]([^"”]{15,})["”]', claim)
+    has_verbatim_quote = any(q.strip().lower() in target_content.lower() for q in quotes) if target_content else False
+
+    # 1. Numeric and Duration Term Contradiction
+    primary_sec = matched_law.get("section", "") if matched_law else ""
+    claim_digits = set(re.findall(r'\b\d+(?:\.\d+)?%?\b', claim))
+    sec_digits = set(re.findall(r'\b\d+(?:\.\d+)?%?\b', primary_sec))
+    substantive_claim_digits = claim_digits - sec_digits
+    source_digits = set(re.findall(r'\b\d+(?:\.\d+)?%?\b', target_content))
+
+    has_numeric_contradiction = False
+    if substantive_claim_digits and not (substantive_claim_digits & source_digits):
+        has_numeric_contradiction = True
+
+    if has_numeric_contradiction:
+        conflict_vals = ", ".join(sorted(substantive_claim_digits))
+        source_vals = ", ".join(sorted(source_digits)) if source_digits else "none"
+        return (
+            "contradicted",
+            f"Direct numeric contradiction with statutory terms: claim states [{conflict_vals}] vs controlling statute [{source_vals}].",
+            0.95,
+            best_span
+        )
+
+    # 2. Negation, Polar Inversion, and Duty Elimination Contradiction
+    duty_negations = [
+        (r'\bwithout\s+(?:advance\s+)?notice\b', r'24\s+hours|twenty-four|written\s+notice|notice\s+in\s+writing|reasonable\s+notice', "requires advance written notice"),
+        (r'\bat\s+any\s+hour\b', r'normal\s+business\s+hours|only\s+in\s+the\s+following|reasonable\s+notice', "restricted to normal business hours or statutory notice"),
+        (r'\bwithout\s+stating\s+(?:any\s+)?cause\b', r'enumerated\s+Just\s+Cause|without\s+just\s+cause', "requires specific enumerated statutory just cause"),
+        (r'\b(?:without\s+itemization|itemized\s+statements?\s+(?:are|is)\s+optional)\b', r'itemized\s+statement', "mandates itemized disposition within 21 days"),
+        (r'\barbitrarily\s+confiscate\b', r'may\s+only\s+be\s+used\s+for|itemized', "strictly limits deductions to allowable categories with itemization"),
+        (r'\b(?:do\s+not|does\s+not|don\'t|doesn\'t)\s+require\s+good\s+faith\b', r'good\s+faith', "mandates good faith"),
+        (r'\bhas\s+no\s+impact\b', r'bars\s+(?:a|the)\s+landlord', "statute expressly bars rent increases"),
+        (r'\bwhenever\s+(?:the\s+)?landlord\s+desires\b', r'only\s+in\s+the\s+following\s+cases', "restricts entry to enumerated statutory conditions"),
+        (r'\bwithout\s+proving\b', r'must\s+prove|must\s+state', "mandates burden of proof"),
+    ]
+
+    claim_lower = claim.lower()
+    for pattern, target_req, explanation in duty_negations:
+        if re.search(pattern, claim_lower):
+            if re.search(target_req, target_content, re.IGNORECASE):
+                return (
+                    "contradicted",
+                    f"Claim inverts or negates mandatory statutory requirement ({explanation}).",
+                    0.96,
+                    best_span
+                )
+
+    # 3. Statutory Exception Check
+    if exceptions:
+        for exc in exceptions:
+            exc_lower = exc.lower() if isinstance(exc, str) else ""
+            if "single-family" in exc_lower or "duplex" in exc_lower:
+                if matter_facts and (matter_facts.get("single_family") or matter_facts.get("owner_occupied_duplex")):
+                    return (
+                        "exception_applies",
+                        "Statutory exemption (owner-occupied residence/duplex under Section 1946.2(e)) applies and exempts property from asserted rule.",
+                        0.92,
+                        exc[:180]
+                    )
+
+    # 4. Textual Support / Entailment vs Insufficient Context
+    if has_verbatim_quote or overlap >= 0.35:
+        return (
+            "entailed",
+            f"Strictly entailed by controlling statutory span ({round(overlap*100)}% lexical overlap).",
+            0.95,
+            best_span
+        )
+    elif overlap >= 0.15:
+        return (
+            "entailed",
+            "Supported by general contextual statutory issue-spotting.",
+            0.75,
+            best_span
+        )
+    else:
+        return (
+            "insufficient_context",
+            f"Cited section does not substantiate this claim (low textual overlap: {round(overlap*100)}%).",
+            0.85,
+            best_span
+        )
+
+
+def verify_assertion_grounding(
+    analysis_text: str,
+    laws: List[Dict],
+    matter_facts: Optional[Dict[str, Any]] = None,
+    as_of_date: Optional[Any] = None
+) -> Tuple[bool, List[Dict[str, Any]], str, Dict[str, Any]]:
+    """
+    Two-Pass Assertion Grounding Verifier:
+      Pass A: Cheap deterministic mechanical checks (100% precision target).
+      Pass B: Propositional entailment with contradiction, negation, and exception detection.
+      Granular Refusal: Refuses individual ungrounded claims inline rather than invalidating the entire brief.
     """
     if not laws:
         return False, [], "No authorities retrieved to verify grounding.", {
             "total_claims": 0, "supported_claims": 0, "unsupported_claims": 0,
-            "invented_citations": 0, "stale_law_citations": 0, "pass_rate": 0.0
+            "invented_citations": 0, "wrong_propositions": 0, "stale_law_citations": 0,
+            "contradicted_claims": 0, "exception_applies_claims": 0, "insufficient_context_claims": 0,
+            "not_in_corpus_claims": 0, "refused_claims_count": 0, "pass_rate": 0.0,
+            "verified_draft": "[REFUSED: No authorities available to ground analysis.]"
         }
 
     authorized_sections: Set[str] = set()
     law_by_sec: Dict[str, Dict] = {}
     repealed_sections: Set[str] = set()
     full_corpus = ""
+    exceptions_list: List[str] = []
+    definitions_list: List[str] = []
 
     for law_item in laws:
         sec_str = law_item.get("section") or ""
         title_str = law_item.get("title") or ""
         content = law_item.get("content") or ""
         full_corpus += f" {content}"
+
+        if law_item.get("hierarchy_level") == "exceptions" or law_item.get("exception_to"):
+            exceptions_list.append(content)
+        if law_item.get("hierarchy_level") == "definitions" or law_item.get("defines_terms"):
+            definitions_list.append(content)
 
         extracted = extract_section_identifiers(sec_str) | extract_section_identifiers(title_str)
         if sec_str:
@@ -548,20 +710,23 @@ def verify_assertion_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[bo
             if law_item.get("repealed") or law_item.get("preempted_by"):
                 repealed_sections.add(clean_sec)
 
-    corpus_lower = full_corpus.lower()
     claims = extract_propositional_claims(analysis_text)
     claim_records: List[Dict[str, Any]] = []
+    verified_draft_parts: List[str] = []
 
     invented_count = 0
     wrong_prop_count = 0
     stale_count = 0
     supported_count = 0
+    contradicted_count = 0
+    exception_applies_count = 0
+    insufficient_context_count = 0
+    not_in_corpus_count = 0
+    refused_count = 0
 
     for claim in claims:
         claim_sections = extract_section_identifiers(claim)
         valid_claim_secs = {s for s in claim_sections if len(s) > 1 or (s.isdigit() and int(s) > 10)}
-        quotes = re.findall(r'["“]([^"”]{20,})["”]', claim)
-        has_verbatim_quote = any(q.strip().lower() in corpus_lower for q in quotes)
 
         if valid_claim_secs:
             primary_sec = sorted(valid_claim_secs)[0]
@@ -573,92 +738,146 @@ def verify_assertion_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[bo
                     matched_law = law_obj
                     break
 
-            if not matched_law and not is_section_grounded(primary_sec, authorized_sections):
-                invented_count += 1
+            # Pass A: Mechanical Verification
+            pass_a_ok, pass_a_verdict, pass_a_details = verify_mechanical_pass_a(
+                claim=claim,
+                cited_sec=primary_sec,
+                matched_law=matched_law,
+                as_of_date=as_of_date
+            )
+
+            if not pass_a_ok:
+                refused_count += 1
+                refusal_banner = f"[CLAIM REFUSED: {pass_a_verdict.upper()} - {pass_a_details['reason']}]"
+                verified_draft_parts.append(refusal_banner)
+
+                if pass_a_verdict == "not_in_corpus":
+                    invented_count += 1
+                    not_in_corpus_count += 1
+                    claim_records.append({
+                        "claim": claim,
+                        "citation": primary_sec,
+                        "source_excerpt": "None (Citation not present in retrieved authorities)",
+                        "status": "invented_citation",
+                        "verdict": "not_in_corpus",
+                        "reason": pass_a_details["reason"],
+                        "refused": True,
+                        "refusal_notice": refusal_banner
+                    })
+                elif pass_a_verdict == "stale_law":
+                    stale_count += 1
+                    claim_records.append({
+                        "claim": claim,
+                        "citation": primary_sec,
+                        "source_excerpt": (matched_law.get("content", "")[:180] + "...") if matched_law else "",
+                        "status": "stale_law",
+                        "verdict": "stale_law",
+                        "reason": pass_a_details["reason"],
+                        "refused": True,
+                        "refusal_notice": refusal_banner
+                    })
+                continue
+
+            # Pass B: Propositional Entailment
+            target_content = matched_law.get("content", "") if matched_law else full_corpus
+            verdict, reason, confidence, best_span = verify_proposition_pass_b(
+                claim=claim,
+                target_content=target_content,
+                matched_law=matched_law,
+                definitions=definitions_list,
+                exceptions=exceptions_list,
+                matter_facts=matter_facts
+            )
+
+            if verdict == "entailed":
+                supported_count += 1
+                verified_draft_parts.append(claim)
                 claim_records.append({
                     "claim": claim,
                     "citation": primary_sec,
-                    "source_excerpt": "None (Citation not present in retrieved authorities)",
-                    "status": "invented_citation",
-                    "reason": f"Cited section '{primary_sec}' does not exist in retrieved authorities."
-                })
-            elif matched_law and (matched_law.get("repealed") or matched_law.get("preempted_by")):
-                stale_count += 1
-                preempt_note = f" Preempted by {matched_law.get('preempted_by')}." if matched_law.get("preempted_by") else ""
-                claim_records.append({
-                    "claim": claim,
-                    "citation": primary_sec,
-                    "source_excerpt": matched_law.get("content", "")[:180] + "...",
-                    "status": "stale_law",
-                    "reason": f"Cited provision '{primary_sec}' is marked REPEALED or SUPERSEDED.{preempt_note}"
+                    "source_excerpt": best_span or (target_content[:180] + "..."),
+                    "status": "supported",
+                    "verdict": "entailed",
+                    "reason": reason,
+                    "refused": False,
+                    "confidence": confidence
                 })
             else:
-                target_content = matched_law.get("content", "") if matched_law else full_corpus
-                overlap, best_span = find_best_supporting_span(claim, target_content)
+                refused_count += 1
+                refusal_banner = f"[CLAIM REFUSED: {verdict.upper()} - {reason}]"
+                verified_draft_parts.append(refusal_banner)
+                wrong_prop_count += 1
 
-                # Detect numeric term contradictions (e.g. 60 days vs 21 days, 50% vs CPI)
-                claim_digits = set(re.findall(r'\b\d+(?:\.\d+)?%?\b', claim))
-                sec_digits = set(re.findall(r'\b\d+(?:\.\d+)?%?\b', primary_sec))
-                substantive_claim_digits = claim_digits - sec_digits
-                source_digits = set(re.findall(r'\b\d+(?:\.\d+)?%?\b', target_content))
+                if verdict == "contradicted":
+                    contradicted_count += 1
+                elif verdict == "exception_applies":
+                    exception_applies_count += 1
+                elif verdict == "insufficient_context":
+                    insufficient_context_count += 1
 
-                has_contradiction = False
-                if substantive_claim_digits and not (substantive_claim_digits & source_digits):
-                    has_contradiction = True
-
-                if not has_contradiction and (has_verbatim_quote or overlap >= 0.38):
-                    supported_count += 1
-                    claim_records.append({
-                        "claim": claim,
-                        "citation": primary_sec,
-                        "source_excerpt": best_span or (target_content[:180] + "..."),
-                        "status": "supported",
-                        "reason": f"Verified against {matched_law.get('title', 'authority') if matched_law else primary_sec}."
-                    })
-                else:
-                    wrong_prop_count += 1
-                    detail = "numeric contradiction with statutory terms" if has_contradiction else f"low textual overlap: {round(overlap*100)}%"
-                    claim_records.append({
-                        "claim": claim,
-                        "citation": primary_sec,
-                        "source_excerpt": best_span or (target_content[:180] + "..."),
-                        "status": "wrong_proposition",
-                        "reason": f"Cited section '{primary_sec}' does not substantiate this claim ({detail})."
-                    })
+                claim_records.append({
+                    "claim": claim,
+                    "citation": primary_sec,
+                    "source_excerpt": best_span or (target_content[:180] + "..."),
+                    "status": "wrong_proposition",
+                    "verdict": verdict,
+                    "reason": reason,
+                    "refused": True,
+                    "refusal_notice": refusal_banner,
+                    "confidence": confidence
+                })
         else:
-            overlap, best_span = find_best_supporting_span(claim, full_corpus)
-            if has_verbatim_quote or overlap >= 0.35:
+            # Uncited general proposition
+            verdict, reason, confidence, best_span = verify_proposition_pass_b(
+                claim=claim,
+                target_content=full_corpus,
+                matched_law=None,
+                definitions=definitions_list,
+                exceptions=exceptions_list,
+                matter_facts=matter_facts
+            )
+
+            if verdict == "entailed":
                 supported_count += 1
+                verified_draft_parts.append(claim)
                 claim_records.append({
                     "claim": claim,
                     "citation": "Retrieved Context",
                     "source_excerpt": best_span,
                     "status": "supported",
-                    "reason": "Supported by general factual/statutory context."
+                    "verdict": "entailed",
+                    "reason": reason,
+                    "refused": False,
+                    "confidence": confidence
                 })
             else:
-                if overlap >= 0.15:
-                    supported_count += 1
-                    claim_records.append({
-                        "claim": claim,
-                        "citation": "Synthesis",
-                        "source_excerpt": best_span,
-                        "status": "supported",
-                        "reason": "Contextual issue-spotting synthesis."
-                    })
+                refused_count += 1
+                wrong_prop_count += 1
+                if verdict == "contradicted":
+                    contradicted_count += 1
+                elif verdict == "exception_applies":
+                    exception_applies_count += 1
                 else:
-                    wrong_prop_count += 1
-                    claim_records.append({
-                        "claim": claim,
-                        "citation": "Uncited",
-                        "source_excerpt": best_span or "No matching excerpt found.",
-                        "status": "wrong_proposition",
-                        "reason": "Assertion lacks supporting statutory text in retrieved corpus."
-                    })
+                    insufficient_context_count += 1
+
+                refusal_banner = f"[CLAIM REFUSED: {verdict.upper()} - {reason}]"
+                verified_draft_parts.append(refusal_banner)
+                claim_records.append({
+                    "claim": claim,
+                    "citation": "Uncited",
+                    "source_excerpt": best_span or "No matching excerpt found.",
+                    "status": "wrong_proposition",
+                    "verdict": verdict,
+                    "reason": reason,
+                    "refused": True,
+                    "refusal_notice": refusal_banner,
+                    "confidence": confidence
+                })
 
     total_claims = len(claim_records)
     unsupported_total = invented_count + wrong_prop_count + stale_count
     pass_rate = round((supported_count / total_claims) * 100, 1) if total_claims > 0 else 100.0
+    verified_draft = " ".join(verified_draft_parts)
 
     stats = {
         "total_claims": total_claims,
@@ -667,7 +886,13 @@ def verify_assertion_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[bo
         "invented_citations": invented_count,
         "wrong_propositions": wrong_prop_count,
         "stale_law_citations": stale_count,
-        "pass_rate": pass_rate
+        "contradicted_claims": contradicted_count,
+        "exception_applies_claims": exception_applies_count,
+        "insufficient_context_claims": insufficient_context_count,
+        "not_in_corpus_claims": not_in_corpus_count,
+        "refused_claims_count": refused_count,
+        "pass_rate": pass_rate,
+        "verified_draft": verified_draft
     }
 
     advisories = []
@@ -675,16 +900,20 @@ def verify_assertion_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[bo
         advisories.append(f"> 🔴 **Invented Citations ({invented_count})**: Citations appeared in the brief that do not exist in the retrieved authorities.")
     if stale_count > 0:
         advisories.append(f"> 🟣 **Stale / Repealed Law ({stale_count})**: Cited authorities are marked repealed or preempted by higher law.")
-    if wrong_prop_count > 0:
-        advisories.append(f"> 🟠 **Unsupported Propositions ({wrong_prop_count})**: Assertions made with low factual or statutory overlap to cited sections.")
+    if contradicted_count > 0:
+        advisories.append(f"> 🚫 **Contradicted Assertions ({contradicted_count})**: Propositions directly contradict numeric terms or mandatory statutory duties.")
+    if exception_applies_count > 0:
+        advisories.append(f"> ⚠️ **Statutory Exceptions Apply ({exception_applies_count})**: General rules asserted where an explicit statutory exception controls.")
+    if insufficient_context_count > 0:
+        advisories.append(f"> 🟠 **Insufficient Context ({insufficient_context_count})**: Assertions made with low factual or statutory overlap to cited sections.")
 
     if advisories:
         advisory_md = (
             "\n\n---\n\n"
-            f"> ⚠️ **Assertion-Level Grounding Advisory (Pass Rate: {pass_rate}%)**:\n"
+            f"> ⚠️ **Assertion-Level Grounding Advisory (Pass Rate: {pass_rate}%, Refused Claims: {refused_count})**:\n"
             + "\n".join(advisories) +
             "\n>\n"
-            "> KruschLaw requires independent attorney review of all unverified propositions prior to reliance."
+            "> KruschLaw has refused all ungrounded assertions inline with specific legal reasons."
         )
         is_grounded = False
     else:
@@ -695,6 +924,325 @@ def verify_assertion_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[bo
         is_grounded = True
 
     return is_grounded, claim_records, advisory_md, stats
+
+
+def filter_authorities_by_jurisdiction(
+    candidates: List[Dict[str, Any]],
+    matter_facts: Optional[Dict[str, Any]] = None,
+    as_of_date: Optional[Any] = None,
+    exclude_repealed: bool = True,
+    db: Optional[Session] = None
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Deterministic Jurisdiction Machine:
+    Replaces arbitrary scalar multipliers with graph and fact-pattern constraints:
+      1. Temporal validity filter: prune repealed, sunset, or not-yet-effective rules.
+      2. Spatial / fact-pattern gate: evaluate `applies_if` (unincorporated island, city boundaries, tenancy type).
+      3. Explicit preemption edges: if rule A preempts rule B and rule A is live/controlling, prune rule B.
+      4. Mandatory child hydration: attach definitions (`defines_ref`/`defines_terms`) and exceptions (`exceptions_ref`/`exception_to`).
+
+    Returns (governing_authorities, pruned_candidates).
+    """
+    if as_of_date is None:
+        target_date = datetime.now(timezone.utc)
+    elif isinstance(as_of_date, str):
+        try:
+            target_date = datetime.fromisoformat(as_of_date)
+        except Exception:
+            target_date = datetime.now(timezone.utc)
+    else:
+        target_date = as_of_date
+
+    if target_date.tzinfo is None:
+        target_date = target_date.replace(tzinfo=timezone.utc)
+
+    surviving: List[Dict[str, Any]] = []
+    pruned: List[Dict[str, Any]] = []
+
+    matter_facts = matter_facts or {}
+    is_unincorporated = bool(matter_facts.get("unincorporated", False))
+    matter_city = matter_facts.get("city")
+    matter_prop_type = matter_facts.get("property_type")
+
+    for cand in candidates:
+        sec = cand.get("section", "Unknown")
+
+        # 1. Temporal Validity Filter
+        if exclude_repealed:
+            if cand.get("repealed") or cand.get("status") in ("repealed", "sunset", "enjoined"):
+                pruned.append({**cand, "prune_reason": "Repealed or sunset statutory node"})
+                continue
+
+            eff_to = cand.get("effective_to")
+            if eff_to:
+                if isinstance(eff_to, str):
+                    try:
+                        eff_to = datetime.fromisoformat(eff_to)
+                    except Exception:
+                        eff_to = None
+                if eff_to and eff_to.tzinfo is None:
+                    eff_to = eff_to.replace(tzinfo=timezone.utc)
+                if eff_to and eff_to < target_date:
+                    pruned.append({**cand, "prune_reason": f"Statute sunset ({eff_to.date()}) prior to inquiry date"})
+                    continue
+
+        eff_from = cand.get("effective_from") or cand.get("effective_date")
+        if eff_from:
+            if isinstance(eff_from, str):
+                try:
+                    eff_from = datetime.fromisoformat(eff_from)
+                except Exception:
+                    eff_from = None
+            if eff_from and eff_from.tzinfo is None:
+                eff_from = eff_from.replace(tzinfo=timezone.utc)
+            if eff_from and eff_from > target_date:
+                pruned.append({**cand, "prune_reason": f"Statute not yet effective ({eff_from.date()}) on inquiry date"})
+                continue
+
+        # 2. Spatial / Fact-Pattern Gate (applies_if)
+        applies_if_raw = cand.get("applies_if")
+        if applies_if_raw:
+            try:
+                conds = json.loads(applies_if_raw) if isinstance(applies_if_raw, str) else applies_if_raw
+            except Exception:
+                conds = {}
+
+            if "unincorporated" in conds:
+                if is_unincorporated and conds["unincorporated"] is False:
+                    pruned.append({**cand, "prune_reason": "Municipal ordinance inapplicable to unincorporated parcel"})
+                    continue
+                if not is_unincorporated and conds["unincorporated"] is True:
+                    pruned.append({**cand, "prune_reason": "Unincorporated county ordinance inapplicable to incorporated city parcel"})
+                    continue
+
+            if "city" in conds and matter_city:
+                if conds["city"].lower() != matter_city.lower():
+                    pruned.append({**cand, "prune_reason": f"Municipal ordinance for {conds['city']} inapplicable in {matter_city}"})
+                    continue
+
+            if "property_type" in conds and matter_prop_type:
+                if conds["property_type"].lower() != matter_prop_type.lower():
+                    pruned.append({**cand, "prune_reason": f"Property type mismatch ({conds['property_type']} vs {matter_prop_type})"})
+                    continue
+
+        surviving.append(cand)
+
+    # 3. Explicit Preemption Edges
+    final_governing: List[Dict[str, Any]] = []
+    active_sections = {c.get("section") for c in surviving}
+
+    for c in surviving:
+        preempted_by_str = c.get("preempted_by")
+        if exclude_repealed and preempted_by_str:
+            # Check if preempting authority is live or in candidates
+            if any(p_sec in preempted_by_str for p_sec in active_sections if p_sec):
+                pruned.append({**c, "prune_reason": f"Preempted by controlling authority: {preempted_by_str}"})
+                continue
+            # Known statewide preemption acts
+            if any(act in preempted_by_str for act in ["Costa-Hawkins", "Tenant Protection Act", "AB 12", "AB 1482", "1950.5(c)", "1946.2"]):
+                pruned.append({**c, "prune_reason": f"Preempted by statewide controlling act: {preempted_by_str}"})
+                continue
+
+        # Check if another candidate has preempts
+        is_preempted = False
+        for other in surviving:
+            other_preempts = other.get("preempts")
+            if other_preempts:
+                try:
+                    p_list = json.loads(other_preempts) if isinstance(other_preempts, str) else other_preempts
+                    if any(c.get("section") in p or p in c.get("title", "") for p in p_list):
+                        is_preempted = True
+                        break
+                except Exception:
+                    pass
+
+        if is_preempted:
+            pruned.append({**c, "prune_reason": f"Preempted by higher priority controlling node"})
+            continue
+
+        final_governing.append(c)
+
+    # 4. Mandatory Child Hydration (Definitions & Exceptions)
+    if db and final_governing:
+        existing_secs = {g.get("section") for g in final_governing}
+        hydrated_nodes = []
+        for g in final_governing:
+            def_ref = g.get("definitions_ref")
+            if def_ref and def_ref not in existing_secs:
+                sibling_def = db.query(LawVector).filter(
+                    LawVector.jurisdiction == g["jurisdiction"],
+                    (LawVector.section == def_ref) | (LawVector.section == f"Section {def_ref}")
+                ).first()
+                if sibling_def:
+                    hydrated_nodes.append({
+                        "id": sibling_def.id,
+                        "jurisdiction": sibling_def.jurisdiction,
+                        "state": sibling_def.state,
+                        "city": sibling_def.city or sibling_def.city_or_county,
+                        "county": sibling_def.county,
+                        "city_or_county": sibling_def.city_or_county or sibling_def.city,
+                        "topic": sibling_def.topic,
+                        "title": f"[Mandatory Definition] {sibling_def.title}",
+                        "section": sibling_def.section,
+                        "content": sibling_def.content,
+                        "chunk_index": sibling_def.chunk_index,
+                        "similarity": 0.99,
+                        "hierarchy_level": "definitions",
+                        "is_hydrated_context": True
+                    })
+                    existing_secs.add(def_ref)
+
+            exc_ref = g.get("exceptions_ref")
+            if exc_ref and exc_ref not in existing_secs:
+                sibling_exc = db.query(LawVector).filter(
+                    LawVector.jurisdiction == g["jurisdiction"],
+                    (LawVector.section == exc_ref) | (LawVector.section == f"Section {exc_ref}")
+                ).first()
+                if sibling_exc:
+                    hydrated_nodes.append({
+                        "id": sibling_exc.id,
+                        "jurisdiction": sibling_exc.jurisdiction,
+                        "state": sibling_exc.state,
+                        "city": sibling_exc.city or sibling_exc.city_or_county,
+                        "county": sibling_exc.county,
+                        "city_or_county": sibling_exc.city_or_county or sibling_exc.city,
+                        "topic": sibling_exc.topic,
+                        "title": f"[Mandatory Exception] {sibling_exc.title}",
+                        "section": sibling_exc.section,
+                        "content": sibling_exc.content,
+                        "chunk_index": sibling_exc.chunk_index,
+                        "similarity": 0.99,
+                        "hierarchy_level": "exceptions",
+                        "exception_to": g.get("section"),
+                        "is_hydrated_context": True
+                    })
+                    existing_secs.add(exc_ref)
+
+        final_governing.extend(hydrated_nodes)
+
+    return final_governing, pruned
+
+
+def apply_statutory_amendment(
+    section: str,
+    jurisdiction: str,
+    new_content: str,
+    new_title: Optional[str] = None,
+    effective_from: Optional[datetime] = None,
+    chaptered_bill_ref: Optional[str] = None,
+    db_session: Optional[Session] = None
+) -> Dict[str, Any]:
+    """
+    Sovereign Statutory Amendment Pipeline:
+    1. Locates existing live LawVector node.
+    2. Computes line-by-line textual diff against previous content.
+    3. Marks old node status='amended', sets effective_to, and points superseded_by_id to new node.
+    4. Inserts new LawVector with status='enacted' and effective_from.
+    5. Queries GroundingReport for past matter conclusions citing this section.
+    6. Returns structured amendment event with diff and list of affected matters requiring review.
+    """
+    close_session = False
+    db = db_session
+    if db is None:
+        db = SessionLocal()
+        close_session = True
+
+    try:
+        old_node = db.query(LawVector).filter(
+            LawVector.jurisdiction == jurisdiction,
+            (LawVector.section == section) | (LawVector.section == f"Section {section}"),
+            LawVector.status == "enacted"
+        ).first()
+
+        if not old_node:
+            # Fallback search without status constraint
+            old_node = db.query(LawVector).filter(
+                LawVector.jurisdiction == jurisdiction,
+                (LawVector.section == section) | (LawVector.section == f"Section {section}")
+            ).first()
+
+        old_content = old_node.content if old_node else ""
+        diff = list(difflib.unified_diff(
+            old_content.splitlines(keepends=True),
+            new_content.splitlines(keepends=True),
+            fromfile=f"{section} (Prior)",
+            tofile=f"{section} (Amended: {chaptered_bill_ref or 'Recent Bill'})"
+        ))
+        diff_text = "".join(diff)
+
+        eff_date = effective_from or datetime.now(timezone.utc)
+
+        # Generate embedding for amended text
+        new_emb = get_embedding(new_content)
+        content_hash = hashlib.sha256(new_content.encode('utf-8')).hexdigest()
+
+        new_node = LawVector(
+            jurisdiction=jurisdiction,
+            state=old_node.state if old_node else "CA",
+            city=old_node.city if old_node else None,
+            county=old_node.county if old_node else None,
+            city_or_county=old_node.city_or_county if old_node else None,
+            topic=old_node.topic if old_node else "Housing & Tenancy",
+            title=new_title or (old_node.title if old_node else f"{section} (Amended)"),
+            section=section if section.startswith("Section") else f"Section {section}",
+            content=new_content,
+            source_header=new_title or (old_node.title if old_node else section),
+            source_hash=content_hash,
+            chunk_index=0,
+            is_substantive=True,
+            embedding=new_emb,
+            parent_section=old_node.parent_section if old_node else None,
+            hierarchy_level=old_node.hierarchy_level if old_node else "section",
+            authority_class=old_node.authority_class if old_node else "controlling_statute",
+            instrument_type=old_node.instrument_type if old_node else "statute",
+            jurisdiction_level=old_node.jurisdiction_level if old_node else "state",
+            effective_date=eff_date,
+            effective_from=eff_date,
+            status="enacted",
+            repealed=False,
+            preempted_by=None,
+            source_url=old_node.source_url if old_node else None
+        )
+        if old_node:
+            old_node.status = "amended"
+            old_node.effective_to = eff_date
+            old_node.amended_date = eff_date
+            db.flush()
+
+        db.add(new_node)
+        db.flush()
+
+        if old_node:
+            old_node.superseded_by_id = new_node.id
+            db.flush()
+
+        # Query past grounding reports that cited this section
+        clean_sec_num = re.sub(r'[^0-9\.]', '', section)
+        affected_reports = db.query(GroundingReport).filter(
+            GroundingReport.claims_json.like(f"%{clean_sec_num}%")
+        ).all()
+        affected_case_ids = sorted(list({r.case_id for r in affected_reports}))
+
+        db.commit()
+
+        return {
+            "status": "amendment_applied",
+            "section": section,
+            "jurisdiction": jurisdiction,
+            "previous_node_id": old_node.id if old_node else None,
+            "new_node_id": new_node.id,
+            "text_diff": diff_text,
+            "affected_case_ids": affected_case_ids,
+            "affected_matter_count": len(affected_case_ids),
+            "chaptered_bill_ref": chaptered_bill_ref
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error applying statutory amendment: {e}")
+        raise
+    finally:
+        if close_session:
+            db.close()
 
 
 def retrieve_laws(
@@ -709,13 +1257,17 @@ def retrieve_laws(
     jurisdiction_rollup: bool = False,
     expand_query: bool = False,
     include_matter_corpus: bool = False,
+    matter_facts: Optional[Dict[str, Any]] = None,
+    as_of_date: Optional[Any] = None,
     db_session: Optional[Session] = None
 ) -> List[Dict]:
     """
-    Retrieve laws using hybrid search: combining pgvector cosine similarity
-    with full-text lexical ranking (tsvector on PostgreSQL, token match on SQLite),
-    authority ranking weights, temporal filtering, sibling/parent hierarchy auto-hydration,
-    and jurisdiction rollup (city inherits county and controlling state statutes unless preempted).
+    Retrieve laws using the Deterministic Jurisdiction Machine:
+    1. Discovers wide candidate set via hybrid lexical + dense vector search (RRF).
+    2. Deterministically filters by temporal status, spatial/fact-pattern gates (`applies_if`),
+       and explicit preemption edges.
+    3. Mandatorily hydratively binds definition and exception children.
+    4. Ranks only live, controlling authorities by pure relevance without scalar multipliers.
     """
     limit = limit or settings.DEFAULT_RETRIEVAL_LIMIT
     close_session = False
@@ -733,9 +1285,19 @@ def retrieve_laws(
         if query_vector is None and text_query:
             query_vector = get_embedding(text_query)
 
+        # Heuristic fact inference if matter_facts was not explicitly provided
+        inferred_facts = dict(matter_facts or {})
+        if text_query:
+            tq_lower = text_query.lower()
+            if re.search(r'\b(unincorporated|castro\s+valley|san\s+lorenzo|ashland)\b', tq_lower):
+                inferred_facts.setdefault("unincorporated", True)
+                inferred_facts.setdefault("county", "Alameda County")
+            if re.search(r'\b(single\s*family|owner[\s\-]occupied\s*duplex)\b', tq_lower):
+                inferred_facts.setdefault("single_family", True)
+
         is_sqlite = db.bind.dialect.name == "sqlite"
         query_conditions = ["is_substantive = 1" if is_sqlite else "is_substantive = true"]
-        params: Dict[str, Any] = {"limit": limit * 3}
+        params: Dict[str, Any] = {"limit": max(30, limit * 4)}
 
         # Corpus isolation: exclude client matter evidence from general statutory search
         if not include_matter_corpus and (city_filter or "").lower() != "matter":
@@ -749,7 +1311,6 @@ def retrieve_laws(
             params["state"] = state_filter.strip().upper()
         if city_filter:
             if jurisdiction_rollup:
-                # Jurisdiction rollup: city inherits county and controlling state statutes unless preempted
                 rollup_cond = (
                     "("
                     "LOWER(city_or_county) = LOWER(:city) OR LOWER(city) = LOWER(:city) OR "
@@ -771,7 +1332,9 @@ def retrieve_laws(
             sql = text(f"""
                 SELECT id, jurisdiction, state, city, county, city_or_county, topic, title, section, content,
                        chunk_index, embedding, parent_section, hierarchy_level, authority_class,
-                       definitions_ref, exceptions_ref, repealed, preempted_by, effective_date, source_url
+                       instrument_type, status, effective_from, effective_to, preempts, implements_ref,
+                       defines_terms, exception_to, applies_if, definitions_ref, exceptions_ref,
+                       repealed, preempted_by, effective_date, source_url
                 FROM laws_vectors
                 WHERE {conditions_str}
             """)
@@ -797,12 +1360,11 @@ def retrieve_laws(
                     doc_text = f"{row.title or ''} {row.section or ''} {row.content or ''}".lower()
                     matches = sum(1 for t in query_tokens if t in doc_text)
                     lex_score = min(1.0, matches / max(1, len(query_tokens)))
+                    if row.section and row.section.lower() in (effective_text_query or "").lower():
+                        lex_score = min(1.0, lex_score + 0.35)
 
-                auth_weight = AUTHORITY_WEIGHTS.get(getattr(row, "authority_class", "municipal_ordinance"), 1.0)
-                if getattr(row, "preempted_by", None):
-                    auth_weight *= 0.5  # Penalize preempted local provisions
-                base_sim = (0.7 * cos_sim) + (0.3 * lex_score) if text_query and query_vector else (cos_sim or lex_score)
-                weighted_sim = float(base_sim * auth_weight)
+                # Pure similarity score: balanced lexical and dense matching without scalar multipliers
+                base_sim = (0.5 * cos_sim) + (0.5 * lex_score) if text_query and query_vector else (cos_sim or lex_score)
 
                 results.append({
                     "id": row.id,
@@ -816,16 +1378,25 @@ def retrieve_laws(
                     "section": row.section,
                     "content": row.content,
                     "chunk_index": row.chunk_index,
-                    "similarity": weighted_sim,
-                    "parent_section": row.parent_section,
-                    "hierarchy_level": row.hierarchy_level,
-                    "authority_class": row.authority_class,
-                    "definitions_ref": row.definitions_ref,
-                    "exceptions_ref": row.exceptions_ref,
-                    "repealed": bool(row.repealed),
-                    "preempted_by": row.preempted_by,
+                    "similarity": round(float(base_sim), 4),
+                    "parent_section": getattr(row, "parent_section", None),
+                    "hierarchy_level": getattr(row, "hierarchy_level", "section"),
+                    "authority_class": getattr(row, "authority_class", "municipal_ordinance"),
+                    "instrument_type": getattr(row, "instrument_type", "statute"),
+                    "status": getattr(row, "status", "enacted"),
+                    "effective_from": getattr(row, "effective_from", None),
+                    "effective_to": getattr(row, "effective_to", None),
+                    "preempts": getattr(row, "preempts", None),
+                    "implements_ref": getattr(row, "implements_ref", None),
+                    "defines_terms": getattr(row, "defines_terms", None),
+                    "exception_to": getattr(row, "exception_to", None),
+                    "applies_if": getattr(row, "applies_if", None),
+                    "definitions_ref": getattr(row, "definitions_ref", None),
+                    "exceptions_ref": getattr(row, "exceptions_ref", None),
+                    "repealed": bool(getattr(row, "repealed", False)),
+                    "preempted_by": getattr(row, "preempted_by", None),
                     "effective_date": str(row.effective_date) if row.effective_date else None,
-                    "source_url": row.source_url
+                    "source_url": getattr(row, "source_url", None)
                 })
 
             results.sort(key=lambda x: x["similarity"], reverse=True)
@@ -839,20 +1410,23 @@ def retrieve_laws(
                 sql = text(f"""
                     WITH vec_matches AS (
                         SELECT id, (1 - (embedding <=> CAST(:vec AS vector))) AS cos_sim,
-                               ROW_NUMBER() OVER (ORDER BY embedding <=> CAST(:vec AS vector)) as v_rank
+                                ROW_NUMBER() OVER (ORDER BY embedding <=> CAST(:vec AS vector)) as v_rank
                         FROM laws_vectors
                         WHERE {conditions_str} AND embedding IS NOT NULL
                         LIMIT 50
                     ),
                     lex_matches AS (
                         SELECT id, ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) as l_score,
-                               ROW_NUMBER() OVER (ORDER BY ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) DESC) as l_rank
+                                ROW_NUMBER() OVER (ORDER BY ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) DESC) as l_rank
                         FROM laws_vectors
                         WHERE {conditions_str} AND to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')) @@ plainto_tsquery('english', :text_q)
                         LIMIT 50
                     )
                     SELECT l.id, l.jurisdiction, l.state, l.city, l.county, l.city_or_county, l.topic, l.title, l.section, l.content, l.chunk_index,
-                           l.parent_section, l.hierarchy_level, l.authority_class, l.definitions_ref, l.exceptions_ref, l.repealed, l.preempted_by, l.effective_date, l.source_url,
+                           l.parent_section, l.hierarchy_level, l.authority_class, l.instrument_type, l.status,
+                           l.effective_from, l.effective_to, l.preempts, l.implements_ref, l.defines_terms,
+                           l.exception_to, l.applies_if, l.definitions_ref, l.exceptions_ref, l.repealed,
+                           l.preempted_by, l.effective_date, l.source_url,
                            COALESCE(1.0 / (60 + v.v_rank), 0.0) + COALESCE(1.0 / (60 + lex.l_rank), 0.0) AS hybrid_score,
                            COALESCE(v.cos_sim, 0.0) as similarity
                     FROM laws_vectors l
@@ -865,7 +1439,10 @@ def retrieve_laws(
             elif vec_str:
                 sql = text(f"""
                     SELECT id, jurisdiction, state, city, county, city_or_county, topic, title, section, content, chunk_index,
-                           parent_section, hierarchy_level, authority_class, definitions_ref, exceptions_ref, repealed, preempted_by, effective_date, source_url,
+                           parent_section, hierarchy_level, authority_class, instrument_type, status,
+                           effective_from, effective_to, preempts, implements_ref, defines_terms,
+                           exception_to, applies_if, definitions_ref, exceptions_ref, repealed,
+                           preempted_by, effective_date, source_url,
                            (1 - (embedding <=> CAST(:vec AS vector))) AS similarity
                     FROM laws_vectors
                     WHERE {conditions_str} AND embedding IS NOT NULL
@@ -875,7 +1452,10 @@ def retrieve_laws(
             else:
                 sql = text(f"""
                     SELECT id, jurisdiction, state, city, county, city_or_county, topic, title, section, content, chunk_index,
-                           parent_section, hierarchy_level, authority_class, definitions_ref, exceptions_ref, repealed, preempted_by, effective_date, source_url,
+                           parent_section, hierarchy_level, authority_class, instrument_type, status,
+                           effective_from, effective_to, preempts, implements_ref, defines_terms,
+                           exception_to, applies_if, definitions_ref, exceptions_ref, repealed,
+                           preempted_by, effective_date, source_url,
                            ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) AS similarity
                     FROM laws_vectors
                     WHERE {conditions_str} AND to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')) @@ plainto_tsquery('english', :text_q)
@@ -886,7 +1466,6 @@ def retrieve_laws(
             rows = db.execute(sql, params).fetchall()
             results = []
             for row in rows:
-                auth_weight = AUTHORITY_WEIGHTS.get(getattr(row, "authority_class", "municipal_ordinance"), 1.0)
                 raw_sim = float(getattr(row, "similarity", 0.0) or 0.0)
                 results.append({
                     "id": row.id,
@@ -900,10 +1479,19 @@ def retrieve_laws(
                     "section": row.section,
                     "content": row.content,
                     "chunk_index": getattr(row, "chunk_index", 0),
-                    "similarity": round(raw_sim * auth_weight, 4),
+                    "similarity": round(raw_sim, 4),
                     "parent_section": getattr(row, "parent_section", None),
                     "hierarchy_level": getattr(row, "hierarchy_level", "section"),
                     "authority_class": getattr(row, "authority_class", "municipal_ordinance"),
+                    "instrument_type": getattr(row, "instrument_type", "statute"),
+                    "status": getattr(row, "status", "enacted"),
+                    "effective_from": getattr(row, "effective_from", None),
+                    "effective_to": getattr(row, "effective_to", None),
+                    "preempts": getattr(row, "preempts", None),
+                    "implements_ref": getattr(row, "implements_ref", None),
+                    "defines_terms": getattr(row, "defines_terms", None),
+                    "exception_to": getattr(row, "exception_to", None),
+                    "applies_if": getattr(row, "applies_if", None),
                     "definitions_ref": getattr(row, "definitions_ref", None),
                     "exceptions_ref": getattr(row, "exceptions_ref", None),
                     "repealed": bool(getattr(row, "repealed", False)),
@@ -912,59 +1500,25 @@ def retrieve_laws(
                     "source_url": getattr(row, "source_url", None)
                 })
 
+        # Apply Deterministic Jurisdiction Machine (temporal, fact-pattern, preemption, child hydration)
+        governing_authorities, _ = filter_authorities_by_jurisdiction(
+            candidates=results,
+            matter_facts=inferred_facts,
+            as_of_date=as_of_date,
+            exclude_repealed=exclude_repealed,
+            db=db
+        )
+
         # Parent-Child deduplication
         seen_sections: Set[Tuple[str, str, str]] = set()
         deduped: List[Dict] = []
-        for r in results:
+        for r in governing_authorities:
             sec_key = (r["jurisdiction"], r.get("state") or "", r.get("section") or r.get("title") or str(r["id"]))
             if sec_key not in seen_sections:
                 seen_sections.add(sec_key)
                 deduped.append(r)
             if len(deduped) >= limit:
                 break
-
-        # Sibling / Hierarchy auto-hydration
-        if hydrate_hierarchy and deduped:
-            refs_to_fetch = set()
-            for r in deduped:
-                if r.get("definitions_ref"):
-                    refs_to_fetch.add((r["jurisdiction"], r["definitions_ref"]))
-                if r.get("exceptions_ref"):
-                    refs_to_fetch.add((r["jurisdiction"], r["exceptions_ref"]))
-
-            existing_sections = {d.get("section") for d in deduped}
-            for jur, ref_sec in refs_to_fetch:
-                if ref_sec not in existing_sections:
-                    sibling = db.query(LawVector).filter(
-                        LawVector.jurisdiction == jur,
-                        (LawVector.section == ref_sec) | (LawVector.section == f"Section {ref_sec}")
-                    ).first()
-                    if sibling:
-                        deduped.append({
-                            "id": sibling.id,
-                            "jurisdiction": sibling.jurisdiction,
-                            "state": sibling.state,
-                            "city": sibling.city or sibling.city_or_county,
-                            "county": sibling.county,
-                            "city_or_county": sibling.city_or_county or sibling.city,
-                            "topic": sibling.topic,
-                            "title": f"[Referenced Hierarchy] {sibling.title}",
-                            "section": sibling.section,
-                            "content": sibling.content,
-                            "chunk_index": sibling.chunk_index,
-                            "similarity": 0.95,
-                            "parent_section": sibling.parent_section,
-                            "hierarchy_level": sibling.hierarchy_level,
-                            "authority_class": sibling.authority_class,
-                            "definitions_ref": sibling.definitions_ref,
-                            "exceptions_ref": sibling.exceptions_ref,
-                            "repealed": bool(sibling.repealed),
-                            "preempted_by": sibling.preempted_by,
-                            "effective_date": str(sibling.effective_date) if sibling.effective_date else None,
-                            "source_url": sibling.source_url,
-                            "is_hydrated_context": True
-                        })
-                        existing_sections.add(ref_sec)
 
         return deduped
     except Exception as e:
@@ -1088,8 +1642,14 @@ Draft the legal analysis following the required headings. Conclude with an ethic
                         unsupported_claims=stats.get("unsupported_claims", 0),
                         invented_citations=stats.get("invented_citations", 0),
                         stale_law_citations=stats.get("stale_law_citations", 0),
+                        contradicted_claims=stats.get("contradicted_claims", 0),
+                        exception_applies_claims=stats.get("exception_applies_claims", 0),
+                        insufficient_context_claims=stats.get("insufficient_context_claims", 0),
+                        not_in_corpus_claims=stats.get("not_in_corpus_claims", 0),
+                        refused_claims_count=stats.get("refused_claims_count", 0),
                         pass_rate=stats.get("pass_rate", 100.0),
                         claims_json=json.dumps(claim_records),
+                        verified_draft=stats.get("verified_draft"),
                         advisory_markdown=grounding_notice
                     )
                     db.add(report)

@@ -49,6 +49,7 @@ import src.backend.db
 import src.backend.rag
 import src.backend.ingest
 import src.backend.main
+import src.mcp.server
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

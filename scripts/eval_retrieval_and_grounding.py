@@ -17,6 +17,7 @@ import sys
 import json
 import time
 import math
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
@@ -299,6 +300,118 @@ def run_heldout_statutory_gate() -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# GATE 4: Conflict-Pair Evaluation Gate (Deterministic Invariants)
+# ---------------------------------------------------------------------------
+def run_conflict_pair_gate(db_session: Optional[Session] = None) -> Dict[str, Any]:
+    """
+    Evaluates 5 critical Sovereign Triad conflict pairs without heuristic multipliers:
+      1. AB 12 Deposit Cap Repeal: Live controlling § 1950.5(c) outranks repealed 2-month rule.
+      2. Spatial Gate / Unincorporated Island: Alameda County island facts prune Oakland OMC 8.22.
+      3. Mandatory Child Hydration & Exception Detection: AB 1482 Just Cause + § 1946.2(e) owner-occupied exception.
+      4. Corpus Abstention: Engine refuses claims when governing authority is missing from corpus.
+      5. Matter Isolation: Confidential exhibits never leak into public laws store.
+    """
+    close_session = False
+    db = db_session
+    if db is None:
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool
+        )
+        Base.metadata.create_all(bind=engine)
+        SessionCls = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        db = SessionCls()
+        close_session = True
+        ingest_mock_data(db)
+
+    try:
+        results = {}
+
+        # 1. Deposit Cap Repeal
+        as_of_today = datetime(2025, 1, 15, tzinfo=timezone.utc)
+        deposit_laws = retrieve_laws(
+            text_query="What is the maximum allowable security deposit for an unfurnished apartment in California Section 1950.5?",
+            limit=5,
+            as_of_date=as_of_today,
+            exclude_repealed=True,
+            db_session=db
+        )
+        deposit_secs = [r["section"] for r in deposit_laws]
+        results["deposit_cap_conflict"] = {
+            "passed": any("1950.5" in s for s in deposit_secs) and "Section 1950.5 (Pre-2024)" not in deposit_secs,
+            "description": "AB 12 1-month deposit cap vs repealed 2-month rule"
+        }
+
+        # 2. Spatial Gate / Unincorporated Island
+        matter_facts = {"county": "Alameda County", "unincorporated": True, "property_type": "residential"}
+        island_laws = retrieve_laws(
+            text_query="Does rent adjustment program notice apply in unincorporated Castro Valley?",
+            limit=5,
+            matter_facts=matter_facts,
+            db_session=db
+        )
+        island_secs = [r["section"] for r in island_laws]
+        results["unincorporated_island_gate"] = {
+            "passed": "Section 6.04.050" in island_secs and not any(s.startswith("Section 8.22") for s in island_secs),
+            "description": "Alameda County unincorporated island vs Oakland OMC 8.22"
+        }
+
+        # 3. Mandatory Child Hydration & Statutory Exception
+        just_cause_laws = retrieve_laws(
+            text_query="Civil Code Section 1946.2 tenant protection act mandatory just cause eviction",
+            limit=5,
+            db_session=db
+        )
+        jc_secs = [r["section"] for r in just_cause_laws]
+        has_child_hydration = "Section 1946.2(e)" in jc_secs
+        draft_exempt = "Pursuant to Section 1946.2, the landlord cannot terminate tenancy without proving statutory just cause."
+        is_g, claims, _, stats = verify_assertion_grounding(
+            analysis_text=draft_exempt,
+            laws=just_cause_laws,
+            matter_facts={"owner_occupied_duplex": True}
+        )
+        results["statutory_exception_gate"] = {
+            "passed": has_child_hydration and not is_g and claims[0]["verdict"] == "exception_applies",
+            "description": "AB 1482 Just Cause vs owner-occupied duplex exception § 1946.2(e)"
+        }
+
+        # 4. Corpus Abstention
+        draft_invented = "Under Fresno Municipal Code Section 12.99, commercial tenants are entitled to 90-day rent abatement."
+        fresno_laws = retrieve_laws(text_query="Fresno commercial rent abatement", limit=3, db_session=db)
+        is_g_inv, claims_inv, _, _ = verify_assertion_grounding(draft_invented, fresno_laws)
+        results["corpus_abstention_gate"] = {
+            "passed": not is_g_inv and claims_inv[0]["verdict"] == "not_in_corpus",
+            "description": "Corpus abstention & refusal on missing statutory rules"
+        }
+
+        # 5. Store Isolation
+        matter_leak = False
+        evidence_results = retrieve_laws(text_query="Confidential settlement NDA 1428 Elm St", limit=5, db_session=db)
+        for r in evidence_results:
+            if "1428 Elm St" in r.get("content", "") or "25,000" in r.get("content", ""):
+                matter_leak = True
+        results["store_isolation_gate"] = {
+            "passed": not matter_leak,
+            "description": "Zero leakage of confidential matter exhibits into public law store"
+        }
+
+        total_gates = len(results)
+        passed_gates = sum(1 for v in results.values() if v["passed"])
+        accuracy = (passed_gates / total_gates) * 100.0
+
+        return {
+            "total_conflict_pairs": total_gates,
+            "passed_conflict_pairs": passed_gates,
+            "accuracy": round(accuracy, 1),
+            "pairs": results
+        }
+    finally:
+        if close_session:
+            db.close()
+
+
+# ---------------------------------------------------------------------------
 # CALIBRATION: Grounding Confusion Matrix
 # ---------------------------------------------------------------------------
 def run_grounding_calibration() -> Dict[str, Any]:
@@ -464,6 +577,17 @@ def main():
     print(f" Held-Out Recall@5        : {g3['heldout_recall_at_5']}%")
     print(f" Held-Out MRR             : {g3['heldout_mrr']}")
     print(f" Priority Inversions      : {g3['priority_inversions']} (Target: 0)")
+
+    # Gate 4
+    print("\n----------------------------------------------------------------------------")
+    print(" [GATE 4] CONFLICT-PAIR EVALUATION SCORECARD (Deterministic Invariants)")
+    print("----------------------------------------------------------------------------")
+    g4 = run_conflict_pair_gate()
+    print(f" Total Conflict Pairs     : {g4['total_conflict_pairs']}")
+    print(f" Passed Conflict Pairs    : {g4['passed_conflict_pairs']} / {g4['total_conflict_pairs']} ({g4['accuracy']}%)")
+    for k, p in g4["pairs"].items():
+        status_icon = "✅" if p["passed"] else "❌"
+        print(f"   {status_icon} {p['description']}")
 
     # Grounding Calibration Matrix
     print("\n----------------------------------------------------------------------------")

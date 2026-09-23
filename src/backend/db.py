@@ -93,7 +93,7 @@ class LawVector(Base):
     """
     __tablename__ = "laws_vectors"
     __table_args__ = (
-        UniqueConstraint("jurisdiction", "state", "city", "section", "chunk_index", name="uq_law_section_chunk"),
+        UniqueConstraint("jurisdiction", "state", "city", "section", "chunk_index", "source_hash", name="uq_law_section_hash"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -122,19 +122,32 @@ class LawVector(Base):
     # --- Temporal Validity & Authority Hierarchy ---
     authority_class = Column(String(50), default="municipal_ordinance", nullable=False, index=True)
     # Options: "controlling_statute", "implementing_regulation", "municipal_ordinance", "secondary_commentary"
+    instrument_type = Column(String(50), default="statute", nullable=False, index=True)
+    # Options: "statute", "regulation", "ordinance", "opinion", "commentary"
     jurisdiction_level = Column(String(50), default="city", nullable=True, index=True)
-    # Options: "federal", "state", "county", "city"
+    # Options: "federal", "state", "county", "city", "agency"
     effective_date = Column(DateTime(timezone=True), nullable=True) # Date statute became in force
+    effective_from = Column(DateTime(timezone=True), nullable=True) # Synonym / formal start date
+    effective_to = Column(DateTime(timezone=True), nullable=True)   # Formal sunset / amendment date
     amended_date = Column(DateTime(timezone=True), nullable=True)   # Date of most recent formal statutory amendment
+    status = Column(String(50), default="enacted", nullable=False, index=True)
+    # Options: "enacted", "amended", "repealed", "sunset", "enjoined"
     repealed = Column(Boolean, default=False, nullable=False, index=True) # True if repealed or superseded
     preempted_by = Column(String(255), nullable=True)               # e.g. "Cal. Civ. Code § 1946.2 (California Tenant Protection Act)"
+    preempts = Column(Text, nullable=True)                          # JSON list of citations preempted by this node
+    implements_ref = Column(String(255), nullable=True)             # Reference to parent statutory mandate
+    defines_terms = Column(Text, nullable=True)                     # JSON list of terms formally defined
+    exception_to = Column(String(255), nullable=True)               # Section for which this node is an exception
+    applies_if = Column(Text, nullable=True)                        # JSON dict of spatial & fact preconditions
+    superseded_by_id = Column(Integer, nullable=True)               # ID of amendment replacement node
     source_url = Column(String(500), nullable=True)                 # Official legal reporter / municipal code publishing URL
 
 
 class GroundingReport(Base):
     """
     Immutable assertion-level grounding audit report tracking verified propositions,
-    supporting textual excerpts, and detected failure modes (invented, unsupported, stale law).
+    supporting textual excerpts, and detected failure modes across the 5-class taxonomy:
+    (entailed, contradicted, exception_applies, insufficient_context, not_in_corpus).
     """
     __tablename__ = "grounding_reports"
 
@@ -146,8 +159,14 @@ class GroundingReport(Base):
     unsupported_claims = Column(Integer, default=0, nullable=False)
     invented_citations = Column(Integer, default=0, nullable=False)
     stale_law_citations = Column(Integer, default=0, nullable=False)
+    contradicted_claims = Column(Integer, default=0, nullable=False)
+    exception_applies_claims = Column(Integer, default=0, nullable=False)
+    insufficient_context_claims = Column(Integer, default=0, nullable=False)
+    not_in_corpus_claims = Column(Integer, default=0, nullable=False)
+    refused_claims_count = Column(Integer, default=0, nullable=False)
     pass_rate = Column(Float, default=100.0, nullable=False)
     claims_json = Column(Text, nullable=False)                      # JSON list of verified claims & spans
+    verified_draft = Column(Text, nullable=True)                    # Redacted/annotated draft with per-claim refusal
     advisory_markdown = Column(Text, nullable=True)
 
 
