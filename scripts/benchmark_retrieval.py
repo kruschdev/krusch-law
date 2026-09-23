@@ -10,7 +10,7 @@ import sys
 import time
 import math
 import json
-from typing import List, Dict
+from typing import List
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
@@ -44,7 +44,7 @@ import src.backend.db
 import src.backend.rag
 import src.backend.ingest
 
-from src.backend.db import Base, LawVector
+from src.backend.db import Base
 from src.backend.ingest import ingest_mock_data
 from src.backend.rag import retrieve_laws, verify_citation_grounding
 

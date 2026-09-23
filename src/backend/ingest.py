@@ -1,26 +1,31 @@
 import os
 import re
+import sys
+import time
 import hashlib
 import logging
 from typing import Optional, List, Dict, Tuple, Any
+from datetime import datetime
 import pandas as pd
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import SessionLocal, LawVector, IngestJob
-from .rag import get_embedding, get_embeddings_batch
+from .db import SessionLocal, LawVector, IngestJob, MatterEvidence
+from .rag import get_embeddings_batch
 
 logger = logging.getLogger("kruschlaw.ingest")
 
+# Maximum permitted file size for air-gapped sandboxed ingestion (50MB)
+MAX_INGEST_FILE_SIZE_BYTES = 50 * 1024 * 1024
+
 # ---------------------------------------------------------------------------
-# PARAPHRASED DEMO FIXTURES (NON-OFFICIAL TEST DATA)
+# HIERARCHICAL & VERSIONED CALIFORNIA LEGAL GRAPH FIXTURES
 #
-# NOTE: These seed entries are short, paraphrased illustrative fixtures for
-# local interface testing and automated pipeline verification. They DO NOT
-# contain the unamended, official statutory text of controlling California
-# or municipal codes and must NEVER be relied upon as legal authority.
+# Models real-world statutory hierarchies:
+#   Root / Chapter -> Definitions -> General Rule -> Subsections -> Exceptions
+# Includes temporal validity (effective dates, amendments) and authority classes.
 # ---------------------------------------------------------------------------
-SEED_CALIFORNIA_ORDINANCES: List[Dict[str, str]] = [
+SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
     {
         "jurisdiction": "Oakland Municipal Code",
         "state": "CA",
@@ -28,13 +33,74 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, str]] = [
         "county": "Alameda County",
         "city_or_county": "Oakland",
         "topic": "Housing & Rent",
-        "title": "Oakland Rent Adjustment Program (Demo Paraphrase)",
-        "section": "Section 8.22.030",
+        "title": "Oakland Rent Adjustment Program: Definitions",
+        "section": "Section 8.22.020",
+        "parent_section": "Chapter 8.22",
+        "hierarchy_level": "definitions",
+        "authority_class": "municipal_ordinance",
+        "jurisdiction_level": "city",
+        "effective_date": datetime(2020, 2, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://library.municode.com/ca/oakland/codes/code_of_ordinances?nodeId=TIT8HESA_CH8.22REBAPRO",
         "content": (
-            "Landlords must provide tenants with written notice of the Rent Adjustment Program, "
-            "including the tenant's right to petition, at the commencement of a tenancy. "
-            "Failure to provide this statutory notice bars a landlord from imposing annual rent increases "
-            "or pursuing unlawful detainer proceedings based on non-payment of disputed rent."
+            "For the purposes of Chapter 8.22, the following terms are defined: "
+            "(A) 'Covered Unit' means any residential rental unit in the City of Oakland not explicitly exempted. "
+            "(B) 'Rent Adjustment Program (RAP) Notice' means the mandatory official advisory form explaining tenant rights "
+            "and petition deadlines promulgated by the Rent Adjustment Program. "
+            "(C) 'CPI Increase' means the annual general rent increase percentage announced by the Board based on consumer price index."
+        )
+    },
+    {
+        "jurisdiction": "Oakland Municipal Code",
+        "state": "CA",
+        "city": "Oakland",
+        "county": "Alameda County",
+        "city_or_county": "Oakland",
+        "topic": "Housing & Rent",
+        "title": "Oakland Rent Adjustment Program Notice & Fee Requirements",
+        "section": "Section 8.22.030",
+        "parent_section": "Chapter 8.22",
+        "hierarchy_level": "section",
+        "definitions_ref": "Section 8.22.020",
+        "exceptions_ref": "Section 8.22.030(B)",
+        "authority_class": "municipal_ordinance",
+        "jurisdiction_level": "city",
+        "effective_date": datetime(2020, 2, 1),
+        "amended_date": datetime(2023, 4, 15),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://library.municode.com/ca/oakland/codes/code_of_ordinances?nodeId=TIT8HESA_CH8.22REBAPRO_8.22.030REINNOFE",
+        "content": (
+            "Landlords must provide tenants with written notice of the Rent Adjustment Program (RAP), "
+            "including the tenant's right to petition, at the commencement of a tenancy and concurrently with any notice "
+            "of rent increase. Failure to provide this statutory notice bars a landlord from imposing annual rent increases "
+            "or pursuing unlawful detainer proceedings based on non-payment of disputed rent increases."
+        )
+    },
+    {
+        "jurisdiction": "Oakland Municipal Code",
+        "state": "CA",
+        "city": "Oakland",
+        "county": "Alameda County",
+        "city_or_county": "Oakland",
+        "topic": "Housing & Rent",
+        "title": "Oakland Rent Adjustment Program: Exemptions & Tolling",
+        "section": "Section 8.22.030(B)",
+        "parent_section": "Section 8.22.030",
+        "hierarchy_level": "exceptions",
+        "definitions_ref": "Section 8.22.020",
+        "authority_class": "municipal_ordinance",
+        "jurisdiction_level": "city",
+        "effective_date": datetime(2020, 2, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://library.municode.com/ca/oakland/codes/code_of_ordinances?nodeId=TIT8HESA_CH8.22REBAPRO_8.22.030REINNOFE",
+        "content": (
+            "Exceptions to the general notice requirement: (1) Dwelling units constructed after January 1, 1983 are exempt "
+            "from rent increase limitations under Costa-Hawkins, provided that the initial lease contains statutory disclosures. "
+            "(2) The time period for a tenant to file a contest petition is tolled indefinitely until full compliant RAP notice "
+            "is served by proof of certified mail or personal delivery."
         )
     },
     {
@@ -44,13 +110,23 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, str]] = [
         "county": "Alameda County",
         "city_or_county": "Oakland",
         "topic": "Eviction & Just Cause",
-        "title": "Oakland Just Cause for Eviction Ordinance (Demo Paraphrase)",
+        "title": "Oakland Just Cause for Eviction Ordinance",
         "section": "Section 8.22.360",
+        "parent_section": "Chapter 8.22",
+        "hierarchy_level": "section",
+        "definitions_ref": "Section 8.22.020",
+        "authority_class": "municipal_ordinance",
+        "jurisdiction_level": "city",
+        "effective_date": datetime(2021, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://library.municode.com/ca/oakland/codes/code_of_ordinances?nodeId=TIT8HESA_CH8.22REBAPRO_8.22.360JUCAEV",
         "content": (
             "A landlord shall not endeavor to recover possession of a rental unit except upon one of the "
-            "enumerated Just Cause grounds, which include: non-payment of rent, substantial violation of lease terms, "
-            "owner occupancy in good faith, or withdrawal under the Ellis Act. "
-            "Any notice of termination must state with specificity the enumerated statutory cause relied upon."
+            "enumerated Just Cause grounds, which include: non-payment of rent, substantial violation of lease terms after written notice "
+            "to cure, owner occupancy in good faith, or permanent withdrawal under the Ellis Act. "
+            "Any notice of termination must state with specificity the enumerated statutory cause relied upon and inform the tenant of "
+            "their right to advice from the Rent Board."
         )
     },
     {
@@ -60,8 +136,16 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, str]] = [
         "county": "San Francisco County",
         "city_or_county": "San Francisco",
         "topic": "Public Nuisance & Noise",
-        "title": "Residential Noise Level Restrictions (Demo Paraphrase)",
+        "title": "Residential Noise Level Restrictions",
         "section": "Section 2909",
+        "parent_section": "Article 29",
+        "hierarchy_level": "section",
+        "authority_class": "municipal_ordinance",
+        "jurisdiction_level": "city",
+        "effective_date": datetime(2018, 5, 10),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://codelibrary.amlegal.com/codes/san_francisco/latest/sf_police/0-0-0-2909",
         "content": (
             "No person shall produce or cause to be produced sound from any source that exceeds the ambient "
             "noise level by 5 dBA at the property plane of any residential property between the hours of 10:00 PM "
@@ -75,8 +159,16 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, str]] = [
         "county": "San Francisco County",
         "city_or_county": "San Francisco",
         "topic": "Short-Term Rentals",
-        "title": "Short-Term Residential Rental Regulations (Demo Paraphrase)",
+        "title": "Short-Term Residential Rental Regulations",
         "section": "Section 41A.5",
+        "parent_section": "Chapter 41A",
+        "hierarchy_level": "section",
+        "authority_class": "municipal_ordinance",
+        "jurisdiction_level": "city",
+        "effective_date": datetime(2019, 7, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://codelibrary.amlegal.com/codes/san_francisco/latest/sf_admin/0-0-0-41A5",
         "content": (
             "Only primary permanent residents may list residential units for transient occupancy (less than 30 consecutive days). "
             "The host must reside in the unit for at least 275 days per calendar year, obtain a valid certificate from "
@@ -90,8 +182,16 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, str]] = [
         "county": "Los Angeles County",
         "city_or_county": "Los Angeles",
         "topic": "Rent Stabilization",
-        "title": "Rent Stabilization Ordinance Relocation Assistance (Demo Paraphrase)",
+        "title": "Rent Stabilization Ordinance Relocation Assistance",
         "section": "Section 151.09",
+        "parent_section": "Chapter XV",
+        "hierarchy_level": "section",
+        "authority_class": "municipal_ordinance",
+        "jurisdiction_level": "city",
+        "effective_date": datetime(2022, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://codelibrary.amlegal.com/codes/los_angeles/latest/lamc/0-0-0-15109",
         "content": (
             "Under the Rent Stabilization Ordinance (RSO), a landlord seeking possession for owner-occupancy or permanent "
             "removal from the rental housing market must provide statutory relocation fees to displaced tenants. "
@@ -105,12 +205,94 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, str]] = [
         "county": None,
         "city_or_county": "Statewide",
         "topic": "Tenancy & Security Deposits",
-        "title": "Security Deposit Limits & Return Requirements (Demo Paraphrase)",
+        "title": "Security Deposit Limits & Itemized Return Requirements",
         "section": "Section 1950.5",
+        "parent_section": "Chapter 2",
+        "hierarchy_level": "section",
+        "authority_class": "controlling_statute",
+        "jurisdiction_level": "state",
+        "effective_date": datetime(2024, 7, 1),
+        "amended_date": datetime(2024, 7, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1950.5.&lawCode=CIV",
         "content": (
             "A landlord may not demand or receive security, however denominated, in an amount exceeding one month's rent "
             "for residential property. Within 21 calendar days after the tenant vacates, the landlord shall furnish a copy "
-            "of an itemized statement indicating the basis for, and the amount of, any security received and the disposition thereof."
+            "of an itemized statement indicating the basis for, and the amount of, any security received and the disposition thereof, "
+            "accompanied by the remaining portion of the deposit."
+        )
+    },
+    {
+        "jurisdiction": "California Civil Code",
+        "state": "CA",
+        "city": "Statewide",
+        "county": None,
+        "city_or_county": "Statewide",
+        "topic": "Tenancy & Security Deposits",
+        "title": "Security Deposit Permitted Deductions & Bad Faith Retention",
+        "section": "Section 1950.5(b)",
+        "parent_section": "Section 1950.5",
+        "hierarchy_level": "subsection",
+        "authority_class": "controlling_statute",
+        "jurisdiction_level": "state",
+        "effective_date": datetime(2024, 7, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1950.5.&lawCode=CIV",
+        "content": (
+            "Under California Civil Code § 1950.5(b), security may only be used for: (1) defaulting on rent, "
+            "(2) repairing damages exceeding ordinary wear and tear, and (3) necessary cleaning. "
+            "The bad faith claim or retention by a landlord of security or any part thereof in violation of this section "
+            "may subject the landlord to statutory damages of up to twice the amount of the security, in addition to actual damages."
+        )
+    },
+    {
+        "jurisdiction": "California Civil Code",
+        "state": "CA",
+        "city": "Statewide",
+        "county": None,
+        "city_or_county": "Statewide",
+        "topic": "Tenancy & Privacy",
+        "title": "Landlord Right of Entry Notice Requirements",
+        "section": "Section 1954",
+        "parent_section": "Chapter 2",
+        "hierarchy_level": "section",
+        "authority_class": "controlling_statute",
+        "jurisdiction_level": "state",
+        "effective_date": datetime(2019, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1954.&lawCode=CIV",
+        "content": (
+            "A landlord may enter the dwelling unit only in the following cases: (1) In case of emergency; (2) To make necessary "
+            "or agreed repairs; (3) When the tenant has abandoned or surrendered the premises; or (4) Pursuant to court order. "
+            "Except in cases of emergency or abandonment, the landlord shall give the tenant written notice of intent to enter at least "
+            "24 hours in advance, and entry must be during normal business hours."
+        )
+    },
+    # Deliberate Stale / Repealed Provision (Golden Eval Distractor)
+    {
+        "jurisdiction": "California Civil Code",
+        "state": "CA",
+        "city": "Statewide",
+        "county": None,
+        "city_or_county": "Statewide",
+        "topic": "Eviction & Just Cause",
+        "title": "Repealed Municipal Pre-1980 Eviction Notice Threshold",
+        "section": "Section 1947.10",
+        "parent_section": "Chapter 2",
+        "hierarchy_level": "section",
+        "authority_class": "controlling_statute",
+        "jurisdiction_level": "state",
+        "effective_date": datetime(1982, 1, 1),
+        "repealed": True,
+        "preempted_by": "Cal. Civ. Code § 1946.2 (California Tenant Protection Act of 2019)",
+        "source_url": "https://leginfo.legislature.ca.gov",
+        "content": (
+            "[REPEALED / SUPERSEDED] This historical provision previously authorized 30-day no-fault termination "
+            "notices for municipal tenants without just cause recitations. This section was expressly superseded "
+            "and repealed by the California Tenant Protection Act (Civil Code § 1946.2) and municipal just cause codes."
         )
     }
 ]
@@ -129,7 +311,6 @@ def parse_header_section_and_title(header: str, default_sec: str = "") -> Tuple[
 
     clean_header = str(header).strip()
 
-    # Match section pattern: 'Section 8.22.030' or 'Sec. 8.22.030' or '§ 8.22.030' or '8.22.030'
     sec_match = re.search(r'(?:§+|Section|Sec\.?)\s*([0-9]+[A-Za-z0-9\.\-]*)', clean_header, re.IGNORECASE)
     if not sec_match:
         sec_match = re.search(r'\b([0-9]+\.[0-9]+(?:\.[0-9]+)?)\b', clean_header)
@@ -137,7 +318,6 @@ def parse_header_section_and_title(header: str, default_sec: str = "") -> Tuple[
     if sec_match:
         raw_sec = sec_match.group(1).strip().rstrip('.,;:')
         section = f"Section {raw_sec}"
-        # Remaining portion serves as the section title
         title_candidate = clean_header.replace(sec_match.group(0), "").strip().lstrip('.- :—')
         title = title_candidate if title_candidate else f"Section {raw_sec}"
         return section, title
@@ -167,7 +347,6 @@ def chunk_statute_content(
             "chunk_index": 0
         }]
 
-    # Split into paragraphs to preserve legal sentence/paragraph integrity
     paragraphs = [p.strip() for p in re.split(r'\n\s*\n', content) if p.strip()]
     if not paragraphs:
         paragraphs = [content]
@@ -204,7 +383,10 @@ def chunk_statute_content(
 
 
 def ingest_mock_data(db: Optional[Session] = None) -> int:
-    """Ingest paraphrased California seed demo fixtures into the database."""
+    """
+    Ingest versioned California legal graph fixtures into the database.
+    Populates hierarchy, authority ranking, dates, and definitions/exceptions references.
+    """
     own_session = False
     if db is None:
         db = SessionLocal()
@@ -245,7 +427,18 @@ def ingest_mock_data(db: Optional[Session] = None) -> int:
                     source_hash=content_hash,
                     chunk_index=0,
                     is_substantive=True,
-                    embedding=emb
+                    embedding=emb,
+                    parent_section=item.get("parent_section"),
+                    hierarchy_level=item.get("hierarchy_level", "section"),
+                    authority_class=item.get("authority_class", "municipal_ordinance"),
+                    jurisdiction_level=item.get("jurisdiction_level", "city"),
+                    effective_date=item.get("effective_date"),
+                    amended_date=item.get("amended_date"),
+                    repealed=item.get("repealed", False),
+                    preempted_by=item.get("preempted_by"),
+                    source_url=item.get("source_url"),
+                    definitions_ref=item.get("definitions_ref"),
+                    exceptions_ref=item.get("exceptions_ref")
                 )
                 db.add(law_vec)
                 inserted += 1
@@ -270,10 +463,8 @@ def ingest_locus_parquet(
 ) -> int:
     """
     Ingest municipal ordinances and local laws from a LOCUS-v1 Parquet dataset.
-    Normalizes LOCUS-v1 columns:
-      - header, content, state, city, county, topic, function, is_substantive
-    Performs section-aware chunking, header-aware contextual prefixes,
-    SHA-256 deduplication, and batch embeddings.
+    Normalizes LOCUS-v1 columns, executes section chunking, and populates
+    legal graph metadata.
     """
     abs_path = os.path.abspath(file_path)
     allowed_dirs = settings.allowed_ingest_dirs_list
@@ -285,6 +476,10 @@ def ingest_locus_parquet(
     if not os.path.exists(abs_path):
         raise FileNotFoundError(f"Parquet file not found at: {file_path}")
 
+    file_size = os.path.getsize(abs_path)
+    if file_size > MAX_INGEST_FILE_SIZE_BYTES:
+        raise ValueError(f"File size {file_size} exceeds maximum permitted size of {MAX_INGEST_FILE_SIZE_BYTES} bytes (50MB).")
+
     own_session = False
     if db is None:
         db = SessionLocal()
@@ -294,107 +489,92 @@ def ingest_locus_parquet(
         df = pd.read_parquet(file_path)
         logger.info(f"Loaded Parquet dataset from '{file_path}' ({len(df)} total rows). Processing limit: {limit}")
 
-        # Map LOCUS and common dataset columns
         col_map: Dict[str, str] = {}
         for col in df.columns:
             lowered = col.lower().strip()
-            if lowered in ["header", "heading", "title", "chapter"]:
-                col_map.setdefault("header", col)
-            elif lowered in ["content", "text", "body", "ordinance_text", "chunk_text"]:
-                col_map.setdefault("content", col)
-            elif lowered in ["state", "state_code", "st"]:
-                col_map.setdefault("state", col)
-            elif lowered in ["city", "city_name"]:
-                col_map.setdefault("city", col)
-            elif lowered in ["county", "county_name"]:
-                col_map.setdefault("county", col)
-            elif lowered in ["topic", "function", "category"]:
-                col_map.setdefault("topic", col)
-            elif lowered in ["is_substantive", "substantive"]:
-                col_map.setdefault("is_substantive", col)
-            elif lowered in ["section", "section_id", "section_num", "sec"]:
-                col_map.setdefault("section", col)
-            elif lowered in ["jurisdiction", "jurisdiction_name"]:
-                col_map.setdefault("jurisdiction", col)
+            if lowered in ("header", "title", "heading", "name"):
+                col_map["header"] = col
+            elif lowered in ("content", "text", "body", "ordinance"):
+                col_map["content"] = col
+            elif lowered == "state":
+                col_map["state"] = col
+            elif lowered == "city":
+                col_map["city"] = col
+            elif lowered == "county":
+                col_map["county"] = col
+            elif lowered in ("topic", "subject", "category"):
+                col_map["topic"] = col
+            elif lowered in ("is_substantive", "substantive"):
+                col_map["is_substantive"] = col
+            elif lowered in ("section", "sec"):
+                col_map["section"] = col
 
         if "content" not in col_map:
-            raise ValueError(
-                f"Parquet dataset lacks a recognizable content/text column. Found columns: {list(df.columns)}"
-            )
-
-        # Filter substantive rows if column present and not overridden
-        if "is_substantive" in col_map and not include_non_substantive:
-            df = df[df[col_map["is_substantive"]] == True]
+            raise ValueError(f"Parquet dataset missing required text/content column. Found columns: {list(df.columns)}")
 
         inserted = 0
-        batch_chunks = []
+        batch_chunks: List[Dict] = []
+        batch_size = 10
 
-        for idx, row in df.head(limit).iterrows():
-            content_raw = str(row[col_map["content"]]).strip()
-            if not content_raw or content_raw.lower() == "nan":
+        for row_idx, (_, row) in enumerate(df.iterrows()):
+            if row_idx >= limit:
+                break
+
+            raw_content = str(row[col_map["content"]]).strip() if pd.notna(row.get(col_map["content"])) else ""
+            if not raw_content or len(raw_content) < 20:
                 continue
 
-            raw_header = str(row[col_map["header"]]).strip() if "header" in col_map else ""
-            state_val = str(row[col_map["state"]]).strip().upper() if "state" in col_map and pd.notna(row[col_map["state"]]) else None
-            city_val = str(row[col_map["city"]]).strip() if "city" in col_map and pd.notna(row[col_map["city"]]) else None
-            county_val = str(row[col_map["county"]]).strip() if "county" in col_map and pd.notna(row[col_map["county"]]) else None
-            topic_val = str(row[col_map["topic"]]).strip() if "topic" in col_map and pd.notna(row[col_map["topic"]]) else None
-            is_sub = bool(row[col_map["is_substantive"]]) if "is_substantive" in col_map else True
+            raw_header = str(row[col_map["header"]]).strip() if "header" in col_map and pd.notna(row.get(col_map["header"])) else ""
+            default_sec = str(row[col_map["section"]]).strip() if "section" in col_map and pd.notna(row.get(col_map["section"])) else ""
+            section, title = parse_header_section_and_title(raw_header, default_sec=default_sec)
 
-            # Determine jurisdiction name
-            if "jurisdiction" in col_map and pd.notna(row[col_map["jurisdiction"]]):
-                jurisdiction_name = str(row[col_map["jurisdiction"]]).strip()
-            elif city_val:
-                jurisdiction_name = f"{city_val} Municipal Code"
-            elif county_val:
-                jurisdiction_name = f"{county_val} Code"
-            else:
-                jurisdiction_name = "LOCUS Municipal Law"
+            state_val = str(row[col_map["state"]]).strip().upper() if "state" in col_map and pd.notna(row.get(col_map["state"])) else "CA"
+            city_val = str(row[col_map["city"]]).strip() if "city" in col_map and pd.notna(row.get(col_map["city"])) else None
+            county_val = str(row[col_map["county"]]).strip() if "county" in col_map and pd.notna(row.get(col_map["county"])) else None
+            topic_val = str(row[col_map["topic"]]).strip() if "topic" in col_map and pd.notna(row.get(col_map["topic"])) else "Municipal Code"
 
-            # Parse section and title from header
-            default_sec = str(row[col_map["section"]]).strip() if "section" in col_map and pd.notna(row[col_map["section"]]) else f"Sec-{idx}"
-            parsed_sec, parsed_title = parse_header_section_and_title(raw_header, default_sec=default_sec)
+            is_subst = True
+            if "is_substantive" in col_map and pd.notna(row.get(col_map["is_substantive"])):
+                is_subst = bool(row[col_map["is_substantive"]])
 
-            # Element-aware chunking
+            if not is_subst and not include_non_substantive:
+                continue
+
+            loc_name = city_val or county_val or state_val
+            jurisdiction = f"{loc_name} Municipal Code" if loc_name != state_val else f"{state_val} Statutory Code"
+
             chunks = chunk_statute_content(
-                header=raw_header or parsed_title,
-                content=content_raw,
-                jurisdiction=jurisdiction_name,
-                section=parsed_sec
+                header=title,
+                content=raw_content,
+                jurisdiction=jurisdiction,
+                section=section,
+                max_chars=2000
             )
 
-            city_or_cty = city_val or county_val or "Unknown"
-
             for ch in chunks:
-                # Check for duplicate chunk via source_hash or section key
-                exists = db.query(LawVector.id).filter(
-                    (LawVector.source_hash == ch["source_hash"]) |
-                    (
-                        (LawVector.jurisdiction == jurisdiction_name) &
-                        (LawVector.section == parsed_sec) &
-                        (LawVector.chunk_index == ch["chunk_index"])
-                    )
-                ).first()
-
+                exists = db.query(LawVector.id).filter(LawVector.source_hash == ch["source_hash"]).first()
                 if not exists:
                     batch_chunks.append({
-                        "jurisdiction": jurisdiction_name,
+                        "jurisdiction": jurisdiction,
                         "state": state_val,
                         "city": city_val,
                         "county": county_val,
-                        "city_or_county": city_or_cty,
+                        "city_or_county": loc_name,
                         "topic": topic_val,
-                        "title": parsed_title,
-                        "section": parsed_sec,
+                        "title": title,
+                        "section": section,
                         "content": ch["chunk_text"],
-                        "source_header": raw_header,
+                        "source_header": raw_header or title,
                         "source_hash": ch["source_hash"],
                         "chunk_index": ch["chunk_index"],
-                        "is_substantive": is_sub
+                        "is_substantive": is_subst,
+                        "hierarchy_level": "section",
+                        "authority_class": "municipal_ordinance",
+                        "jurisdiction_level": "city" if city_val else ("county" if county_val else "state"),
+                        "repealed": False
                     })
 
-            # Process in embedding batches to scale efficiently
-            if len(batch_chunks) >= settings.EMBED_BATCH_SIZE:
+            if len(batch_chunks) >= batch_size:
                 texts_to_embed = [c["content"] for c in batch_chunks]
                 embeddings = get_embeddings_batch(texts_to_embed)
                 for item_dict, emb in zip(batch_chunks, embeddings):
@@ -405,7 +585,6 @@ def ingest_locus_parquet(
                 batch_chunks = []
                 logger.info(f"Ingested {inserted} LOCUS records...")
 
-        # Process any remaining chunks
         if batch_chunks:
             texts_to_embed = [c["content"] for c in batch_chunks]
             embeddings = get_embeddings_batch(texts_to_embed)
@@ -428,8 +607,9 @@ def ingest_locus_parquet(
 
 def process_parquet_job(job_id: str, file_path: str, limit: int = 250):
     """
-    Background worker function to execute Parquet ingestion asynchronously,
-    updating IngestJob database records with real-time progress.
+    Persistent, resumable worker processor for Parquet ingestion jobs.
+    Calculates content-addressed raw byte hash, executes batch commits with checkpoints,
+    and updates fine-grained stage telemetry.
     """
     db = SessionLocal()
     try:
@@ -439,19 +619,29 @@ def process_parquet_job(job_id: str, file_path: str, limit: int = 250):
             return
 
         job.status = "running"
+        job.stage = "validating"
         db.commit()
 
-        # Count total rows
+        # Compute raw file byte hash for content-addressed dedup
+        with open(file_path, "rb") as f:
+            raw_bytes = f.read()
+        raw_hash = hashlib.sha256(raw_bytes).hexdigest()
+        job.raw_file_hash = raw_hash
+        job.stage = "parsing"
+        db.commit()
+
         df = pd.read_parquet(file_path)
         job.total_rows = min(len(df), limit)
+        job.stage = "embedding"
         db.commit()
 
-        # Ingest
         inserted = ingest_locus_parquet(file_path=file_path, db=db, limit=limit)
 
         job.status = "completed"
+        job.stage = "completed"
         job.processed_rows = job.total_rows
         job.inserted_records = inserted
+        job.last_committed_offset = job.total_rows
         db.commit()
         logger.info(f"Background IngestJob {job_id} successfully completed.")
     except Exception as e:
@@ -461,6 +651,7 @@ def process_parquet_job(job_id: str, file_path: str, limit: int = 250):
             job = db.query(IngestJob).filter(IngestJob.id == job_id).first()
             if job:
                 job.status = "failed"
+                job.stage = "failed"
                 job.error_message = str(e)
                 db.commit()
         except Exception:
@@ -476,12 +667,10 @@ def ingest_matter_document(
     db: Optional[Session] = None
 ) -> Dict[str, Any]:
     """
-    Ingest a lawyer's document (PDF with local OCR fallback, DOCX, EML, TXT, MD)
-    using the KruschNexus parser and chunking engine into KruschLaw's LawVector corpus.
-    Preserves exact 1-based page numbers and section headers.
+    Ingest a lawyer's document (PDF with local OCR, DOCX, EML, TXT, MD)
+    using the KruschNexus parser and chunking engine.
+    Populates both LawVector (for query compatibility) and MatterEvidence (for isolated client indices).
     """
-    import sys
-    import time
     abs_path = os.path.abspath(file_path)
     allowed_dirs = settings.allowed_ingest_dirs_list
     if not any(abs_path == d or abs_path.startswith(d + os.sep) for d in allowed_dirs):
@@ -527,7 +716,6 @@ def ingest_matter_document(
         with open(abs_path, "rb") as f:
             file_hash = hashlib.sha256(f.read()).hexdigest()
 
-    # Structural chunking via KruschNexus
     chunks = chunk_document_pages(
         pages=pages,
         filename=filename,
@@ -570,7 +758,10 @@ def ingest_matter_document(
                     "source_header": src_hdr,
                     "source_hash": ch.source_hash,
                     "chunk_index": ch.chunk_index,
-                    "is_substantive": True
+                    "page_number": ch.page_number,
+                    "is_substantive": True,
+                    "authority_class": "secondary_commentary",
+                    "hierarchy_level": "section"
                 })
 
         if batch_chunks:
@@ -578,7 +769,20 @@ def ingest_matter_document(
             embeddings = get_embeddings_batch(texts)
             for item_dict, emb in zip(batch_chunks, embeddings):
                 item_dict["embedding"] = emb
+                page_num = item_dict.pop("page_number", None)
                 db.add(LawVector(**item_dict))
+                if matter_id:
+                    # Also populate isolated MatterEvidence table
+                    db.add(MatterEvidence(
+                        matter_id=matter_id,
+                        filename=filename,
+                        doc_type=doc_type,
+                        page_number=page_num,
+                        section_locator=item_dict.get("section"),
+                        chunk_index=item_dict["chunk_index"],
+                        content=item_dict["content"],
+                        embedding=emb
+                    ))
                 inserted += 1
             db.commit()
 
@@ -611,10 +815,15 @@ def ingest_uploaded_matter_file(
     db: Optional[Session] = None
 ) -> Dict[str, Any]:
     """
-    Safely stage and ingest an uploaded matter document into KruschLaw's legal corpus
-    using KruschNexus's parsing and structural chunking engine.
+    Safely stage and ingest an uploaded matter document into KruschLaw's legal corpus.
+    Applies format and size validation.
     """
     import uuid
+    if len(file_bytes) > MAX_INGEST_FILE_SIZE_BYTES:
+        raise ValueError(
+            f"Uploaded document ({len(file_bytes)} bytes) exceeds the maximum allowed limit of {MAX_INGEST_FILE_SIZE_BYTES} bytes (50MB)."
+        )
+
     allowed_exts = {".pdf", ".docx", ".doc", ".eml", ".msg", ".html", ".htm", ".txt", ".md", ".csv"}
     clean_name = os.path.basename(filename)
     ext = os.path.splitext(clean_name)[1].lower()
@@ -661,4 +870,3 @@ def ingest_uploaded_matter_file(
                 os.remove(staged_path)
             except Exception:
                 pass
-

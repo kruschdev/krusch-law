@@ -1,7 +1,6 @@
 import os
 import streamlit as st
 import httpx
-import pandas as pd
 
 # Page setup
 st.set_page_config(
@@ -130,6 +129,53 @@ st.markdown("""
         font-size: 0.75rem;
         font-weight: 600;
     }
+    .badge-supported {
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ade80;
+        border: 1px solid rgba(34, 197, 94, 0.4);
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.76rem;
+    }
+    .badge-invented {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.76rem;
+    }
+    .badge-wrong-prop {
+        background: rgba(249, 115, 22, 0.15);
+        color: #fb923c;
+        border: 1px solid rgba(249, 115, 22, 0.4);
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.76rem;
+    }
+    .badge-stale {
+        background: rgba(168, 85, 247, 0.15);
+        color: #c084fc;
+        border: 1px solid rgba(168, 85, 247, 0.4);
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.76rem;
+    }
+    .authority-tag {
+        display: inline-block;
+        background: rgba(99, 102, 241, 0.15);
+        color: #a5b4fc;
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        padding: 0.1rem 0.45rem;
+        border-radius: 4px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        margin-right: 6px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -155,8 +201,8 @@ st.markdown("""
 st.markdown("""
     <div class="disclaimer-card">
         <strong>⚠️ Research Prototype & Mandatory Verification Notice</strong><br>
-        KruschLaw is an open-source experimental research prototype exploring local, air-gapped retrieval-augmented generation for legal research. 
-        It does <strong>NOT</strong> constitute legal advice, representation, or an attorney-client relationship. 
+        KruschLaw is an open-source experimental research prototype exploring local, air-gapped retrieval-augmented generation for legal research.
+        It does <strong>NOT</strong> constitute legal advice, representation, or an attorney-client relationship.
         Seed statutes are paraphrased demo fixtures. An attorney admitted in the governing jurisdiction must independently Shepardize and verify all cited sections and quotes prior to taking formal legal action.
     </div>
 """, unsafe_allow_html=True)
@@ -189,12 +235,12 @@ def fetch_cases_list():
 # --- Sidebar: Control Plane ---
 with st.sidebar:
     st.markdown("### 🏛️ Control Plane")
-    
+
     if is_healthy:
         sec = health_info.get("security", {})
         auth_active = sec.get("auth_enabled", False)
         st.success(f"🟢 Backend Online (`{health_info.get('models', {}).get('reasoning')}`)")
-        
+
         if auth_active:
             st.info("🔒 Matter Authorization Active")
             user_key = st.text_input(
@@ -457,20 +503,37 @@ with tab1:
                             st.warning("Please choose a file to attach.")
 
                     st.markdown("---")
-                    if st.button(f"🗑️ Delete Matter #{c['id']}", key=f"del_{c['id']}"):
-                        try:
-                            del_resp = httpx.delete(
-                                f"{BACKEND_URL}/api/cases/{c['id']}",
-                                headers=get_auth_headers(),
-                                timeout=10.0
-                            )
-                            if del_resp.status_code == 200:
-                                st.success(f"Matter #{c['id']} deleted.")
-                                st.rerun()
-                            else:
-                                st.error(f"Delete failed: {del_resp.text}")
-                        except Exception as e:
-                            st.error(f"Error deleting matter: {e}")
+                    c_del, c_purge = st.columns(2)
+                    with c_del:
+                        if st.button(f"🗑️ Soft Delete #{c['id']}", key=f"del_{c['id']}"):
+                            try:
+                                del_resp = httpx.delete(
+                                    f"{BACKEND_URL}/api/cases/{c['id']}",
+                                    headers=get_auth_headers(),
+                                    timeout=10.0
+                                )
+                                if del_resp.status_code == 200:
+                                    st.success(f"Matter #{c['id']} soft-deleted.")
+                                    st.rerun()
+                                else:
+                                    st.error(f"Delete failed: {del_resp.text}")
+                            except Exception as e:
+                                st.error(f"Error deleting matter: {e}")
+                    with c_purge:
+                        if st.button(f"🔥 Hard Purge #{c['id']}", key=f"purge_{c['id']}", help="Permanently destroys matter record, facts, evidence chunks, and all embeddings."):
+                            try:
+                                purge_resp = httpx.delete(
+                                    f"{BACKEND_URL}/api/cases/{c['id']}/purge",
+                                    headers=get_auth_headers(),
+                                    timeout=10.0
+                                )
+                                if purge_resp.status_code == 200:
+                                    st.success(f"Matter #{c['id']} permanently purged from sovereign database.")
+                                    st.rerun()
+                                else:
+                                    st.error(f"Purge failed: {purge_resp.text}")
+                            except Exception as e:
+                                st.error(f"Error purging matter: {e}")
 
 
 # --- Tab 2: Precedent Consultation & Brief ---
@@ -524,14 +587,80 @@ with tab2:
                             st.markdown("### 📋 AI Legal Analysis Brief")
                             st.markdown(data["analysis"])
 
-                            # Brief Export
-                            st.download_button(
-                                label="📥 Export Brief as Markdown (.md)",
-                                data=data["analysis"],
-                                file_name=f"kruschlaw_brief_matter_{case_id}.md",
-                                mime="text/markdown",
-                                use_container_width=True
-                            )
+                            # Brief Export (Markdown + Word .docx)
+                            g_stats = data.get("grounding_stats") or {}
+                            claims_audit = data.get("claims_audit") or []
+                            spotted = data.get("spotted_issues") or []
+
+                            if spotted:
+                                st.markdown("#### 🎯 Spotted Legal Issues & Causes of Action")
+                                for sp in spotted:
+                                    st.info(f"**{sp['issue']}** ({sp['jurisdiction']})\n\nGoverning Authorities: `{sp['governing_authorities']}`")
+
+                            exp_c1, exp_c2 = st.columns(2)
+                            with exp_c1:
+                                st.download_button(
+                                    label="📥 Export Markdown (.md)",
+                                    data=data["analysis"],
+                                    file_name=f"kruschlaw_brief_matter_{case_id}.md",
+                                    mime="text/markdown",
+                                    use_container_width=True
+                                )
+                            with exp_c2:
+                                try:
+                                    from src.backend.export import generate_brief_docx
+                                    docx_data = generate_brief_docx(
+                                        brief_content=data["analysis"],
+                                        matter_title=data.get("case", {}).get("title", f"Matter #{case_id}"),
+                                        matter_number=f"MATTER-{case_id:04d}",
+                                        claims_audit=claims_audit,
+                                        retrieved_laws=data.get("retrieved_laws", []),
+                                        disclaimer=data.get("disclaimer", "")
+                                    )
+                                    st.download_button(
+                                        label="📄 Export Word (.docx)",
+                                        data=docx_data,
+                                        file_name=f"kruschlaw_brief_matter_{case_id}.docx",
+                                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                        use_container_width=True
+                                    )
+                                except Exception as e:
+                                    st.caption(f"DOCX Export: {e}")
+
+                            # Assertion-Level Grounding Scorecard & Table
+                            st.markdown("---")
+                            st.markdown("### 🛡️ Assertion-Level Grounding Audit")
+
+                            if g_stats:
+                                m1, m2, m3, m4 = st.columns(4)
+                                with m1:
+                                    st.metric("Pass Rate", f"{g_stats.get('pass_rate', 100.0)}%")
+                                with m2:
+                                    st.metric("Total Claims", g_stats.get("total_claims", 0))
+                                with m3:
+                                    st.metric("Supported", g_stats.get("supported_claims", 0))
+                                with m4:
+                                    flagged = g_stats.get("unsupported_claims", 0)
+                                    st.metric("Flagged Issues", flagged)
+
+                            if claims_audit:
+                                st.markdown("#### 🔬 Side-by-Side Claim Verification")
+                                for c_idx, c_item in enumerate(claims_audit, 1):
+                                    status = c_item.get("status", "supported")
+                                    badge_html = {
+                                        "supported": '<span class="badge-supported">🟢 Supported</span>',
+                                        "invented_citation": '<span class="badge-invented">🔴 Invented Citation</span>',
+                                        "wrong_proposition": '<span class="badge-wrong-prop">🟠 Wrong Proposition</span>',
+                                        "stale_law": '<span class="badge-stale">🟣 Stale / Repealed Law</span>'
+                                    }.get(status, f'<span class="badge-supported">{status}</span>')
+
+                                    with st.expander(f"Claim #{c_idx} [{c_item.get('citation') or 'Context'}]: {c_item['claim'][:60]}..."):
+                                        st.markdown(f"**Assertion:** {c_item['claim']}")
+                                        st.markdown(f"**Status:** {badge_html}", unsafe_allow_html=True)
+                                        if c_item.get("reason"):
+                                            st.markdown(f"**Grounding Analysis:** {c_item['reason']}")
+                                        if c_item.get("source_excerpt"):
+                                            st.markdown(f"**Source Legal Excerpt:**\n> {c_item['source_excerpt']}")
 
                         with l_col:
                             st.markdown("### 📖 Matched Legal Authorities")
@@ -551,10 +680,20 @@ with tab2:
                                     loc_label = ", ".join(loc_parts) if loc_parts else "Federal / General"
 
                                     topic_str = f" • {law['topic']}" if law.get("topic") else ""
+                                    auth_class = law.get("authority_class") or "municipal_ordinance"
+                                    h_level = law.get("hierarchy_level") or "section"
+
+                                    auth_tags = (
+                                        f'<span class="authority-tag">{auth_class.replace("_", " ").title()}</span>'
+                                        f'<span class="authority-tag">{h_level.title()}</span>'
+                                    )
+                                    if law.get("repealed"):
+                                        auth_tags += '<span class="badge-stale">REPEALED</span>'
 
                                     st.markdown(f"""
                                         <div class="law-card">
                                             <div class="law-card-header">{law['title']} — {law['section']}</div>
+                                            <div style="margin-bottom: 0.4rem;">{auth_tags}</div>
                                             <div class="law-card-meta">
                                                 <span>Jurisdiction: {loc_label}{topic_str}</span>
                                                 <span class="sim-badge" style="float: right;">{sim_pct}% Relevance</span>
@@ -570,58 +709,142 @@ with tab2:
 
 # --- Tab 3: Statutory & Ordinance Explorer ---
 with tab3:
-    st.markdown("### 🔍 On-Premise Vector & Lexical Search Explorer")
-    st.write("Perform direct hybrid queries across all ingested municipal codes, ordinances, and statutes without logging a client matter.")
+    st.markdown("### 🔍 Sovereign Legal & Discovery Search Explorer")
+    st.write("Perform isolated hybrid searches across the governing statutory graph or inspect client matter discovery exhibits.")
 
-    e_q, e_st, e_cty = st.columns([2, 1, 1])
-    with e_q:
-        search_query = st.text_input("Enter natural language query or statutory terms", placeholder="e.g., notice of rent increase dispute")
-    with e_st:
-        exp_state = st.text_input("Filter State", max_chars=2, placeholder="e.g., CA", key="exp_st")
-    with e_cty:
-        exp_city = st.text_input("Filter City", placeholder="e.g., Oakland", key="exp_cty")
+    search_domain = st.radio(
+        "Search Domain",
+        ["📜 Governing Statutory Graph", "📁 Client Matter Discovery & Evidence"],
+        horizontal=True
+    )
 
-    search_limit = st.slider("Result Count", min_value=1, max_value=25, value=6, key="search_slider")
+    if search_domain == "📜 Governing Statutory Graph":
+        e_q, e_st, e_cty = st.columns([2, 1, 1])
+        with e_q:
+            search_query = st.text_input("Enter natural language query or statutory terms", placeholder="e.g., notice of rent increase dispute")
+        with e_st:
+            exp_state = st.text_input("Filter State", max_chars=2, placeholder="e.g., CA", key="exp_st")
+        with e_cty:
+            exp_city = st.text_input("Filter City", placeholder="e.g., Oakland", key="exp_cty")
 
-    if st.button("Search Legal Database", use_container_width=True):
-        if not search_query.strip():
-            st.warning("Please enter a search query.")
-        else:
-            with st.spinner("Executing hybrid search against local statutory corpus..."):
-                try:
-                    params = {"q": search_query.strip(), "limit": search_limit}
-                    if exp_state:
-                        params["state"] = exp_state
-                    if exp_city:
-                        params["city"] = exp_city
+        col_opt1, col_opt2 = st.columns([1, 1])
+        with col_opt1:
+            search_limit = st.slider("Result Count", min_value=1, max_value=25, value=6, key="search_slider")
+        with col_opt2:
+            use_query_expansion = st.checkbox("Enable Automated Issue-Spotting Expansion", value=True)
 
-                    resp = httpx.get(
-                        f"{BACKEND_URL}/api/laws",
-                        params=params,
-                        headers=get_auth_headers(),
-                        timeout=30.0
-                    )
-                    if resp.status_code == 200:
-                        results = resp.json()
-                        if not results:
-                            st.info("No matching legal authorities found.")
-                        else:
-                            st.markdown(f"**Found {len(results)} matching authority provisions:**")
-                            for r in results:
-                                sim_pct = round(r["similarity"] * 100, 1)
-                                loc_str = f"{r.get('city') or r.get('city_or_county') or 'Federal'} ({r.get('state') or 'US'})"
-                                top_str = f" [{r['topic']}]" if r.get("topic") else ""
-                                st.markdown(f"""
-                                    <div class="law-card">
-                                        <div class="law-card-header">{r['title']} — {r['section']}{top_str}</div>
-                                        <div class="law-card-meta">
-                                            <span>Location: {loc_str}</span>
-                                            <span class="sim-badge" style="float: right;">{sim_pct}% Match</span>
+        if st.button("Search Statutory Graph", use_container_width=True):
+            if not search_query.strip():
+                st.warning("Please enter a search query.")
+            else:
+                with st.spinner("Executing hybrid search against local statutory corpus..."):
+                    try:
+                        params = {
+                            "q": search_query.strip(),
+                            "limit": search_limit,
+                            "expand_query": use_query_expansion
+                        }
+                        if exp_state:
+                            params["state"] = exp_state
+                        if exp_city:
+                            params["city"] = exp_city
+
+                        resp = httpx.get(
+                            f"{BACKEND_URL}/api/laws",
+                            params=params,
+                            headers=get_auth_headers(),
+                            timeout=30.0
+                        )
+                        if resp.status_code == 200:
+                            results = resp.json()
+                            if not results:
+                                st.info("No matching legal authorities found.")
+                            else:
+                                st.markdown(f"**Found {len(results)} matching authority provisions:**")
+                                for r in results:
+                                    sim_pct = round(r["similarity"] * 100, 1)
+                                    loc_str = f"{r.get('city') or r.get('city_or_county') or 'Federal'} ({r.get('state') or 'US'})"
+                                    top_str = f" [{r['topic']}]" if r.get("topic") else ""
+                                    auth_class = r.get("authority_class") or "municipal_ordinance"
+                                    h_level = r.get("hierarchy_level") or "section"
+
+                                    auth_tags = (
+                                        f'<span class="authority-tag">{auth_class.replace("_", " ").title()}</span>'
+                                        f'<span class="authority-tag">{h_level.title()}</span>'
+                                    )
+                                    if r.get("repealed"):
+                                        auth_tags += '<span class="badge-stale">REPEALED</span>'
+
+                                    st.markdown(f"""
+                                        <div class="law-card">
+                                            <div class="law-card-header">{r['title']} — {r['section']}{top_str}</div>
+                                            <div style="margin-bottom: 0.4rem;">{auth_tags}</div>
+                                            <div class="law-card-meta">
+                                                <span>Location: {loc_str}</span>
+                                                <span class="sim-badge" style="float: right;">{sim_pct}% Match</span>
+                                            </div>
+                                            <div class="law-card-body">{r['content']}</div>
                                         </div>
-                                        <div class="law-card-body">{r['content']}</div>
-                                    </div>
-                                """, unsafe_allow_html=True)
-                    else:
-                        st.error(f"Statutory search failed ({resp.status_code}): {resp.text}")
-                except Exception as e:
-                    st.error(f"Search failure: {e}")
+                                    """, unsafe_allow_html=True)
+                        else:
+                            st.error(f"Statutory search failed ({resp.status_code}): {resp.text}")
+                    except Exception as e:
+                        st.error(f"Search failure: {e}")
+
+    else:
+        # Client Matter Discovery & Evidence Search
+        matters = fetch_cases_list()
+        if not matters:
+            st.info("No active matters found. Please log a matter in the 'Matter Portfolio' tab and upload documents.")
+        else:
+            m_options = {f"#{m['id']} — {m['title']}": m['id'] for m in matters}
+            sel_m_label = st.selectbox("Select Client Matter to Search", list(m_options.keys()))
+            sel_m_id = m_options[sel_m_label]
+
+            ev_q_col, ev_type_col = st.columns([3, 1])
+            with ev_q_col:
+                ev_query = st.text_input("Discovery Search Query (optional)", placeholder="e.g., rent increase notice text or security deposit clause")
+            with ev_type_col:
+                ev_doc_type = st.selectbox("Doc Classification", ["All", "matter_facts", "evidence", "lease", "notice", "work_product"])
+
+            ev_limit = st.slider("Max Evidence Chunks", min_value=1, max_value=20, value=8)
+
+            if st.button("Search Matter Discovery", use_container_width=True):
+                with st.spinner("Searching isolated client matter evidence table..."):
+                    try:
+                        ev_params = {"limit": ev_limit}
+                        if ev_query.strip():
+                            ev_params["q"] = ev_query.strip()
+                        if ev_doc_type != "All":
+                            ev_params["doc_type"] = ev_doc_type
+
+                        resp = httpx.get(
+                            f"{BACKEND_URL}/api/cases/{sel_m_id}/evidence",
+                            params=ev_params,
+                            headers=get_auth_headers(),
+                            timeout=30.0
+                        )
+                        if resp.status_code == 200:
+                            ev_results = resp.json()
+                            if not ev_results:
+                                st.info("No discovery evidence chunks matched.")
+                            else:
+                                st.markdown(f"**Found {len(ev_results)} discovery chunks for Matter #{sel_m_id}:**")
+                                for er in ev_results:
+                                    sim_pct = round(er["similarity"] * 100, 1)
+                                    page_info = f" (p. {er['page_number']})" if er.get("page_number") else ""
+                                    sec_info = f" • {er['section_locator']}" if er.get("section_locator") else ""
+                                    st.markdown(f"""
+                                        <div class="law-card">
+                                            <div class="law-card-header">📄 {er['filename']}{page_info}{sec_info}</div>
+                                            <div class="law-card-meta">
+                                                <span>Classification: <code>{er['doc_type']}</code></span>
+                                                <span class="sim-badge" style="float: right;">{sim_pct}% Relevance</span>
+                                            </div>
+                                            <div class="law-card-body">{er['content']}</div>
+                                        </div>
+                                    """, unsafe_allow_html=True)
+                        else:
+                            st.error(f"Evidence search failed ({resp.status_code}): {resp.text}")
+                    except Exception as e:
+                        st.error(f"Evidence search failure: {e}")

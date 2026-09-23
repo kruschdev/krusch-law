@@ -2,20 +2,21 @@
 """
 KruschLaw Model Context Protocol (MCP) Server.
 Exposes air-gapped municipal ordinance search, matter logging, and staged brief generation
-to IDE agents (Claude Code, Antigravity, Cursor) via stdio JSON-RPC.
+to IDE agents (Claude Code, Antigravity, Cursor) via stdio JSON-RPC with strict ethical guardrails.
 """
 
 import sys
 import json
+import uuid
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
-from ..backend.db import SessionLocal, LawVector, Case
+from ..backend.db import SessionLocal, LawVector, Case, GroundingReport
 from ..backend.rag import (
     get_embedding,
     retrieve_laws,
     generate_legal_analysis,
-    verify_citation_grounding,
+    verify_assertion_grounding,
     UPL_DISCLAIMER
 )
 
@@ -109,8 +110,36 @@ TOOLS_CATALOG = [
         }
     },
     {
+        "name": "list_matters",
+        "description": "List existing active client matters with tracking codes and dates.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Max matters to return (default: 10)",
+                    "default": 10
+                }
+            }
+        }
+    },
+    {
+        "name": "get_grounding_report",
+        "description": "Retrieve the most recent assertion-level grounding audit report for a matter.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "case_id": {
+                    "type": "integer",
+                    "description": "Matter ID"
+                }
+            },
+            "required": ["case_id"]
+        }
+    },
+    {
         "name": "draft_brief",
-        "description": "Stage an air-gapped, citation-grounded 4-part legal brief for human attorney review. Does NOT auto-file; all outputs require human approval.",
+        "description": "Stage an air-gapped, citation-grounded 4-part legal brief for human attorney review. Refuses to draft if governing authorities are absent. Does NOT auto-file.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -173,7 +202,9 @@ def handle_search_ordinances(args: Dict[str, Any]) -> Dict[str, Any]:
                 "section": r["section"],
                 "title": r["title"],
                 "location": f"{r.get('city') or r.get('city_or_county') or 'General'} ({r.get('state') or 'US'})",
-                "topic": r.get("topic"),
+                "authority_class": r.get("authority_class", "municipal_ordinance"),
+                "hierarchy_level": r.get("hierarchy_level", "section"),
+                "repealed": r.get("repealed", False),
                 "relevance_score": round(r["similarity"], 4),
                 "content": r["content"]
             })
@@ -221,6 +252,13 @@ def handle_get_section(args: Dict[str, Any]) -> Dict[str, Any]:
             "city": primary.city or primary.city_or_county,
             "county": primary.county,
             "topic": primary.topic,
+            "authority_class": primary.authority_class,
+            "hierarchy_level": primary.hierarchy_level,
+            "repealed": primary.repealed,
+            "preempted_by": primary.preempted_by,
+            "effective_date": str(primary.effective_date) if primary.effective_date else None,
+            "definitions_ref": primary.definitions_ref,
+            "exceptions_ref": primary.exceptions_ref,
             "total_chunks": len(records),
             "content": full_text
         }
@@ -265,13 +303,62 @@ def handle_log_matter(args: Dict[str, Any]) -> Dict[str, Any]:
         db.close()
 
 
+def handle_list_matters(args: Dict[str, Any]) -> Dict[str, Any]:
+    limit = min(50, max(1, int(args.get("limit", 10))))
+    db = SessionLocal()
+    try:
+        cases = db.query(Case).filter(Case.is_deleted.is_(False)).order_by(Case.created_at.desc()).limit(limit).all()
+        return {
+            "total_matters": len(cases),
+            "matters": [
+                {
+                    "id": c.id,
+                    "matter_number": c.matter_number,
+                    "client_name": c.client_name,
+                    "title": c.title,
+                    "created_at": c.created_at.isoformat() if c.created_at else ""
+                } for c in cases
+            ]
+        }
+    finally:
+        db.close()
+
+
+def handle_get_grounding_report(args: Dict[str, Any]) -> Dict[str, Any]:
+    case_id = args.get("case_id")
+    if not case_id:
+        return {"error": "case_id is required."}
+
+    db = SessionLocal()
+    try:
+        report = db.query(GroundingReport).filter(GroundingReport.case_id == case_id).order_by(GroundingReport.created_at.desc()).first()
+        if not report:
+            return {"found": False, "message": f"No grounding audit report found for matter #{case_id}."}
+
+        return {
+            "found": True,
+            "case_id": case_id,
+            "report_id": report.id,
+            "created_at": report.created_at.isoformat() if report.created_at else "",
+            "pass_rate": report.pass_rate,
+            "total_claims": report.total_claims,
+            "supported_claims": report.supported_claims,
+            "unsupported_claims": report.unsupported_claims,
+            "invented_citations": report.invented_citations,
+            "stale_law_citations": report.stale_law_citations,
+            "claims": json.loads(report.claims_json) if report.claims_json else []
+        }
+    finally:
+        db.close()
+
+
 def handle_draft_brief(args: Dict[str, Any]) -> Dict[str, Any]:
     db = SessionLocal()
     try:
         case_id = args.get("case_id")
         case = None
         if case_id:
-            case = db.query(Case).filter(Case.id == case_id, Case.is_deleted == False).first()
+            case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
             if not case:
                 return {"error": f"Matter #{case_id} not found."}
 
@@ -295,22 +382,63 @@ def handle_draft_brief(args: Dict[str, Any]) -> Dict[str, Any]:
             db_session=db
         )
 
-        analysis = generate_legal_analysis(case_facts=facts, case_title=title, laws=laws)
-        is_grounded, ungrounded, notice = verify_citation_grounding(analysis, laws)
+        if not laws:
+            return {
+                "error": "CANNOT_DRAFT_WITHOUT_AUTHORITIES",
+                "review_required": True,
+                "provisional_work_product": True,
+                "message": "Drafting refused: No relevant governing statutory or municipal authorities retrieved in the air-gapped corpus."
+            }
+
+        res = generate_legal_analysis(
+            case_facts=facts,
+            case_title=title,
+            laws=laws,
+            case_id=case.id if case else None,
+            db_session=db
+        )
+        if isinstance(res, tuple):
+            analysis = res[0]
+            stats = res[1] if len(res) > 1 else {}
+            claim_records = res[2] if len(res) > 2 else []
+        else:
+            analysis = str(res)
+            is_grounded, claim_records, notice, stats = verify_assertion_grounding(analysis, laws)
+            if case and case.id:
+                try:
+                    report = GroundingReport(
+                        id=str(uuid.uuid4()),
+                        case_id=case.id,
+                        pass_rate=stats.get("pass_rate", 0.0),
+                        total_claims=stats.get("total_claims", 0),
+                        supported_claims=stats.get("supported_claims", 0),
+                        unsupported_claims=stats.get("unsupported_claims", 0),
+                        invented_citations=stats.get("invented_citations", 0),
+                        stale_law_citations=stats.get("stale_law_citations", 0),
+                        claims_json=json.dumps(claim_records)
+                    )
+                    db.add(report)
+                    db.commit()
+                except Exception as e:
+                    logger.warning(f"Could not persist fallback grounding report: {e}")
 
         return {
             "staged_status": "READY_FOR_ATTORNEY_REVIEW",
+            "review_required": True,
+            "provisional_work_product": True,
             "matter_title": title,
-            "grounding_verified": is_grounded,
-            "flagged_items": ungrounded,
+            "pass_rate": stats.get("pass_rate", 100.0),
             "retrieved_authority_count": len(laws),
+            "grounding_summary": stats,
+            "claims_audit": claim_records,
             "authorities_cited": [
                 {
-                    "section": l.get("section"),
-                    "title": l.get("title"),
-                    "jurisdiction": l.get("jurisdiction"),
-                    "similarity": round(l.get("similarity", 0.0), 3)
-                } for l in laws
+                    "section": law_item.get("section"),
+                    "title": law_item.get("title"),
+                    "jurisdiction": law_item.get("jurisdiction"),
+                    "authority_class": law_item.get("authority_class"),
+                    "similarity": round(law_item.get("similarity", 0.0), 3)
+                } for law_item in laws
             ],
             "brief_content": analysis,
             "disclaimer": UPL_DISCLAIMER
@@ -335,7 +463,7 @@ def process_request(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 },
                 "serverInfo": {
                     "name": "kruschlaw-mcp",
-                    "version": "0.2.0-dev"
+                    "version": "0.3.0-dev"
                 }
             }
         }
@@ -353,25 +481,27 @@ def process_request(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         tool_name = params.get("name")
         args = params.get("arguments", {})
 
-        try:
-            if tool_name == "search_ordinances":
-                res = handle_search_ordinances(args)
-            elif tool_name == "get_section":
-                res = handle_get_section(args)
-            elif tool_name == "log_matter":
-                res = handle_log_matter(args)
-            elif tool_name == "draft_brief":
-                res = handle_draft_brief(args)
-            else:
-                return {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "error": {
-                        "code": -32601,
-                        "message": f"Unknown tool: {tool_name}"
-                    }
-                }
+        handlers = {
+            "search_ordinances": handle_search_ordinances,
+            "get_section": handle_get_section,
+            "log_matter": handle_log_matter,
+            "list_matters": handle_list_matters,
+            "get_grounding_report": handle_get_grounding_report,
+            "draft_brief": handle_draft_brief
+        }
 
+        if tool_name not in handlers:
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {
+                    "code": -32601,
+                    "message": f"Tool '{tool_name}' not found."
+                }
+            }
+
+        try:
+            res = handlers[tool_name](args)
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
@@ -385,40 +515,28 @@ def process_request(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 }
             }
         except Exception as e:
-            logger.error(f"Error handling tool '{tool_name}': {e}", exc_info=True)
+            logger.error(f"Error executing tool '{tool_name}': {e}", exc_info=True)
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
-                "result": {
-                    "isError": True,
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"Error executing tool '{tool_name}': {str(e)}"
-                        }
-                    ]
+                "error": {
+                    "code": -32000,
+                    "message": f"Tool execution failed: {str(e)}"
                 }
             }
-    elif method == "ping":
-        return {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "result": {}
-        }
     else:
         return {
             "jsonrpc": "2.0",
             "id": req_id,
             "error": {
                 "code": -32601,
-                "message": f"Method not supported: {method}"
+                "message": f"Method '{method}' not implemented."
             }
         }
 
 
-def run_stdio_server():
-    """Run JSON-RPC 2.0 loop reading from sys.stdin and writing to sys.stdout."""
-    logger.info("Starting KruschLaw MCP stdio server (v0.2.0-dev)...")
+def main():
+    logger.info("KruschLaw MCP Server initializing on stdio...")
     for line in sys.stdin:
         line_clean = line.strip()
         if not line_clean:
@@ -426,21 +544,19 @@ def run_stdio_server():
         try:
             req = json.loads(line_clean)
             resp = process_request(req)
-            if resp is not None:
+            if resp:
                 sys.stdout.write(json.dumps(resp) + "\n")
                 sys.stdout.flush()
         except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON received: {e}")
             err_resp = {
                 "jsonrpc": "2.0",
                 "id": None,
-                "error": {
-                    "code": -32700,
-                    "message": f"Parse error: {str(e)}"
-                }
+                "error": {"code": -32700, "message": "Parse error: Invalid JSON"}
             }
             sys.stdout.write(json.dumps(err_resp) + "\n")
             sys.stdout.flush()
 
 
 if __name__ == "__main__":
-    run_stdio_server()
+    main()

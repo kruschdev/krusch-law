@@ -1,7 +1,33 @@
-import os
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, UniqueConstraint, func, text
+import uuid
+from sqlalchemy import (
+    create_engine, Column, Integer, String, Text, DateTime,
+    Boolean, UniqueConstraint, func, text, Float
+)
 from sqlalchemy.orm import declarative_base, sessionmaker
-from pgvector.sqlalchemy import Vector
+
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    from sqlalchemy.types import UserDefinedType
+    import json
+    class Vector(UserDefinedType):
+        def __init__(self, dim=1024):
+            self.dim = dim
+        def get_col_spec(self, **kw):
+            return "TEXT"
+        def bind_processor(self, dialect):
+            def process(value):
+                return json.dumps(value) if isinstance(value, list) else value
+            return process
+        def result_processor(self, dialect, coltype):
+            def process(value):
+                if isinstance(value, str):
+                    try:
+                        return json.loads(value)
+                    except Exception:
+                        return value
+                return value
+            return process
 
 from .config import settings
 
@@ -36,14 +62,17 @@ class Case(Base):
 
 
 class LawVector(Base):
-    """Statutory, municipal ordinance, or regulatory provision with vector embedding and hybrid search metadata."""
+    """
+    Statutory, municipal ordinance, or regulatory provision in a hierarchical, versioned legal graph
+    with dense vector embedding and hybrid search metadata.
+    """
     __tablename__ = "laws_vectors"
     __table_args__ = (
         UniqueConstraint("jurisdiction", "state", "city", "section", "chunk_index", name="uq_law_section_chunk"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    jurisdiction = Column(String(100), nullable=False, index=True)  # e.g., "U.S. Code", "Oakland Municipal Code"
+    jurisdiction = Column(String(100), nullable=False, index=True)  # e.g., "California Civil Code", "Oakland Municipal Code"
     state = Column(String(50), nullable=True, index=True)           # e.g., "CA"
     city = Column(String(100), nullable=True, index=True)            # e.g., "Oakland"
     county = Column(String(100), nullable=True, index=True)          # e.g., "Alameda County"
@@ -58,45 +87,141 @@ class LawVector(Base):
     is_substantive = Column(Boolean, default=True, nullable=False)  # False for TOC, editorial notes, enactments
     embedding = Column(Vector(settings.EMBEDDING_DIM), nullable=True)
 
+    # --- Hierarchy & Legal Graph Structure ---
+    parent_id = Column(Integer, nullable=True, index=True)          # Foreign key or self-referential ID
+    parent_section = Column(String(100), nullable=True, index=True) # e.g. "Chapter 8.22" or "Section 8.22.030"
+    hierarchy_level = Column(String(50), default="section", nullable=False, index=True) # code, title, chapter, article, section, subsection, definitions, exceptions, penalties
+    definitions_ref = Column(String(100), nullable=True)            # Reference to section defining controlling terms (e.g. "Section 8.22.020")
+    exceptions_ref = Column(String(100), nullable=True)             # Reference to explicit statutory exception provisions
+
+    # --- Temporal Validity & Authority Hierarchy ---
+    authority_class = Column(String(50), default="municipal_ordinance", nullable=False, index=True)
+    # Options: "controlling_statute", "implementing_regulation", "municipal_ordinance", "secondary_commentary"
+    jurisdiction_level = Column(String(50), default="city", nullable=True, index=True)
+    # Options: "federal", "state", "county", "city"
+    effective_date = Column(DateTime(timezone=True), nullable=True) # Date statute became in force
+    amended_date = Column(DateTime(timezone=True), nullable=True)   # Date of most recent formal statutory amendment
+    repealed = Column(Boolean, default=False, nullable=False, index=True) # True if repealed or superseded
+    preempted_by = Column(String(255), nullable=True)               # e.g. "Cal. Civ. Code § 1946.2 (California Tenant Protection Act)"
+    source_url = Column(String(500), nullable=True)                 # Official legal reporter / municipal code publishing URL
+
+
+class GroundingReport(Base):
+    """
+    Immutable assertion-level grounding audit report tracking verified propositions,
+    supporting textual excerpts, and detected failure modes (invented, unsupported, stale law).
+    """
+    __tablename__ = "grounding_reports"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    case_id = Column(Integer, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    total_claims = Column(Integer, default=0, nullable=False)
+    supported_claims = Column(Integer, default=0, nullable=False)
+    unsupported_claims = Column(Integer, default=0, nullable=False)
+    invented_citations = Column(Integer, default=0, nullable=False)
+    stale_law_citations = Column(Integer, default=0, nullable=False)
+    pass_rate = Column(Float, default=100.0, nullable=False)
+    claims_json = Column(Text, nullable=False)                      # JSON list of verified claims & spans
+    advisory_markdown = Column(Text, nullable=True)
+
+
+class AuditLog(Base):
+    """
+    Per-action regulatory and security audit trail.
+    Tracks queries, matter consultations, retrieved statutory IDs, and model versions.
+    """
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    actor_key_hash = Column(String(64), nullable=True, index=True)  # SHA-256 hash of API key
+    client_ip = Column(String(50), nullable=True)
+    action = Column(String(50), nullable=False, index=True)         # consult, search, ingest, delete_matter, purge_matter, export
+    matter_id = Column(Integer, nullable=True, index=True)
+    retrieved_section_ids = Column(Text, nullable=True)             # JSON list or comma-separated IDs
+    model_name = Column(String(100), nullable=True)
+    model_version = Column(String(50), nullable=True)
+    prompt_hash = Column(String(64), nullable=True)
+    grounding_verdict = Column(String(50), nullable=True)           # PASS, WARNING, FAIL
+    duration_ms = Column(Integer, nullable=True)
+
 
 class IngestJob(Base):
-    """Tracks asynchronous background ingestion jobs for LOCUS Parquet corpora."""
+    """
+    Persistent, crash-resilient queue job for statutory corpora ingestion.
+    Supports transactional resumption, byte-level dedup, and stage telemetry.
+    """
     __tablename__ = "ingest_jobs"
 
     id = Column(String(36), primary_key=True)
     file_path = Column(String(500), nullable=False)
-    status = Column(String(20), default="pending", nullable=False)  # pending, running, completed, failed
+    raw_file_hash = Column(String(64), nullable=True, index=True)   # SHA-256 of raw source bytes
+    status = Column(String(20), default="pending", nullable=False, index=True)  # pending, running, completed, failed, cancelled
+    stage = Column(String(50), default="queued", nullable=False)    # queued, validating, parsing, chunking, embedding, indexing, completed
     total_rows = Column(Integer, default=0, nullable=False)
     processed_rows = Column(Integer, default=0, nullable=False)
     inserted_records = Column(Integer, default=0, nullable=False)
+    last_committed_offset = Column(Integer, default=0, nullable=False)
+    worker_id = Column(String(100), nullable=True)
+    heartbeat_at = Column(DateTime(timezone=True), nullable=True)
+    ocr_pages = Column(Integer, default=0, nullable=False)
+    total_pages = Column(Integer, default=0, nullable=False)
+    chunks_total = Column(Integer, default=0, nullable=False)
+    chunks_embedded = Column(Integer, default=0, nullable=False)
+    retry_count = Column(Integer, default=0, nullable=False)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class MatterEvidence(Base):
+    """
+    Client discovery and case evidence documents (leases, notices, emails).
+    Strictly isolated from the public laws_vectors table to prevent cross-matter fact contamination.
+    """
+    __tablename__ = "matter_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    matter_id = Column(Integer, nullable=False, index=True)
+    filename = Column(String(255), nullable=False)
+    doc_type = Column(String(50), default="matter_facts", nullable=False) # matter_facts, evidence, lease, notice
+    page_number = Column(Integer, nullable=True)
+    section_locator = Column(String(100), nullable=True)
+    chunk_index = Column(Integer, default=0, nullable=False)
+    content = Column(Text, nullable=False)
+    embedding = Column(Vector(settings.EMBEDDING_DIM), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 def init_db(target_engine=None):
     """Initialize database tables, pgvector extension, HNSW vector indexes, and GIN full-text index."""
     eng = target_engine or engine
     dialect_name = eng.dialect.name
-    
+
     if dialect_name == "postgresql":
         with eng.connect() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
             conn.commit()
-            
+
     Base.metadata.create_all(bind=eng)
 
     if dialect_name == "postgresql":
         with eng.connect() as conn:
             # Create HNSW cosine indexes for sub-millisecond retrieval on large statutory dumps
             conn.execute(text("""
-                CREATE INDEX IF NOT EXISTS laws_vectors_embedding_hnsw_idx 
+                CREATE INDEX IF NOT EXISTS laws_vectors_embedding_hnsw_idx
                 ON laws_vectors USING hnsw (embedding vector_cosine_ops)
                 WITH (m = 16, ef_construction = 64);
             """))
             conn.execute(text("""
-                CREATE INDEX IF NOT EXISTS cases_embedding_hnsw_idx 
+                CREATE INDEX IF NOT EXISTS cases_embedding_hnsw_idx
                 ON cases USING hnsw (embedding vector_cosine_ops)
+                WITH (m = 16, ef_construction = 64);
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS matter_evidence_embedding_hnsw_idx
+                ON matter_evidence USING hnsw (embedding vector_cosine_ops)
                 WITH (m = 16, ef_construction = 64);
             """))
             # Functional GIN index for hybrid full-text lexical search
@@ -105,4 +230,3 @@ def init_db(target_engine=None):
                 ON laws_vectors USING gin (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')));
             """))
             conn.commit()
-

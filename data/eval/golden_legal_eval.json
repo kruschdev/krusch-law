@@ -1,0 +1,227 @@
+[
+  {
+    "id": "eval_001",
+    "topic": "Housing & Rent",
+    "jurisdiction": "Oakland",
+    "fact_pattern": "Tenant in Oakland received a notice of an 8% rent increase from the landlord. The notice included only the dollar amount and effective date, with no mention or enclosure of the Oakland Rent Adjustment Program notice or petition rights.",
+    "gold_sections": ["Section 8.22.030", "Section 8.22.020"],
+    "forbidden_distractors": ["Section 1947.10", "Section 2909"],
+    "expected_claims": ["landlord must provide written notice of the Rent Adjustment Program", "failure to provide notice bars the rent increase"]
+  },
+  {
+    "id": "eval_002",
+    "topic": "Eviction & Just Cause",
+    "jurisdiction": "Oakland",
+    "fact_pattern": "Landlord in Oakland served a 30-day notice to terminate tenancy stating that the landlord's nephew wishes to move into the apartment. No other grounds were stated in the notice.",
+    "gold_sections": ["Section 8.22.360"],
+    "forbidden_distractors": ["Section 1947.10"],
+    "expected_claims": ["landlord cannot recover possession except upon enumerated just cause grounds", "owner occupancy requires good faith"]
+  },
+  {
+    "id": "eval_003",
+    "topic": "Public Nuisance & Noise",
+    "jurisdiction": "San Francisco",
+    "fact_pattern": "Neighbor in a San Francisco residential zone operates an amplified sound system in their backyard at 11:30 PM on a Tuesday, generating noise 12 dBA above the ambient residential level.",
+    "gold_sections": ["Section 2909"],
+    "forbidden_distractors": ["Section 8.22.030"],
+    "expected_claims": ["exceeds ambient noise level by 5 dBA", "between 10:00 PM and 7:00 AM"]
+  },
+  {
+    "id": "eval_004",
+    "topic": "Short-Term Rentals",
+    "jurisdiction": "San Francisco",
+    "fact_pattern": "Condo owner in San Francisco who lives full-time in New York leases out their San Francisco property on Airbnb for 120 days a year with no primary resident living there.",
+    "gold_sections": ["Section 41A.5"],
+    "forbidden_distractors": ["Section 151.09"],
+    "expected_claims": ["only primary permanent residents may list residential units", "reside at least 275 days per calendar year"]
+  },
+  {
+    "id": "eval_005",
+    "topic": "Rent Stabilization",
+    "jurisdiction": "Los Angeles",
+    "fact_pattern": "Landlord of an RSO apartment building in Los Angeles seeks to evict an elderly disabled tenant of 14 years for permanent owner occupancy, but refuses to pay relocation assistance.",
+    "gold_sections": ["Section 151.09"],
+    "forbidden_distractors": ["Section 8.22.030"],
+    "expected_claims": ["statutory relocation fees to displaced tenants", "graduated based on tenancy duration and protected status"]
+  },
+  {
+    "id": "eval_006",
+    "topic": "Tenancy & Security Deposits",
+    "jurisdiction": "California Civil Code",
+    "fact_pattern": "Tenant moved out of a rented house in California on June 1. It is now July 10 (40 days later) and the landlord has neither refunded the $2,500 security deposit nor sent an itemized list of deductions.",
+    "gold_sections": ["Section 1950.5", "Section 1950.5(b)"],
+    "forbidden_distractors": ["Section 1947.10"],
+    "expected_claims": ["within 21 calendar days after the tenant vacates", "itemized statement indicating the basis"]
+  },
+  {
+    "id": "eval_007",
+    "topic": "Tenancy & Security Deposits",
+    "jurisdiction": "California Civil Code",
+    "fact_pattern": "California landlord retained the tenant's entire $3,000 security deposit out of spite, refusing all phone calls and admitting in a text message that there was no damage to the unit.",
+    "gold_sections": ["Section 1950.5(b)"],
+    "forbidden_distractors": ["Section 2909"],
+    "expected_claims": ["bad faith claim or retention", "statutory damages of up to twice the amount of the security"]
+  },
+  {
+    "id": "eval_008",
+    "topic": "Tenancy & Privacy",
+    "jurisdiction": "California Civil Code",
+    "fact_pattern": "Landlord entered tenant's apartment at 9:00 PM on a Sunday without any prior written notice to inspect the kitchen cabinets while tenant was in bed.",
+    "gold_sections": ["Section 1954"],
+    "forbidden_distractors": ["Section 41A.5"],
+    "expected_claims": ["written notice of intent to enter at least 24 hours in advance", "during normal business hours"]
+  },
+  {
+    "id": "eval_009",
+    "topic": "Housing & Rent",
+    "jurisdiction": "Oakland",
+    "fact_pattern": "Oakland tenant wishes to file a rent increase petition 120 days after receiving a rent hike notice because the landlord never served the mandatory RAP notice.",
+    "gold_sections": ["Section 8.22.030(B)", "Section 8.22.030"],
+    "forbidden_distractors": ["Section 1947.10"],
+    "expected_claims": ["time period for a tenant to file a contest petition is tolled indefinitely"]
+  },
+  {
+    "id": "eval_010",
+    "topic": "Housing & Rent",
+    "jurisdiction": "Oakland",
+    "fact_pattern": "What constitutes a 'Covered Unit' and a 'RAP Notice' under the Oakland municipal housing regulatory framework?",
+    "gold_sections": ["Section 8.22.020"],
+    "forbidden_distractors": ["Section 2909"],
+    "expected_claims": ["residential rental unit in the City of Oakland", "Rent Adjustment Program"]
+  },
+  {
+    "id": "eval_011",
+    "topic": "Tenancy & Security Deposits",
+    "jurisdiction": "California Civil Code",
+    "fact_pattern": "A residential landlord demands a security deposit equal to 3 months' rent for an unfurnished apartment in California.",
+    "gold_sections": ["Section 1950.5"],
+    "forbidden_distractors": ["Section 151.09"],
+    "expected_claims": ["exceeding one month's rent for residential property"]
+  },
+  {
+    "id": "eval_012",
+    "topic": "Eviction & Just Cause",
+    "jurisdiction": "Oakland",
+    "fact_pattern": "Tenant in Oakland was served a termination notice claiming substantial lease violation for hanging pictures on the wall, without any prior written notice to cure.",
+    "gold_sections": ["Section 8.22.360"],
+    "forbidden_distractors": ["Section 1947.10"],
+    "expected_claims": ["substantial violation of lease terms after written notice to cure"]
+  },
+  {
+    "id": "eval_013",
+    "topic": "Public Nuisance & Noise",
+    "jurisdiction": "San Francisco",
+    "fact_pattern": "Commercial air conditioner on an adjacent residential rooftop in San Francisco produces a persistent humming that is 8 dBA over ambient noise at 2:00 AM.",
+    "gold_sections": ["Section 2909"],
+    "forbidden_distractors": ["Section 1954"],
+    "expected_claims": ["exceeds the ambient noise level by 5 dBA", "between 10:00 PM and 7:00 AM"]
+  },
+  {
+    "id": "eval_014",
+    "topic": "Short-Term Rentals",
+    "jurisdiction": "San Francisco",
+    "fact_pattern": "A San Francisco host rents their guest room on VRBO for 45 nights while living in the unit for 300 days a year, but has no certificate from the Office of Short-Term Rentals.",
+    "gold_sections": ["Section 41A.5"],
+    "forbidden_distractors": ["Section 8.22.030"],
+    "expected_claims": ["obtain a valid certificate from the Office of Short-Term Rentals"]
+  },
+  {
+    "id": "eval_015",
+    "topic": "Rent Stabilization",
+    "jurisdiction": "Los Angeles",
+    "fact_pattern": "Can an owner in Los Angeles demolish an RSO apartment building without providing relocation compensation to the long-term occupants?",
+    "gold_sections": ["Section 151.09"],
+    "forbidden_distractors": ["Section 1954"],
+    "expected_claims": ["permanent removal from the rental housing market must provide statutory relocation fees"]
+  },
+  {
+    "id": "eval_016",
+    "topic": "Tenancy & Privacy",
+    "jurisdiction": "California Civil Code",
+    "fact_pattern": "Landlord claims they have the right to enter an apartment at any time without notice to perform routine pest control in California.",
+    "gold_sections": ["Section 1954"],
+    "forbidden_distractors": ["Section 41A.5"],
+    "expected_claims": ["written notice of intent to enter at least 24 hours in advance", "normal business hours"]
+  },
+  {
+    "id": "eval_017",
+    "topic": "Housing & Rent",
+    "jurisdiction": "Oakland",
+    "fact_pattern": "Oakland landlord served a 3-day notice to pay or quit based on a 10% rent increase where the RAP notice was omitted from the rent increase service.",
+    "gold_sections": ["Section 8.22.030"],
+    "forbidden_distractors": ["Section 1947.10"],
+    "expected_claims": ["unlawful detainer proceedings based on non-payment of disputed rent increases"]
+  },
+  {
+    "id": "eval_018",
+    "topic": "Tenancy & Security Deposits",
+    "jurisdiction": "California Civil Code",
+    "fact_pattern": "Landlord deducted $800 from tenant's security deposit for normal wear and tear painting after a 5-year tenancy in California.",
+    "gold_sections": ["Section 1950.5(b)"],
+    "forbidden_distractors": ["Section 2909"],
+    "expected_claims": ["repairing damages exceeding ordinary wear and tear"]
+  },
+  {
+    "id": "eval_019",
+    "topic": "Eviction & Just Cause",
+    "jurisdiction": "Oakland",
+    "fact_pattern": "Does the Oakland Just Cause for Eviction Ordinance allow landlords to remove units under the state Ellis Act?",
+    "gold_sections": ["Section 8.22.360"],
+    "forbidden_distractors": ["Section 1947.10"],
+    "expected_claims": ["withdrawal under the Ellis Act"]
+  },
+  {
+    "id": "eval_020",
+    "topic": "Short-Term Rentals",
+    "jurisdiction": "San Francisco",
+    "fact_pattern": "What amount of commercial liability insurance is mandatory for a primary resident operating a transient short-term rental in San Francisco?",
+    "gold_sections": ["Section 41A.5"],
+    "forbidden_distractors": ["Section 1950.5"],
+    "expected_claims": ["commercial general liability insurance of not less than $500,000"]
+  },
+  {
+    "id": "eval_021",
+    "topic": "Housing & Rent",
+    "jurisdiction": "Oakland",
+    "fact_pattern": "Are post-1983 residential buildings in Oakland subject to general rent increase caps or notice requirements?",
+    "gold_sections": ["Section 8.22.030(B)"],
+    "forbidden_distractors": ["Section 151.09"],
+    "expected_claims": ["constructed after January 1, 1983 are exempt", "Costa-Hawkins"]
+  },
+  {
+    "id": "eval_022",
+    "topic": "Public Nuisance & Noise",
+    "jurisdiction": "San Francisco",
+    "fact_pattern": "At what time in the morning does the nighttime residential noise limit under the San Francisco Police Code end?",
+    "gold_sections": ["Section 2909"],
+    "forbidden_distractors": ["Section 8.22.360"],
+    "expected_claims": ["7:00 AM"]
+  },
+  {
+    "id": "eval_023",
+    "topic": "Tenancy & Security Deposits",
+    "jurisdiction": "California Civil Code",
+    "fact_pattern": "Tenant in California left an apartment thoroughly clean, but the landlord deducted $500 for professional carpet cleaning without providing any receipt or justification.",
+    "gold_sections": ["Section 1950.5", "Section 1950.5(b)"],
+    "forbidden_distractors": ["Section 41A.5"],
+    "expected_claims": ["itemized statement indicating the basis", "necessary cleaning"]
+  },
+  {
+    "id": "eval_024",
+    "topic": "Eviction & Just Cause",
+    "jurisdiction": "California Civil Code",
+    "fact_pattern": "Does California law still permit 30-day no-fault termination without just cause under Section 1947.10?",
+    "gold_sections": ["Section 1947.10"],
+    "forbidden_distractors": [],
+    "expected_claims": ["REPEALED", "preempted by the California Tenant Protection Act"]
+  },
+  {
+    "id": "eval_025",
+    "topic": "Tenancy & Privacy",
+    "jurisdiction": "California Civil Code",
+    "fact_pattern": "Can a California landlord enter an apartment without 24 hours notice if there is a burst pipe flooding the unit?",
+    "gold_sections": ["Section 1954"],
+    "forbidden_distractors": ["Section 8.22.020"],
+    "expected_claims": ["case of emergency", "except in cases of emergency"]
+  }
+]

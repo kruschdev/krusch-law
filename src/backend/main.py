@@ -1,17 +1,33 @@
+import re
 import uuid
+import time
+import hashlib
+import json
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional, List
-from fastapi import FastAPI, Depends, HTTPException, Query, Security, BackgroundTasks, status, UploadFile, File, Form
+from typing import Optional, List, Dict, Any
+from fastapi import (
+    FastAPI, Depends, HTTPException, Query, Security,
+    BackgroundTasks, UploadFile, File, Form, Request, Response
+)
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
 from .config import settings, is_loopback_or_private_host
-from .db import init_db, SessionLocal, Case, IngestJob
-from .rag import get_embedding, retrieve_laws, generate_legal_analysis, UPL_DISCLAIMER, RetrievalError
-from .ingest import ingest_mock_data, ingest_locus_parquet, process_parquet_job
+from .db import (
+    init_db, SessionLocal, Case, IngestJob, GroundingReport, AuditLog, MatterEvidence
+)
+from .rag import (
+    get_embedding, retrieve_laws, generate_legal_analysis,
+    UPL_DISCLAIMER, RetrievalError, verify_assertion_grounding,
+    expand_legal_query, retrieve_matter_evidence
+)
+from .ingest import (
+    ingest_mock_data, ingest_locus_parquet, process_parquet_job,
+    ingest_matter_document, ingest_uploaded_matter_file
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("kruschlaw.api")
@@ -42,9 +58,18 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def verify_api_key(api_key: Optional[str] = Security(api_key_header)) -> Optional[str]:
-    """Verify optional API Key authentication. Enforced if API_KEY is configured in settings."""
+    """
+    Verify API Key authentication.
+    In non-development environments, unauthenticated access is strictly blocked to protect client data.
+    """
+    is_dev = getattr(settings, "ENVIRONMENT", "development").lower() in ("development", "dev", "test")
+    if not is_dev and not settings.API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="Server Misconfiguration: API_KEY must be configured in non-development environments to safeguard client matter confidentiality."
+        )
     if not settings.API_KEY:
-        return None  # Unauthenticated in local development mode
+        return None
     if not api_key or api_key.strip() != settings.API_KEY.strip():
         raise HTTPException(
             status_code=401,
@@ -53,7 +78,6 @@ def verify_api_key(api_key: Optional[str] = Security(api_key_header)) -> Optiona
     return api_key
 
 
-# Enable CORS restricted to configured internal origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -70,6 +94,37 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def log_audit_event(
+    db: Session,
+    action: str,
+    actor_key: Optional[str] = None,
+    client_ip: Optional[str] = None,
+    matter_id: Optional[int] = None,
+    retrieved_section_ids: Optional[List[str]] = None,
+    model_name: Optional[str] = None,
+    grounding_verdict: Optional[str] = None,
+    duration_ms: Optional[int] = None
+):
+    """Write an immutable audit log entry for sovereign review."""
+    try:
+        actor_hash = hashlib.sha256(actor_key.encode('utf-8')).hexdigest() if actor_key else None
+        audit = AuditLog(
+            actor_key_hash=actor_hash,
+            client_ip=client_ip,
+            action=action,
+            matter_id=matter_id,
+            retrieved_section_ids=json.dumps(retrieved_section_ids) if retrieved_section_ids else None,
+            model_name=model_name or settings.OLLAMA_LLM_MODEL,
+            model_version="qwen2.5:14b",
+            grounding_verdict=grounding_verdict,
+            duration_ms=duration_ms
+        )
+        db.add(audit)
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to record audit log: {e}")
 
 
 # --- Pydantic Request & Response Schemas ---
@@ -124,9 +179,14 @@ class IngestJobStatusResponse(BaseModel):
     id: str
     status: str
     file_path: str
-    total_rows: int
-    processed_rows: int
-    inserted_records: int
+    raw_file_hash: Optional[str] = None
+    stage: str = "queued"
+    total_rows: int = 0
+    processed_rows: int = 0
+    inserted_records: int = 0
+    last_committed_offset: int = 0
+    chunks_total: int = 0
+    chunks_embedded: int = 0
     error_message: Optional[str] = None
     created_at: str
     updated_at: Optional[str] = None
@@ -163,6 +223,16 @@ class LawItem(BaseModel):
     content: str
     chunk_index: Optional[int] = 0
     similarity: float
+    parent_section: Optional[str] = None
+    hierarchy_level: Optional[str] = "section"
+    authority_class: Optional[str] = "municipal_ordinance"
+    definitions_ref: Optional[str] = None
+    exceptions_ref: Optional[str] = None
+    repealed: Optional[bool] = False
+    preempted_by: Optional[str] = None
+    effective_date: Optional[str] = None
+    source_url: Optional[str] = None
+    is_hydrated_context: Optional[bool] = False
 
 
 class CaseSummary(BaseModel):
@@ -171,11 +241,62 @@ class CaseSummary(BaseModel):
     facts: str
 
 
+class ClaimRecord(BaseModel):
+    claim: str
+    citation: Optional[str] = None
+    source_excerpt: Optional[str] = None
+    status: str
+    reason: Optional[str] = None
+
+
+class GroundingStats(BaseModel):
+    total_claims: int = 0
+    supported_claims: int = 0
+    unsupported_claims: int = 0
+    invented_citations: int = 0
+    wrong_propositions: int = 0
+    stale_law_citations: int = 0
+    pass_rate: float = 100.0
+
+
+class SpottedIssue(BaseModel):
+    issue: str
+    jurisdiction: str
+    governing_authorities: str
+
+
+class MatterEvidenceItem(BaseModel):
+    id: int
+    matter_id: int
+    filename: str
+    doc_type: str
+    page_number: Optional[int] = None
+    section_locator: Optional[str] = None
+    chunk_index: int
+    content: str
+    similarity: float
+    created_at: Optional[str] = None
+
+
 class ConsultResponse(BaseModel):
     case: CaseSummary
     retrieved_laws: List[LawItem]
     analysis: str
     disclaimer: str
+    review_required: bool = True
+    provisional_work_product: bool = True
+    grounding_stats: Optional[GroundingStats] = None
+    claims_audit: List[ClaimRecord] = []
+    spotted_issues: List[SpottedIssue] = []
+
+
+class ExportDocxRequest(BaseModel):
+    brief_content: str
+    matter_title: str
+    matter_number: Optional[str] = None
+    client_name: Optional[str] = None
+    claims_audit: Optional[List[Dict[str, Any]]] = None
+    retrieved_laws: Optional[List[Dict[str, Any]]] = None
 
 
 # --- API Endpoints ---
@@ -183,8 +304,19 @@ class ConsultResponse(BaseModel):
 @app.get("/health", tags=["System"])
 def health_check():
     """Health check endpoint with verified runtime security and inference inspection."""
+    is_dev = getattr(settings, "ENVIRONMENT", "development").lower() in ("development", "dev", "test")
     ollama_local = is_loopback_or_private_host(settings.OLLAMA_BASE_URL)
     embed_local = is_loopback_or_private_host(settings.OLLAMA_EMBED_HOST)
+
+    if not is_dev:
+        return {
+            "status": "healthy",
+            "service": "kruschlaw-backend",
+            "version": "0.2.0-dev",
+            "auth_enforced": True,
+            "air_gap_verified": bool(ollama_local and embed_local)
+        }
+
     return {
         "status": "healthy",
         "service": "kruschlaw-backend",
@@ -209,6 +341,7 @@ def health_check():
 @app.post("/api/cases", response_model=CaseResponse, status_code=201, tags=["Cases"])
 def create_case(
     payload: CaseCreate,
+    request: Request,
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
 ):
@@ -232,6 +365,12 @@ def create_case(
         db.commit()
         db.refresh(new_case)
 
+        log_audit_event(
+            db, action="create_matter", actor_key=_auth,
+            client_ip=request.client.host if request.client else None,
+            matter_id=new_case.id
+        )
+
         return CaseResponse(
             id=new_case.id,
             matter_number=new_case.matter_number,
@@ -253,12 +392,14 @@ def create_case(
 
 @app.get("/api/cases", response_model=List[CaseResponse], tags=["Cases"])
 def get_cases(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
 ):
-    """Retrieve all non-deleted client matters, ordered by creation date."""
+    """Retrieve all non-deleted client matters, with pagination."""
     try:
-        cases = db.query(Case).filter(Case.is_deleted == False).order_by(Case.created_at.desc()).all()
+        cases = db.query(Case).filter(Case.is_deleted.is_(False)).order_by(Case.created_at.desc()).offset(offset).limit(limit).all()
         return [
             CaseResponse(
                 id=c.id,
@@ -283,7 +424,7 @@ def get_case(
     _auth: Optional[str] = Depends(verify_api_key)
 ):
     """Retrieve a single matter by ID."""
-    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted == False).first()
+    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
     if not case:
         raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found")
     return CaseResponse(
@@ -302,11 +443,12 @@ def get_case(
 def update_case(
     case_id: int,
     payload: CaseUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
 ):
-    """Update matter details. If facts narrative is modified, recomputes vector embedding."""
-    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted == False).first()
+    """Update fields on an existing matter. Automatically recalculates embedding if facts change."""
+    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
     if not case:
         raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found")
 
@@ -319,13 +461,20 @@ def update_case(
             case.client_name = payload.client_name
         if payload.description is not None:
             case.description = payload.description
-        if payload.facts is not None and payload.facts.strip() != case.facts.strip():
+
+        if payload.facts is not None and payload.facts != case.facts:
             case.facts = payload.facts
             logger.info(f"Recomputing embedding for updated matter #{case_id}...")
             case.embedding = get_embedding(payload.facts)
 
         db.commit()
         db.refresh(case)
+
+        log_audit_event(
+            db, action="update_matter", actor_key=_auth,
+            client_ip=request.client.host if request.client else None,
+            matter_id=case.id
+        )
 
         return CaseResponse(
             id=case.id,
@@ -346,35 +495,71 @@ def update_case(
         raise HTTPException(status_code=500, detail=f"Failed to update matter: {str(e)}")
 
 
-@app.delete("/api/cases/{case_id}", status_code=200, tags=["Cases"])
+@app.delete("/api/cases/{case_id}", tags=["Cases"])
 def delete_case(
     case_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
 ):
-    """Soft-delete a matter record from the active portfolio."""
-    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted == False).first()
+    """Soft-delete a matter record."""
+    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
     if not case:
         raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found")
+
     case.is_deleted = True
     db.commit()
-    return {"status": "deleted", "id": case_id}
+
+    log_audit_event(
+        db, action="delete_matter", actor_key=_auth,
+        client_ip=request.client.host if request.client else None,
+        matter_id=case_id
+    )
+    return {"status": "deleted", "message": f"Matter #{case_id} soft-deleted successfully"}
 
 
-@app.get("/api/laws", response_model=List[LawItem], tags=["Statutes & Ordinances"])
-def search_laws(
-    q: Optional[str] = Query(None, description="Natural language search query or statutory keywords"),
-    state: Optional[str] = Query(None, description="Two-letter state filter (e.g. CA)"),
-    city: Optional[str] = Query(None, description="City or county filter (e.g. Oakland)"),
-    topic: Optional[str] = Query(None, description="Topic classification filter"),
-    limit: Optional[int] = Query(10, ge=1, le=50, description="Max results to return"),
+@app.delete("/api/cases/{case_id}/purge", tags=["Cases"])
+def purge_case(
+    case_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
 ):
     """
-    Explore and search ingested statutes, municipal codes, and ordinances.
-    Uses hybrid search (full-text lexical + pgvector cosine similarity).
+    Explicit enterprise matter purge.
+    Permanently destroys the client matter, vector embeddings, attached evidence chunks,
+    and associated grounding reports from the sovereign database.
     """
+    case = db.query(Case).filter(Case.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found")
+
+    db.query(MatterEvidence).filter(MatterEvidence.matter_id == case_id).delete()
+    db.query(GroundingReport).filter(GroundingReport.case_id == case_id).delete()
+    db.delete(case)
+    db.commit()
+
+    log_audit_event(
+        db, action="purge_matter", actor_key=_auth,
+        client_ip=request.client.host if request.client else None,
+        matter_id=case_id
+    )
+    return {"status": "purged", "message": f"Matter #{case_id} and all associated embeddings permanently destroyed."}
+
+
+@app.get("/api/laws", response_model=List[LawItem], tags=["Laws"])
+def search_laws(
+    q: Optional[str] = Query(None, description="Natural language search inquiry"),
+    limit: Optional[int] = Query(10, ge=1, le=100, description="Max results to return"),
+    offset: Optional[int] = Query(0, ge=0),
+    state: Optional[str] = Query(None, description="Two-letter state postal filter (e.g. CA)"),
+    city: Optional[str] = Query(None, description="City or county filter (e.g. Oakland)"),
+    topic: Optional[str] = Query(None, description="Subject classification filter"),
+    expand_query: bool = Query(False, description="Enable automated issue-spotting expansion"),
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """Search laws using hybrid vector and lexical ranking with authority hierarchy weighting."""
     try:
         results = retrieve_laws(
             text_query=q,
@@ -382,20 +567,24 @@ def search_laws(
             state_filter=state,
             city_filter=city,
             topic_filter=topic,
+            expand_query=expand_query,
             db_session=db
         )
         return [LawItem(**r) for r in results]
+    except RetrievalError as e:
+        logger.error(f"Law search error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        logger.error(f"Error exploring laws: {e}")
-        raise HTTPException(status_code=500, detail=f"Statutory search failed: {str(e)}")
+        logger.error(f"Unexpected search error: {e}")
+        raise HTTPException(status_code=500, detail=f"Retrieval error: {str(e)}")
 
 
 @app.post("/api/ingest/mock", response_model=IngestResponse, tags=["Ingestion"])
-def ingest_mock_ordinances(
+def ingest_mock(
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
 ):
-    """Seed the database with paraphrased California demo fixtures for testing."""
+    """Seed versioned California legal graph fixtures into the local store."""
     try:
         inserted = ingest_mock_data(db)
         return IngestResponse(status="success", inserted_records=inserted)
@@ -434,12 +623,8 @@ def ingest_document(
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
 ):
-    """
-    Ingest a lawyer's document (PDF with OCR, DOCX, EML, TXT, MD) via KruschNexus's
-    ingestion pipeline directly into KruschLaw's legal corpus.
-    """
+    """Ingest a lawyer's document (PDF with OCR, DOCX, EML, TXT, MD) via KruschNexus."""
     try:
-        from .ingest import ingest_matter_document
         report = ingest_matter_document(
             file_path=payload.file_path,
             matter_id=payload.matter_id,
@@ -467,12 +652,8 @@ async def upload_document(
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
 ):
-    """
-    Directly upload a lawyer's document (PDF with OCR, DOCX, EML, TXT, MD)
-    via KruschNexus's parsing and chunking pipeline directly into KruschLaw's legal corpus.
-    """
+    """Directly upload a lawyer's document via KruschNexus's parsing and chunking pipeline."""
     try:
-        from .ingest import ingest_uploaded_matter_file
         contents = await file.read()
         report = ingest_uploaded_matter_file(
             file_bytes=contents,
@@ -499,15 +680,13 @@ def ingest_parquet_async(
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
 ):
-    """
-    Queue asynchronous background ingestion of a LOCUS-v1 Parquet file.
-    Returns a job_id to monitor progress.
-    """
+    """Queue asynchronous background ingestion of a LOCUS-v1 Parquet file."""
     job_id = str(uuid.uuid4())
     job = IngestJob(
         id=job_id,
         file_path=payload.file_path,
-        status="pending"
+        status="pending",
+        stage="queued"
     )
     db.add(job)
     db.commit()
@@ -522,7 +701,7 @@ def get_ingest_job_status(
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
 ):
-    """Check status and progress of a background Parquet ingestion job."""
+    """Check status and progress telemetry of a background Parquet ingestion job."""
     job = db.query(IngestJob).filter(IngestJob.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail=f"Ingest job '{job_id}' not found")
@@ -531,9 +710,14 @@ def get_ingest_job_status(
         id=job.id,
         status=job.status,
         file_path=job.file_path,
+        raw_file_hash=job.raw_file_hash,
+        stage=job.stage or "queued",
         total_rows=job.total_rows,
         processed_rows=job.processed_rows,
         inserted_records=job.inserted_records,
+        last_committed_offset=job.last_committed_offset,
+        chunks_total=job.chunks_total,
+        chunks_embedded=job.chunks_embedded,
         error_message=job.error_message,
         created_at=job.created_at.isoformat() if job.created_at else "",
         updated_at=job.updated_at.isoformat() if job.updated_at else None
@@ -547,18 +731,19 @@ def consult_matter(
     state: Optional[str] = Query(None, description="Two-letter state filter (e.g. CA)"),
     city: Optional[str] = Query(None, description="City or county filter (e.g. Oakland)"),
     topic: Optional[str] = Query(None, description="Topic filter (e.g. Housing)"),
+    request: Request = None,
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
 ):
     """
-    Perform hybrid vector + lexical matching against local laws and generate a 4-part legal brief
-    grounded strictly in retrieved authorities with citation verification.
+    Perform hybrid vector + lexical matching against local laws, execute assertion-level grounding,
+    and generate an auditable legal brief with side-by-side claim support spans.
     """
-    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted == False).first()
+    start_time = time.time()
+    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
     if not case:
         raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found")
 
-    # If missing vector embedding, generate one on-demand
     if not case.embedding:
         try:
             logger.info(f"Generating missing embedding on-the-fly for matter #{case_id}...")
@@ -567,7 +752,6 @@ def consult_matter(
         except Exception as e:
             raise HTTPException(status_code=503, detail=f"Ollama embedding failure: {str(e)}")
 
-    # Retrieve matching laws using hybrid search
     try:
         matched_laws = retrieve_laws(
             query_vector=case.embedding,
@@ -582,16 +766,152 @@ def consult_matter(
         logger.error(f"Statutory retrieval failure for matter #{case_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Database retrieval failure: {str(e)}")
 
-    # Generate structured analysis
-    analysis_text = generate_legal_analysis(
+    # Generate analysis and run assertion grounding (flexible to tuple or mocked string)
+    res = generate_legal_analysis(
         case_facts=case.facts,
         case_title=case.title,
-        laws=matched_laws
+        laws=matched_laws,
+        case_id=case.id,
+        db_session=db
     )
+    if isinstance(res, tuple):
+        analysis_text = res[0]
+        stats = res[1] if len(res) > 1 else {}
+        claim_records = res[2] if len(res) > 2 else []
+    else:
+        analysis_text = str(res)
+        is_grounded, claim_records, notice, stats = verify_assertion_grounding(analysis_text, matched_laws)
+
+    elapsed_ms = int((time.time() - start_time) * 1000)
+    verdict = "PASS" if stats.get("pass_rate", 100.0) == 100.0 else ("FAIL" if stats.get("invented_citations", 0) > 0 else "WARNING")
+
+    client_ip = request.client.host if request and request.client else None
+    sec_ids = [law_item.get("section") or str(law_item.get("id")) for law_item in matched_laws]
+    log_audit_event(
+        db, action="consult", actor_key=_auth,
+        client_ip=client_ip, matter_id=case.id,
+        retrieved_section_ids=sec_ids,
+        grounding_verdict=verdict,
+        duration_ms=elapsed_ms
+    )
+
+    _, spotted = expand_legal_query(case.facts)
+    spotted_models = [SpottedIssue(**s) for s in spotted]
 
     return ConsultResponse(
         case=CaseSummary(id=case.id, title=case.title, facts=case.facts),
-        retrieved_laws=[LawItem(**l) for l in matched_laws],
+        retrieved_laws=[LawItem(**law_item) for law_item in matched_laws],
         analysis=analysis_text,
-        disclaimer=UPL_DISCLAIMER
+        disclaimer=UPL_DISCLAIMER,
+        review_required=True,
+        provisional_work_product=True,
+        grounding_stats=GroundingStats(**stats) if stats else None,
+        claims_audit=[ClaimRecord(**c) for c in claim_records],
+        spotted_issues=spotted_models
     )
+
+
+@app.get("/api/cases/{case_id}/evidence", response_model=List[MatterEvidenceItem], tags=["Discovery & Evidence"])
+@app.get("/api/matters/{case_id}/evidence", response_model=List[MatterEvidenceItem], tags=["Discovery & Evidence"])
+def get_matter_evidence(
+    case_id: int,
+    q: Optional[str] = Query(None, description="Semantic or keyword query within matter discovery"),
+    limit: int = Query(10, ge=1, le=100, description="Max discovery chunks to retrieve"),
+    doc_type: Optional[str] = Query(None, description="Optional doc_type filter (e.g. lease, notice, evidence)"),
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Search client discovery documents, exhibits, and uploaded records strictly within the designated matter.
+    Prevents cross-matter data contamination.
+    """
+    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found.")
+
+    try:
+        results = retrieve_matter_evidence(
+            matter_id=case_id,
+            text_query=q,
+            limit=limit,
+            doc_type=doc_type,
+            db_session=db
+        )
+        return [MatterEvidenceItem(**r) for r in results]
+    except Exception as e:
+        logger.error(f"Error querying matter evidence: {e}")
+        raise HTTPException(status_code=500, detail=f"Evidence retrieval error: {str(e)}")
+
+
+@app.post("/api/consult/export/docx", tags=["Consult & Synthesis"])
+def export_consult_docx(
+    payload: ExportDocxRequest,
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """Generate a court/client-ready Word (.docx) document from consult analysis and audit data."""
+    try:
+        from .export import generate_brief_docx
+        docx_bytes = generate_brief_docx(
+            brief_content=payload.brief_content,
+            matter_title=payload.matter_title,
+            matter_number=payload.matter_number,
+            client_name=payload.client_name,
+            claims_audit=payload.claims_audit,
+            retrieved_laws=payload.retrieved_laws,
+            disclaimer=UPL_DISCLAIMER
+        )
+        safe_title = re.sub(r'[^a-zA-Z0-9_\-]', '_', payload.matter_title[:30])
+        filename = f"KruschLaw_Brief_{safe_title}.docx"
+        return Response(
+            content=docx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        logger.error(f"Error generating DOCX export: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate DOCX export: {e}")
+
+
+@app.get("/api/consult/{case_id}/export/docx", tags=["Consult & Synthesis"])
+def export_case_docx(
+    case_id: int,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """Export the latest consultation brief and grounding audit for a matter as Word (.docx)."""
+    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found.")
+
+    report = db.query(GroundingReport).filter(GroundingReport.case_id == case_id).order_by(GroundingReport.created_at.desc()).first()
+    claims_audit = json.loads(report.claims_json) if (report and report.claims_json) else []
+
+    matched_laws = retrieve_laws(query_vector=case.embedding, text_query=case.facts, limit=5, db_session=db)
+
+    brief_text = (
+        f"### Executive Summary\nPreliminary legal evaluation for Matter #{case.id}: {case.title}.\n\n"
+        f"### Factual Matrix\n{case.facts}\n\n"
+        f"### Governing Authorities\nPrimary authorities identified in the sovereign graph are detailed in the appendix."
+    )
+
+    try:
+        from .export import generate_brief_docx
+        docx_bytes = generate_brief_docx(
+            brief_content=brief_text,
+            matter_title=case.title,
+            matter_number=case.matter_number,
+            client_name=case.client_name,
+            claims_audit=claims_audit,
+            retrieved_laws=matched_laws,
+            disclaimer=UPL_DISCLAIMER
+        )
+        safe_title = re.sub(r'[^a-zA-Z0-9_\-]', '_', case.title[:30])
+        filename = f"KruschLaw_Brief_Matter_{case.id}_{safe_title}.docx"
+        return Response(
+            content=docx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        logger.error(f"Error generating DOCX export for matter #{case_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate DOCX export: {e}")

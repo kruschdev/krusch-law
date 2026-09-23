@@ -71,11 +71,11 @@ class TestKruschLawPipeline(unittest.TestCase):
         )
         cls.Session = sessionmaker(bind=cls.engine)
 
-        # Wire test engine into modules
         src.backend.db.engine = cls.engine
         src.backend.db.SessionLocal = cls.Session
         src.backend.rag.SessionLocal = cls.Session
         src.backend.ingest.SessionLocal = cls.Session
+        src.mcp.server.SessionLocal = cls.Session
 
         Base.metadata.create_all(cls.engine)
 
@@ -96,6 +96,9 @@ class TestKruschLawPipeline(unittest.TestCase):
         src.backend.ingest.get_embedding = self.mock_embed
         src.backend.ingest.get_embeddings_batch = self.mock_embed_batch
         src.backend.main.get_embedding = self.mock_embed
+        src.mcp.server.get_embedding = self.mock_embed
+        src.mcp.server.get_embeddings_batch = self.mock_embed_batch
+        src.mcp.server.SessionLocal = self.Session
 
         def override_get_db():
             db_session = self.Session()

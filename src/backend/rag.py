@@ -1,14 +1,18 @@
 import re
 import json
 import math
+import uuid
 import logging
+import hashlib
+import threading
+from collections import OrderedDict
 import httpx
-from typing import List, Dict, Optional, Tuple, Set
+from typing import List, Dict, Optional, Tuple, Set, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import SessionLocal
+from .db import SessionLocal, LawVector, GroundingReport, MatterEvidence
 
 logger = logging.getLogger("kruschlaw.rag")
 
@@ -20,41 +24,260 @@ UPL_DISCLAIMER = (
     "all cited statutes, local ordinances, and analytical conclusions prior to taking any formal legal action."
 )
 
+AUTHORITY_WEIGHTS = {
+    "controlling_statute": 1.25,
+    "implementing_regulation": 1.15,
+    "municipal_ordinance": 1.0,
+    "secondary_commentary": 0.8,
+}
+
+LEGAL_ISSUE_RULES: List[Dict[str, Any]] = [
+    {
+        "issue": "Notice of Rent Adjustment Program (RAP) Compliance",
+        "jurisdiction": "Oakland / California",
+        "governing_authorities": "OMC § 8.22.030, Cal. Civ. Code § 1947.12",
+        "keywords": [
+            r"\brent\s+increase\b", r"\brent\s+hike\b", r"\braised\s+rent\b", r"\bincreased\s+(?:the\s+)?rent\b",
+            r"\brap\s+notice\b", r"\brent\s+adjustment\b", r"\bnotice\s+of\s+rent\b"
+        ],
+        "statutory_terms": "OMC 8.22.030 Notice of Rent Adjustment Program RAP Notice Cal Civ Code 1947.12 allowable rent increase petition rights"
+    },
+    {
+        "issue": "Security Deposit Retention & Itemization",
+        "jurisdiction": "California Civil Code",
+        "governing_authorities": "Cal. Civ. Code § 1950.5",
+        "keywords": [
+            r"\bsecurity\s+deposit\b", r"\bdeposit\s+return\b", r"\brefund\s+deposit\b",
+            r"\bcleaning\s+fee\b", r"\bdeductions?\b", r"\bitemized\s+statement\b",
+            r"\bkept\s+(?:the\s+|my\s+)?deposit\b", r"\bwithheld\s+(?:the\s+|my\s+)?deposit\b"
+        ],
+        "statutory_terms": "Cal Civ Code 1950.5 itemized disposition of security deposit 21 calendar days bad faith retention statutory damages normal wear and tear"
+    },
+    {
+        "issue": "Breach of Implied Warranty of Habitability",
+        "jurisdiction": "California Civil Code / Health & Safety",
+        "governing_authorities": "Cal. Civ. Code § 1941.1, Cal. Health & Safety Code § 17920.3",
+        "keywords": [
+            r"\bmold\b", r"\bno\s+heat\b", r"\bbroken\s+heater\b", r"\bhot\s+water\b",
+            r"\broaches?\b", r"\brats?\b", r"\bmice\b", r"\bvermin\b", r"\binfestation\b",
+            r"\bleaking\s+roof\b", r"\bplumbing\s+leak\b", r"\buntenantable\b", r"\bhabitability\b"
+        ],
+        "statutory_terms": "Cal Civ Code 1941.1 implied warranty of habitability tenantable dwelling effective waterproofing weather protection heating plumbing repair and deduct"
+    },
+    {
+        "issue": "Unlawful Self-Help Eviction & Utility Interruption",
+        "jurisdiction": "California Civil Code",
+        "governing_authorities": "Cal. Civ. Code § 789.3",
+        "keywords": [
+            r"\blocked?\s+out\b", r"\blockout\b", r"\bchanged\s+(?:the\s+)?locks?\b", r"\bdeadbolt\b",
+            r"\bpadlock\b", r"\bshut\s+off\s+(?:water|power|electricity|gas)\b", r"\bcut\s+(?:the\s+)?power\b",
+            r"\bremoved\s+(?:door|windows?)\b", r"\bthrew\s+out\s+belongings\b"
+        ],
+        "statutory_terms": "Cal Civ Code 789.3 unlawful self-help eviction interruption of utility service statutory damages 100 dollars per day forcible entry without court process"
+    },
+    {
+        "issue": "Just Cause Eviction & Owner Move-In (OMI) Defense",
+        "jurisdiction": "Oakland / California",
+        "governing_authorities": "OMC § 8.22.360, Cal. Civ. Code § 1946.2",
+        "keywords": [
+            r"\bjust\s+cause\b", r"\bowner\s+move\s*in\b", r"\brelative\s+move\s*in\b",
+            r"\bnephew\s+move\s*in\b", r"\bellis\s+act\b", r"\bno\s+fault\s+eviction\b",
+            r"\bterminate\s+tenancy\b", r"\bnotice\s+to\s+vacate\b"
+        ],
+        "statutory_terms": "OMC 8.22.360 just cause for eviction good faith owner occupancy principal residence enumerated grounds 1946.2"
+    },
+    {
+        "issue": "Tenant Relocation Assistance & Displacement Protections",
+        "jurisdiction": "Los Angeles / Oakland",
+        "governing_authorities": "LAMC § 151.09, OMC § 8.22.360",
+        "keywords": [
+            r"\brelocation\s+fees?\b", r"\brelocation\s+assistance\b", r"\bdisplaced\s+tenants?\b",
+            r"\belderly\s+tenant\b", r"\bdisabled\s+tenant\b", r"\brso\s+building\b"
+        ],
+        "statutory_terms": "LAMC 151.09 relocation fees displaced tenants rent stabilization ordinance RSO graduated payment protected status"
+    },
+    {
+        "issue": "Retaliatory Eviction Defense",
+        "jurisdiction": "California Civil Code",
+        "governing_authorities": "Cal. Civ. Code § 1942.5",
+        "keywords": [
+            r"\bretaliat(?:ion|ed|ory)\b", r"\bcomplained\s+about\b", r"\bcode\s+enforcement\b",
+            r"\breported\s+(?:violation|landlord)\b", r"\bexercis(?:ed|ing)\s+rights\b"
+        ],
+        "statutory_terms": "Cal Civ Code 1942.5 retaliatory eviction 180 days exercise of tenant rights reporting habitability violation"
+    },
+    {
+        "issue": "Residential Noise Nuisance Limits",
+        "jurisdiction": "San Francisco Police Code",
+        "governing_authorities": "SF Police Code § 2909",
+        "keywords": [
+            r"\bamplified\s+sound\b", r"\bdecibels?\b", r"\bdba\b", r"\bnighttime\s+noise\b",
+            r"\bloud\s+music\b", r"\bambient\s+noise\b"
+        ],
+        "statutory_terms": "SF Police Code Section 2909 ambient noise residential zone dBA 5 dBA above ambient 10:00 PM to 7:00 AM"
+    },
+    {
+        "issue": "Short-Term Residential Rental Restrictions",
+        "jurisdiction": "San Francisco Administrative Code",
+        "governing_authorities": "SF Admin. Code Chapter 41A § 41A.5",
+        "keywords": [
+            r"\bairbnb\b", r"\bshort\s+term\s+rental\b", r"\bvrbo\b", r"\bvacation\s+rental\b",
+            r"\bprimary\s+resident\b", r"\b275\s+days\b"
+        ],
+        "statutory_terms": "SF Administrative Code Chapter 41A Section 41A.5 primary permanent resident reside at least 275 days calendar year"
+    }
+]
+
+
+def expand_legal_query(text_content: str) -> Tuple[str, List[Dict[str, str]]]:
+    """
+    Spot legal issues from colloquial tenant/landlord fact patterns and synthesize
+    canonical statutory search terms.
+    Returns (expanded_query_string, spotted_issues_list).
+    """
+    if not text_content or not text_content.strip():
+        return text_content, []
+
+    spotted: List[Dict[str, str]] = []
+    collected_terms: List[str] = []
+    text_lower = text_content.lower()
+
+    for rule in LEGAL_ISSUE_RULES:
+        matched = False
+        for kw in rule["keywords"]:
+            if re.search(kw, text_lower):
+                matched = True
+                break
+        if matched:
+            spotted.append({
+                "issue": rule["issue"],
+                "jurisdiction": rule["jurisdiction"],
+                "governing_authorities": rule["governing_authorities"]
+            })
+            collected_terms.append(rule["statutory_terms"])
+
+    if collected_terms:
+        expanded_query = f"{text_content} {' '.join(collected_terms)}"
+    else:
+        expanded_query = text_content
+
+    return expanded_query, spotted
+
 
 class RetrievalError(RuntimeError):
     """Raised when statutory or ordinance search against the database fails."""
     pass
 
 
+class EmbeddingCache:
+    """Thread-safe LRU cache for embeddings keyed by model and sha256 text hash."""
+    def __init__(self, maxsize: int = 10000):
+        self.maxsize = maxsize
+        self._cache: OrderedDict[str, List[float]] = OrderedDict()
+        self._lock = threading.Lock()
+        self.hits = 0
+        self.misses = 0
+
+    def _key(self, model: str, text: str) -> str:
+        text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        return f"{model}:{text_hash}"
+
+    def get(self, model: str, text: str) -> Optional[List[float]]:
+        key = self._key(model, text)
+        with self._lock:
+            if key in self._cache:
+                self.hits += 1
+                self._cache.move_to_end(key)
+                return self._cache[key]
+            self.misses += 1
+            return None
+
+    def set(self, model: str, text: str, vector: List[float]) -> None:
+        key = self._key(model, text)
+        with self._lock:
+            self._cache[key] = vector
+            self._cache.move_to_end(key)
+            if len(self._cache) > self.maxsize:
+                self._cache.popitem(last=False)
+
+    def stats(self) -> Dict[str, Any]:
+        with self._lock:
+            total = self.hits + self.misses
+            hit_ratio = (self.hits / total) if total > 0 else 0.0
+            return {
+                "size": len(self._cache),
+                "maxsize": self.maxsize,
+                "hits": self.hits,
+                "misses": self.misses,
+                "hit_ratio": round(hit_ratio, 4)
+            }
+
+    def clear(self) -> None:
+        with self._lock:
+            self._cache.clear()
+            self.hits = 0
+            self.misses = 0
+
+
+embedding_cache = EmbeddingCache(maxsize=10000)
+
+
 def get_embeddings_batch(queries: List[str]) -> List[List[float]]:
-    """Generate vector embeddings in batch via Ollama API."""
+    """Generate vector embeddings in batch via Ollama API with LRU cache."""
     if not queries:
         return []
     clean_queries = [q.strip() if q and q.strip() else " " for q in queries]
+
+    results: List[Optional[List[float]]] = [None] * len(clean_queries)
+    miss_indices: List[int] = []
+    miss_texts: List[str] = []
+
+    for idx, q in enumerate(clean_queries):
+        cached = embedding_cache.get(settings.OLLAMA_EMBED_MODEL, q)
+        if cached is not None:
+            results[idx] = cached
+        else:
+            miss_indices.append(idx)
+            miss_texts.append(q)
+
+    if not miss_texts:
+        return [r for r in results if r is not None]
+
     payload = {
         "model": settings.OLLAMA_EMBED_MODEL,
-        "input": clean_queries
+        "input": miss_texts
     }
+    fetched: List[List[float]] = []
     try:
-        timeout = max(settings.EMBED_TIMEOUT, settings.EMBED_TIMEOUT * (len(clean_queries) / 8.0))
+        timeout = max(settings.EMBED_TIMEOUT, settings.EMBED_TIMEOUT * (len(miss_texts) / 8.0))
         with httpx.Client(timeout=timeout) as client:
             resp = client.post(f"{settings.OLLAMA_EMBED_HOST}/api/embed", json=payload)
             if resp.status_code == 200:
                 data = resp.json()
                 embeddings = data.get("embeddings", [])
-                if len(embeddings) == len(clean_queries):
-                    return embeddings
-            # Fallback to sequential calls
-            return [get_embedding(q) for q in clean_queries]
+                if len(embeddings) == len(miss_texts):
+                    fetched = embeddings
+            if not fetched:
+                fetched = [get_embedding(q) for q in miss_texts]
     except Exception as e:
         logger.warning(f"Batch embedding request failed ({e}), falling back to sequential embedding.")
-        return [get_embedding(q) for q in clean_queries]
+        fetched = [get_embedding(q) for q in miss_texts]
+
+    for idx, text_val, vec in zip(miss_indices, miss_texts, fetched):
+        embedding_cache.set(settings.OLLAMA_EMBED_MODEL, text_val, vec)
+        results[idx] = vec
+
+    return [r for r in results if r is not None]
 
 
 def get_embedding(query: str) -> List[float]:
-    """Generate a vector embedding via Ollama API."""
+    """Generate a vector embedding via Ollama API with LRU cache."""
     if not query or not query.strip():
         raise ValueError("Cannot embed empty text.")
+
+    cached = embedding_cache.get(settings.OLLAMA_EMBED_MODEL, query)
+    if cached is not None:
+        return cached
 
     payload = {
         "model": settings.OLLAMA_EMBED_MODEL,
@@ -64,8 +287,6 @@ def get_embedding(query: str) -> List[float]:
     try:
         with httpx.Client(timeout=settings.EMBED_TIMEOUT) as client:
             resp = client.post(f"{settings.OLLAMA_EMBED_HOST}/api/embed", json=payload)
-            
-            # If /api/embed fails with 404, fallback to legacy /api/embeddings endpoint
             if resp.status_code == 404:
                 resp = client.post(
                     f"{settings.OLLAMA_EMBED_HOST}/api/embeddings",
@@ -74,16 +295,19 @@ def get_embedding(query: str) -> List[float]:
                 resp.raise_for_status()
                 embedding = resp.json().get("embedding", [])
                 if embedding:
+                    embedding_cache.set(settings.OLLAMA_EMBED_MODEL, query, embedding)
                     return embedding
                 raise ValueError("Legacy Ollama endpoint returned empty embedding.")
-                
+
             resp.raise_for_status()
             data = resp.json()
             embeddings = data.get("embeddings", [])
             if embeddings and len(embeddings) > 0 and len(embeddings[0]) > 0:
-                return embeddings[0]
+                result_vec = embeddings[0]
+                embedding_cache.set(settings.OLLAMA_EMBED_MODEL, query, result_vec)
+                return result_vec
             raise ValueError(f"Ollama returned unexpected payload structure: {data}")
-            
+
     except httpx.ConnectError as e:
         logger.error(f"Failed to connect to Ollama embedding service at {settings.OLLAMA_EMBED_HOST}: {e}")
         raise ConnectionError(
@@ -95,212 +319,36 @@ def get_embedding(query: str) -> List[float]:
         raise
 
 
-def retrieve_laws(
-    query_vector: Optional[List[float]] = None,
-    text_query: Optional[str] = None,
-    limit: Optional[int] = None,
-    state_filter: Optional[str] = None,
-    city_filter: Optional[str] = None,
-    topic_filter: Optional[str] = None,
-    db_session: Optional[Session] = None
-) -> List[Dict]:
-    """
-    Retrieve laws using hybrid search: combining pgvector cosine similarity
-    with full-text lexical ranking (tsvector on PostgreSQL, token match on SQLite),
-    followed by parent-section deduplication.
-    """
-    limit = limit or settings.DEFAULT_RETRIEVAL_LIMIT
-    close_session = False
-    db = db_session
-    if db is None:
-        db = SessionLocal()
-        close_session = True
-
-    try:
-        # If query vector is missing but text_query exists, compute vector
-        if query_vector is None and text_query:
-            query_vector = get_embedding(text_query)
-
-        query_conditions = ["is_substantive = 1" if db.bind.dialect.name == "sqlite" else "is_substantive = true"]
-        params: Dict = {"limit": limit * 2}  # Retrieve extra for chunk deduplication
-
-        if state_filter:
-            query_conditions.append("state = :state")
-            params["state"] = state_filter.strip().upper()
-        if city_filter:
-            query_conditions.append("(LOWER(city_or_county) = LOWER(:city) OR LOWER(city) = LOWER(:city))")
-            params["city"] = city_filter.strip()
-        if topic_filter:
-            query_conditions.append("LOWER(topic) = LOWER(:topic)")
-            params["topic"] = topic_filter.strip()
-
-        conditions_str = " AND ".join(query_conditions)
-        is_sqlite = db.bind.dialect.name == "sqlite"
-
-        if is_sqlite:
-            # SQLite fallback: hybrid cosine similarity + lexical keyword scoring
-            sql = text(f"""
-                SELECT id, jurisdiction, state, city, county, city_or_county, topic, title, section, content, chunk_index, embedding
-                FROM laws_vectors
-                WHERE {conditions_str}
-            """)
-            rows = db.execute(sql, params).fetchall()
-            results = []
-            norm_q = math.sqrt(sum(a * a for a in query_vector)) if query_vector else 0.0
-
-            # Tokenize query for lexical scoring
-            query_tokens = set(re.findall(r'\b[a-zA-Z0-9\.\-]{3,}\b', text_query.lower())) if text_query else set()
-
-            for row in rows:
-                cos_sim = 0.0
-                if query_vector and row.embedding:
-                    try:
-                        emb = json.loads(row.embedding) if isinstance(row.embedding, str) else row.embedding
-                        dot = sum(a * b for a, b in zip(query_vector, emb))
-                        norm_e = math.sqrt(sum(b * b for b in emb))
-                        if norm_q > 0 and norm_e > 0:
-                            cos_sim = dot / (norm_q * norm_e)
-                    except Exception:
-                        cos_sim = 0.0
-
-                lex_score = 0.0
-                if query_tokens:
-                    doc_text = f"{row.title or ''} {row.section or ''} {row.content or ''}".lower()
-                    matches = sum(1 for t in query_tokens if t in doc_text)
-                    lex_score = min(1.0, matches / max(1, len(query_tokens)))
-
-                # Weighted hybrid score: 70% vector semantic, 30% lexical keyword
-                combined_sim = (0.7 * cos_sim) + (0.3 * lex_score) if text_query and query_vector else (cos_sim or lex_score)
-
-                results.append({
-                    "id": row.id,
-                    "jurisdiction": row.jurisdiction,
-                    "state": row.state,
-                    "city": row.city or row.city_or_county,
-                    "county": row.county,
-                    "city_or_county": row.city_or_county or row.city,
-                    "topic": row.topic,
-                    "title": row.title,
-                    "section": row.section,
-                    "content": row.content,
-                    "chunk_index": row.chunk_index,
-                    "similarity": float(combined_sim)
-                })
-
-            results.sort(key=lambda x: x["similarity"], reverse=True)
-        else:
-            # Production PostgreSQL: Hybrid tsvector + pgvector query
-            vec_str = '[' + ','.join(str(v) for v in query_vector) + ']' if query_vector else None
-            params["vec"] = vec_str
-            clean_text_q = re.sub(r'[^a-zA-Z0-9\s]', ' ', text_query or "").strip()
-            params["text_q"] = clean_text_q if clean_text_q else ""
-
-            if clean_text_q and vec_str:
-                sql = text(f"""
-                    WITH vec_matches AS (
-                        SELECT id, (1 - (embedding <=> CAST(:vec AS vector))) AS cos_sim,
-                               ROW_NUMBER() OVER (ORDER BY embedding <=> CAST(:vec AS vector)) as v_rank
-                        FROM laws_vectors
-                        WHERE {conditions_str} AND embedding IS NOT NULL
-                        LIMIT 50
-                    ),
-                    lex_matches AS (
-                        SELECT id, ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) as l_score,
-                               ROW_NUMBER() OVER (ORDER BY ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) DESC) as l_rank
-                        FROM laws_vectors
-                        WHERE {conditions_str} AND to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')) @@ plainto_tsquery('english', :text_q)
-                        LIMIT 50
-                    )
-                    SELECT l.id, l.jurisdiction, l.state, l.city, l.county, l.city_or_county, l.topic, l.title, l.section, l.content, l.chunk_index,
-                           COALESCE(1.0 / (60 + v.v_rank), 0.0) + COALESCE(1.0 / (60 + lex.l_rank), 0.0) AS hybrid_score,
-                           COALESCE(v.cos_sim, 0.0) as similarity
-                    FROM laws_vectors l
-                    LEFT JOIN vec_matches v ON l.id = v.id
-                    LEFT JOIN lex_matches lex ON l.id = lex.id
-                    WHERE v.id IS NOT NULL OR lex.id IS NOT NULL
-                    ORDER BY hybrid_score DESC
-                    LIMIT :limit
-                """)
-            elif vec_str:
-                sql = text(f"""
-                    SELECT id, jurisdiction, state, city, county, city_or_county, topic, title, section, content, chunk_index,
-                           (1 - (embedding <=> CAST(:vec AS vector))) AS similarity
-                    FROM laws_vectors
-                    WHERE {conditions_str} AND embedding IS NOT NULL
-                    ORDER BY embedding <=> CAST(:vec AS vector)
-                    LIMIT :limit
-                """)
-            else:
-                sql = text(f"""
-                    SELECT id, jurisdiction, state, city, county, city_or_county, topic, title, section, content, chunk_index,
-                           ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) AS similarity
-                    FROM laws_vectors
-                    WHERE {conditions_str} AND to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')) @@ plainto_tsquery('english', :text_q)
-                    ORDER BY similarity DESC
-                    LIMIT :limit
-                """)
-
-            rows = db.execute(sql, params).fetchall()
-            results = []
-            for row in rows:
-                results.append({
-                    "id": row.id,
-                    "jurisdiction": row.jurisdiction,
-                    "state": row.state,
-                    "city": row.city or row.city_or_county,
-                    "county": row.county,
-                    "city_or_county": row.city_or_county or row.city,
-                    "topic": row.topic,
-                    "title": row.title,
-                    "section": row.section,
-                    "content": row.content,
-                    "chunk_index": getattr(row, "chunk_index", 0),
-                    "similarity": float(row.similarity) if getattr(row, "similarity", None) is not None else 0.0
-                })
-
-        # Parent-Child deduplication: avoid multiple chunks of identical section crowding out top-k
-        seen_sections: Set[Tuple[str, str, str]] = set()
-        deduped: List[Dict] = []
-        for r in results:
-            sec_key = (r["jurisdiction"], r.get("state") or "", r.get("section") or r.get("title") or str(r["id"]))
-            if sec_key not in seen_sections:
-                seen_sections.add(sec_key)
-                deduped.append(r)
-            if len(deduped) >= limit:
-                break
-
-        return deduped
-    except Exception as e:
-        logger.error(f"Vector search retrieval error: {e}", exc_info=True)
-        raise RetrievalError(f"Database statutory retrieval failed: {str(e)}") from e
-    finally:
-        if close_session:
-            db.close()
-
-
 def extract_section_identifiers(text_content: str) -> Set[str]:
-    """Extract normalized section numbers and statutory identifiers from legal text."""
+    """
+    Extract normalized section numbers and statutory identifiers from legal text.
+    Handles municipal formats (OMC 8.22.030, LAMC § 151.09, SF Police Code § 2909)
+    and California Codes (Cal. Civ. Code § 1950.5(b)).
+    """
     if not text_content:
         return set()
+
     patterns = [
-        r'(?:§+|Section|Sec\.)\s*([0-9]+[A-Za-z0-9\.\-]*)',
-        r'\b(?:CC|Civ\.\s*Code|Gov\.\s*Code|Health\s*&\s*Saf\.\s*Code|Admin\.\s*Code)\s*§*\s*([0-9]+[A-Za-z0-9\.\-]*)',
+        r'\b(?:OMC|O\.M\.C\.|LAMC|L\.A\.M\.C\.|SFPC|SFAC)\s*(?:§+|Section|Sec\.?)?\s*([0-9]+[A-Za-z0-9\.\-\(\)]*)',
+        r'\b(?:Cal\.\s*Civ\.\s*Code|California\s*Civil\s*Code|Civ\.\s*Code|CC)\s*(?:§+|Section|Sec\.?)?\s*([0-9]+[A-Za-z0-9\.\-\(\)]*)',
+        r'\b(?:Police\s*Code|Admin\.\s*Code|Health\s*&\s*Saf\.\s*Code|Gov\.\s*Code)\s*(?:§+|Section|Sec\.?)?\s*([0-9]+[A-Za-z0-9\.\-\(\)]*)',
+        r'(?:§+|Section|Sec\.)\s*([0-9]+[A-Za-z0-9\.\-\(\)]*)',
     ]
+
     sections = set()
     for pattern in patterns:
-        matches = re.finditer(pattern, text_content, re.IGNORECASE)
-        for m in matches:
-            sec = m.group(1).strip().rstrip('.,;:')
-            if sec:
-                sections.add(sec)
+        for m in re.finditer(pattern, text_content, re.IGNORECASE):
+            raw_sec = m.group(1).strip().rstrip('.,;:')
+            if raw_sec:
+                sections.add(raw_sec)
     return sections
 
 
 def is_section_grounded(cited_sec: str, authorized_sections: Set[str]) -> bool:
     """Check if a cited section matches or derives from an authorized section."""
-    cited_norm = re.sub(r'[\(\)\[\]]', '', cited_sec).lower()
+    cited_norm = re.sub(r'[\(\)\[\]\s]', '', cited_sec).lower()
     for auth in authorized_sections:
-        auth_norm = re.sub(r'[\(\)\[\]]', '', auth).lower()
+        auth_norm = re.sub(r'[\(\)\[\]\s]', '', auth).lower()
         if cited_norm == auth_norm or cited_norm.startswith(auth_norm) or auth_norm.startswith(cited_norm):
             return True
     return False
@@ -310,13 +358,10 @@ def verify_citation_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[boo
     """
     Verify whether statutory citations and quote spans in the generated brief
     are grounded in retrieved laws.
-    Returns:
-        (is_grounded, ungrounded_items, advisory_markdown)
     """
     if not laws:
         return False, [], ""
 
-    # Aggregate authorized section numbers and full text corpus
     authorized_sections: Set[str] = set()
     corpus_text = ""
     for law in laws:
@@ -326,9 +371,7 @@ def verify_citation_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[boo
 
     corpus_lower = corpus_text.lower()
 
-    # 1. Extract cited section numbers in the generated brief
     raw_citations = extract_section_identifiers(analysis_text)
-    # Disregard single-digit heading numbers ("1", "2", "3", "4") that match outline formatting
     valid_citations = {s for s in raw_citations if len(s) > 1 or (s.isdigit() and int(s) > 10)}
 
     ungrounded_cites = []
@@ -336,14 +379,11 @@ def verify_citation_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[boo
         if not is_section_grounded(citation, authorized_sections):
             ungrounded_cites.append(citation)
 
-    # 2. Extract quotes (20+ chars) from analysis to verify quote-span overlap
     quotes = re.findall(r'["“]([^"”]{20,})["”]', analysis_text)
     ungrounded_quotes = []
     for q in quotes:
         clean_q = re.sub(r'\s+', ' ', q).strip().lower()
-        # Check if the quote or a substantial portion appears in the authority corpus
         if clean_q not in corpus_lower and len(clean_q) > 25:
-            # Check 70% word overlap
             q_words = set(clean_q.split())
             if q_words and sum(1 for w in q_words if w in corpus_lower) / len(q_words) < 0.6:
                 ungrounded_quotes.append(q[:60] + ("..." if len(q) > 60 else ""))
@@ -375,17 +415,576 @@ def verify_citation_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[boo
         return True, [], notice
 
 
-def generate_legal_analysis(case_facts: str, case_title: str, laws: List[Dict]) -> str:
-    """Generate structured legal analysis grounding client matter facts with retrieved laws."""
+def extract_propositional_claims(analysis_text: str) -> List[str]:
+    """
+    Decompose legal analysis prose into discrete propositional claim sentences.
+    Protects legal abbreviations from improper sentence splitting.
+    """
+    if not analysis_text:
+        return []
+
+    cleaned_lines = []
+    for line in analysis_text.splitlines():
+        line_s = line.strip()
+        if not line_s:
+            continue
+        if line_s.startswith(("#", "---", "===", ">", "|")):
+            continue
+        if line_s.lower().startswith(("disclaimer:", "note:", "ethical & regulatory notice:")):
+            continue
+        line_clean = re.sub(r'^[\*\-\d\.\)]+\s+', '', line_s)
+        if len(line_clean) > 15:
+            cleaned_lines.append(line_clean)
+
+    body_text = " ".join(cleaned_lines)
+    abbrs = {
+        r'\bCal\.\s*': 'CAL_DOT_',
+        r'\bCiv\.\s*': 'CIV_DOT_',
+        r'\bSec\.\s*': 'SEC_DOT_',
+        r'\bv\.\s*': 'VS_DOT_',
+        r'\be\.g\.,?\s*': 'EG_DOT_',
+        r'\bi\.e\.,?\s*': 'IE_DOT_',
+        r'\bNo\.\s*': 'NO_DOT_',
+        r'\bp\.\s*': 'P_DOT_',
+        r'§\s*': 'SEC_SYM_',
+    }
+    protected_text = body_text
+    for pattern, placeholder in abbrs.items():
+        protected_text = re.sub(pattern, placeholder, protected_text, flags=re.IGNORECASE)
+
+    raw_sentences = re.split(r'(?<=[.!?])\s+', protected_text)
+    claims = []
+    for s in raw_sentences:
+        restored = s
+        for _, placeholder in abbrs.items():
+            if placeholder == 'CAL_DOT_':
+                restored = restored.replace(placeholder, 'Cal. ')
+            elif placeholder == 'CIV_DOT_':
+                restored = restored.replace(placeholder, 'Civ. ')
+            elif placeholder == 'SEC_DOT_':
+                restored = restored.replace(placeholder, 'Sec. ')
+            elif placeholder == 'VS_DOT_':
+                restored = restored.replace(placeholder, 'v. ')
+            elif placeholder == 'EG_DOT_':
+                restored = restored.replace(placeholder, 'e.g., ')
+            elif placeholder == 'IE_DOT_':
+                restored = restored.replace(placeholder, 'i.e., ')
+            elif placeholder == 'NO_DOT_':
+                restored = restored.replace(placeholder, 'No. ')
+            elif placeholder == 'P_DOT_':
+                restored = restored.replace(placeholder, 'p. ')
+            elif placeholder == 'SEC_SYM_':
+                restored = restored.replace(placeholder, '§ ')
+
+        restored = restored.strip()
+        if len(restored) >= 20 and not restored.lower().startswith("kruschlaw mandates"):
+            claims.append(restored)
+
+    return claims
+
+
+def find_best_supporting_span(claim: str, doc_content: str) -> Tuple[float, str]:
+    """
+    Compute word-level overlap and extract the highest-scoring supporting sentence
+    or text span from the document content.
+    """
+    clean_claim = re.sub(r'[^a-zA-Z0-9\s]', ' ', claim.lower()).strip()
+    claim_words = {w for w in clean_claim.split() if len(w) > 3 and w not in {
+        "under", "shall", "must", "with", "from", "that", "this", "these", "their", "there", "which"
+    }}
+    if not claim_words:
+        return 0.0, ""
+
+    doc_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', doc_content) if len(s.strip()) > 15]
+    best_score = 0.0
+    best_span = ""
+
+    for sent in doc_sentences:
+        sent_clean = re.sub(r'[^a-zA-Z0-9\s]', ' ', sent.lower()).strip()
+        sent_words = set(sent_clean.split())
+        overlap = len(claim_words.intersection(sent_words))
+        score = overlap / len(claim_words)
+        if score > best_score:
+            best_score = score
+            best_span = sent
+
+    return best_score, best_span
+
+
+def verify_assertion_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[bool, List[Dict[str, Any]], str, Dict[str, Any]]:
+    """
+    Granular assertion-level grounding scanner.
+    Categorizes failure modes into:
+      - invented_citation
+      - wrong_proposition
+      - stale_law
+      - supported
+    """
     if not laws:
-        return (
+        return False, [], "No authorities retrieved to verify grounding.", {
+            "total_claims": 0, "supported_claims": 0, "unsupported_claims": 0,
+            "invented_citations": 0, "stale_law_citations": 0, "pass_rate": 0.0
+        }
+
+    authorized_sections: Set[str] = set()
+    law_by_sec: Dict[str, Dict] = {}
+    repealed_sections: Set[str] = set()
+    full_corpus = ""
+
+    for law_item in laws:
+        sec_str = law_item.get("section") or ""
+        title_str = law_item.get("title") or ""
+        content = law_item.get("content") or ""
+        full_corpus += f" {content}"
+
+        extracted = extract_section_identifiers(sec_str) | extract_section_identifiers(title_str)
+        if sec_str:
+            extracted.add(sec_str.replace("Section", "").strip())
+
+        for sec in extracted:
+            clean_sec = re.sub(r'[\(\)\[\]\s]', '', sec).lower()
+            authorized_sections.add(sec)
+            law_by_sec[clean_sec] = law_item
+            if law_item.get("repealed") or law_item.get("preempted_by"):
+                repealed_sections.add(clean_sec)
+
+    corpus_lower = full_corpus.lower()
+    claims = extract_propositional_claims(analysis_text)
+    claim_records: List[Dict[str, Any]] = []
+
+    invented_count = 0
+    wrong_prop_count = 0
+    stale_count = 0
+    supported_count = 0
+
+    for claim in claims:
+        claim_sections = extract_section_identifiers(claim)
+        valid_claim_secs = {s for s in claim_sections if len(s) > 1 or (s.isdigit() and int(s) > 10)}
+        quotes = re.findall(r'["“]([^"”]{20,})["”]', claim)
+        has_verbatim_quote = any(q.strip().lower() in corpus_lower for q in quotes)
+
+        if valid_claim_secs:
+            primary_sec = sorted(valid_claim_secs)[0]
+            sec_norm = re.sub(r'[\(\)\[\]\s]', '', primary_sec).lower()
+
+            matched_law = None
+            for auth_key, law_obj in law_by_sec.items():
+                if sec_norm == auth_key or sec_norm.startswith(auth_key) or auth_key.startswith(sec_norm):
+                    matched_law = law_obj
+                    break
+
+            if not matched_law and not is_section_grounded(primary_sec, authorized_sections):
+                invented_count += 1
+                claim_records.append({
+                    "claim": claim,
+                    "citation": primary_sec,
+                    "source_excerpt": "None (Citation not present in retrieved authorities)",
+                    "status": "invented_citation",
+                    "reason": f"Cited section '{primary_sec}' does not exist in retrieved authorities."
+                })
+            elif matched_law and (matched_law.get("repealed") or matched_law.get("preempted_by")):
+                stale_count += 1
+                preempt_note = f" Preempted by {matched_law.get('preempted_by')}." if matched_law.get("preempted_by") else ""
+                claim_records.append({
+                    "claim": claim,
+                    "citation": primary_sec,
+                    "source_excerpt": matched_law.get("content", "")[:180] + "...",
+                    "status": "stale_law",
+                    "reason": f"Cited provision '{primary_sec}' is marked REPEALED or SUPERSEDED.{preempt_note}"
+                })
+            else:
+                target_content = matched_law.get("content", "") if matched_law else full_corpus
+                overlap, best_span = find_best_supporting_span(claim, target_content)
+
+                if has_verbatim_quote or overlap >= 0.30:
+                    supported_count += 1
+                    claim_records.append({
+                        "claim": claim,
+                        "citation": primary_sec,
+                        "source_excerpt": best_span or (target_content[:180] + "..."),
+                        "status": "supported",
+                        "reason": f"Verified against {matched_law.get('title', 'authority') if matched_law else primary_sec}."
+                    })
+                else:
+                    wrong_prop_count += 1
+                    claim_records.append({
+                        "claim": claim,
+                        "citation": primary_sec,
+                        "source_excerpt": best_span or (target_content[:180] + "..."),
+                        "status": "wrong_proposition",
+                        "reason": f"Cited section '{primary_sec}' does not substantiate this claim (low textual overlap: {round(overlap*100)}%)."
+                    })
+        else:
+            overlap, best_span = find_best_supporting_span(claim, full_corpus)
+            if has_verbatim_quote or overlap >= 0.35:
+                supported_count += 1
+                claim_records.append({
+                    "claim": claim,
+                    "citation": "Retrieved Context",
+                    "source_excerpt": best_span,
+                    "status": "supported",
+                    "reason": "Supported by general factual/statutory context."
+                })
+            else:
+                if overlap >= 0.15:
+                    supported_count += 1
+                    claim_records.append({
+                        "claim": claim,
+                        "citation": "Synthesis",
+                        "source_excerpt": best_span,
+                        "status": "supported",
+                        "reason": "Contextual issue-spotting synthesis."
+                    })
+                else:
+                    wrong_prop_count += 1
+                    claim_records.append({
+                        "claim": claim,
+                        "citation": "Uncited",
+                        "source_excerpt": best_span or "No matching excerpt found.",
+                        "status": "wrong_proposition",
+                        "reason": "Assertion lacks supporting statutory text in retrieved corpus."
+                    })
+
+    total_claims = len(claim_records)
+    unsupported_total = invented_count + wrong_prop_count + stale_count
+    pass_rate = round((supported_count / total_claims) * 100, 1) if total_claims > 0 else 100.0
+
+    stats = {
+        "total_claims": total_claims,
+        "supported_claims": supported_count,
+        "unsupported_claims": unsupported_total,
+        "invented_citations": invented_count,
+        "wrong_propositions": wrong_prop_count,
+        "stale_law_citations": stale_count,
+        "pass_rate": pass_rate
+    }
+
+    advisories = []
+    if invented_count > 0:
+        advisories.append(f"> 🔴 **Invented Citations ({invented_count})**: Citations appeared in the brief that do not exist in the retrieved authorities.")
+    if stale_count > 0:
+        advisories.append(f"> 🟣 **Stale / Repealed Law ({stale_count})**: Cited authorities are marked repealed or preempted by higher law.")
+    if wrong_prop_count > 0:
+        advisories.append(f"> 🟠 **Unsupported Propositions ({wrong_prop_count})**: Assertions made with low factual or statutory overlap to cited sections.")
+
+    if advisories:
+        advisory_md = (
+            "\n\n---\n\n"
+            f"> ⚠️ **Assertion-Level Grounding Advisory (Pass Rate: {pass_rate}%)**:\n"
+            + "\n".join(advisories) +
+            "\n>\n"
+            "> KruschLaw requires independent attorney review of all unverified propositions prior to reliance."
+        )
+        is_grounded = False
+    else:
+        advisory_md = (
+            "\n\n---\n\n"
+            f"> 🛡️ **Assertion Grounding Verified (Pass Rate: 100%)**: All {total_claims} assertions and citations correspond directly to active retrieved authorities."
+        )
+        is_grounded = True
+
+    return is_grounded, claim_records, advisory_md, stats
+
+
+def retrieve_laws(
+    query_vector: Optional[List[float]] = None,
+    text_query: Optional[str] = None,
+    limit: Optional[int] = None,
+    state_filter: Optional[str] = None,
+    city_filter: Optional[str] = None,
+    topic_filter: Optional[str] = None,
+    exclude_repealed: bool = True,
+    hydrate_hierarchy: bool = True,
+    jurisdiction_rollup: bool = False,
+    expand_query: bool = False,
+    include_matter_corpus: bool = False,
+    db_session: Optional[Session] = None
+) -> List[Dict]:
+    """
+    Retrieve laws using hybrid search: combining pgvector cosine similarity
+    with full-text lexical ranking (tsvector on PostgreSQL, token match on SQLite),
+    authority ranking weights, temporal filtering, sibling/parent hierarchy auto-hydration,
+    and jurisdiction rollup (city inherits county and controlling state statutes unless preempted).
+    """
+    limit = limit or settings.DEFAULT_RETRIEVAL_LIMIT
+    close_session = False
+    db = db_session
+    if db is None:
+        db = SessionLocal()
+        close_session = True
+
+    try:
+        effective_text_query = text_query
+        if expand_query and text_query:
+            expanded_text, _ = expand_legal_query(text_query)
+            effective_text_query = expanded_text
+
+        if query_vector is None and text_query:
+            query_vector = get_embedding(text_query)
+
+        is_sqlite = db.bind.dialect.name == "sqlite"
+        query_conditions = ["is_substantive = 1" if is_sqlite else "is_substantive = true"]
+        params: Dict[str, Any] = {"limit": limit * 3}
+
+        # Corpus isolation: exclude client matter evidence from general statutory search
+        if not include_matter_corpus and (city_filter or "").lower() != "matter":
+            query_conditions.append("(jurisdiction != 'Matter Corpus' OR jurisdiction IS NULL)")
+
+        if exclude_repealed:
+            query_conditions.append("repealed = 0" if is_sqlite else "repealed = false")
+
+        if state_filter:
+            query_conditions.append("state = :state")
+            params["state"] = state_filter.strip().upper()
+        if city_filter:
+            if jurisdiction_rollup:
+                # Jurisdiction rollup: city inherits county and controlling state statutes unless preempted
+                rollup_cond = (
+                    "("
+                    "LOWER(city_or_county) = LOWER(:city) OR LOWER(city) = LOWER(:city) OR "
+                    "city IS NULL OR LOWER(city) = 'statewide' OR LOWER(city_or_county) = 'statewide' OR "
+                    "authority_class = 'controlling_statute' OR jurisdiction_level = 'state'"
+                    ")"
+                )
+                query_conditions.append(rollup_cond)
+            else:
+                query_conditions.append("(LOWER(city_or_county) = LOWER(:city) OR LOWER(city) = LOWER(:city))")
+            params["city"] = city_filter.strip()
+        if topic_filter:
+            query_conditions.append("LOWER(topic) = LOWER(:topic)")
+            params["topic"] = topic_filter.strip()
+
+        conditions_str = " AND ".join(query_conditions)
+
+        if is_sqlite:
+            sql = text(f"""
+                SELECT id, jurisdiction, state, city, county, city_or_county, topic, title, section, content,
+                       chunk_index, embedding, parent_section, hierarchy_level, authority_class,
+                       definitions_ref, exceptions_ref, repealed, preempted_by, effective_date, source_url
+                FROM laws_vectors
+                WHERE {conditions_str}
+            """)
+            rows = db.execute(sql, params).fetchall()
+            results = []
+            norm_q = math.sqrt(sum(a * a for a in query_vector)) if query_vector else 0.0
+            query_tokens = set(re.findall(r'\b[a-zA-Z0-9\.\-]{3,}\b', (effective_text_query or "").lower())) if effective_text_query else set()
+
+            for row in rows:
+                cos_sim = 0.0
+                if query_vector and row.embedding:
+                    try:
+                        emb = json.loads(row.embedding) if isinstance(row.embedding, str) else row.embedding
+                        dot = sum(a * b for a, b in zip(query_vector, emb))
+                        norm_e = math.sqrt(sum(b * b for b in emb))
+                        if norm_q > 0 and norm_e > 0:
+                            cos_sim = dot / (norm_q * norm_e)
+                    except Exception:
+                        cos_sim = 0.0
+
+                lex_score = 0.0
+                if query_tokens:
+                    doc_text = f"{row.title or ''} {row.section or ''} {row.content or ''}".lower()
+                    matches = sum(1 for t in query_tokens if t in doc_text)
+                    lex_score = min(1.0, matches / max(1, len(query_tokens)))
+
+                auth_weight = AUTHORITY_WEIGHTS.get(getattr(row, "authority_class", "municipal_ordinance"), 1.0)
+                if getattr(row, "preempted_by", None):
+                    auth_weight *= 0.5  # Penalize preempted local provisions
+                base_sim = (0.7 * cos_sim) + (0.3 * lex_score) if text_query and query_vector else (cos_sim or lex_score)
+                weighted_sim = float(base_sim * auth_weight)
+
+                results.append({
+                    "id": row.id,
+                    "jurisdiction": row.jurisdiction,
+                    "state": row.state,
+                    "city": row.city or row.city_or_county,
+                    "county": row.county,
+                    "city_or_county": row.city_or_county or row.city,
+                    "topic": row.topic,
+                    "title": row.title,
+                    "section": row.section,
+                    "content": row.content,
+                    "chunk_index": row.chunk_index,
+                    "similarity": weighted_sim,
+                    "parent_section": row.parent_section,
+                    "hierarchy_level": row.hierarchy_level,
+                    "authority_class": row.authority_class,
+                    "definitions_ref": row.definitions_ref,
+                    "exceptions_ref": row.exceptions_ref,
+                    "repealed": bool(row.repealed),
+                    "preempted_by": row.preempted_by,
+                    "effective_date": str(row.effective_date) if row.effective_date else None,
+                    "source_url": row.source_url
+                })
+
+            results.sort(key=lambda x: x["similarity"], reverse=True)
+        else:
+            vec_str = '[' + ','.join(str(v) for v in query_vector) + ']' if query_vector else None
+            params["vec"] = vec_str
+            clean_text_q = re.sub(r'[^a-zA-Z0-9\s]', ' ', effective_text_query or "").strip()
+            params["text_q"] = clean_text_q if clean_text_q else ""
+
+            if clean_text_q and vec_str:
+                sql = text(f"""
+                    WITH vec_matches AS (
+                        SELECT id, (1 - (embedding <=> CAST(:vec AS vector))) AS cos_sim,
+                               ROW_NUMBER() OVER (ORDER BY embedding <=> CAST(:vec AS vector)) as v_rank
+                        FROM laws_vectors
+                        WHERE {conditions_str} AND embedding IS NOT NULL
+                        LIMIT 50
+                    ),
+                    lex_matches AS (
+                        SELECT id, ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) as l_score,
+                               ROW_NUMBER() OVER (ORDER BY ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) DESC) as l_rank
+                        FROM laws_vectors
+                        WHERE {conditions_str} AND to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')) @@ plainto_tsquery('english', :text_q)
+                        LIMIT 50
+                    )
+                    SELECT l.id, l.jurisdiction, l.state, l.city, l.county, l.city_or_county, l.topic, l.title, l.section, l.content, l.chunk_index,
+                           l.parent_section, l.hierarchy_level, l.authority_class, l.definitions_ref, l.exceptions_ref, l.repealed, l.preempted_by, l.effective_date, l.source_url,
+                           COALESCE(1.0 / (60 + v.v_rank), 0.0) + COALESCE(1.0 / (60 + lex.l_rank), 0.0) AS hybrid_score,
+                           COALESCE(v.cos_sim, 0.0) as similarity
+                    FROM laws_vectors l
+                    LEFT JOIN vec_matches v ON l.id = v.id
+                    LEFT JOIN lex_matches lex ON l.id = lex.id
+                    WHERE v.id IS NOT NULL OR lex.id IS NOT NULL
+                    ORDER BY hybrid_score DESC
+                    LIMIT :limit
+                """)
+            elif vec_str:
+                sql = text(f"""
+                    SELECT id, jurisdiction, state, city, county, city_or_county, topic, title, section, content, chunk_index,
+                           parent_section, hierarchy_level, authority_class, definitions_ref, exceptions_ref, repealed, preempted_by, effective_date, source_url,
+                           (1 - (embedding <=> CAST(:vec AS vector))) AS similarity
+                    FROM laws_vectors
+                    WHERE {conditions_str} AND embedding IS NOT NULL
+                    ORDER BY embedding <=> CAST(:vec AS vector)
+                    LIMIT :limit
+                """)
+            else:
+                sql = text(f"""
+                    SELECT id, jurisdiction, state, city, county, city_or_county, topic, title, section, content, chunk_index,
+                           parent_section, hierarchy_level, authority_class, definitions_ref, exceptions_ref, repealed, preempted_by, effective_date, source_url,
+                           ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) AS similarity
+                    FROM laws_vectors
+                    WHERE {conditions_str} AND to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')) @@ plainto_tsquery('english', :text_q)
+                    ORDER BY similarity DESC
+                    LIMIT :limit
+                """)
+
+            rows = db.execute(sql, params).fetchall()
+            results = []
+            for row in rows:
+                auth_weight = AUTHORITY_WEIGHTS.get(getattr(row, "authority_class", "municipal_ordinance"), 1.0)
+                raw_sim = float(getattr(row, "similarity", 0.0) or 0.0)
+                results.append({
+                    "id": row.id,
+                    "jurisdiction": row.jurisdiction,
+                    "state": row.state,
+                    "city": row.city or row.city_or_county,
+                    "county": row.county,
+                    "city_or_county": row.city_or_county or row.city,
+                    "topic": row.topic,
+                    "title": row.title,
+                    "section": row.section,
+                    "content": row.content,
+                    "chunk_index": getattr(row, "chunk_index", 0),
+                    "similarity": round(raw_sim * auth_weight, 4),
+                    "parent_section": getattr(row, "parent_section", None),
+                    "hierarchy_level": getattr(row, "hierarchy_level", "section"),
+                    "authority_class": getattr(row, "authority_class", "municipal_ordinance"),
+                    "definitions_ref": getattr(row, "definitions_ref", None),
+                    "exceptions_ref": getattr(row, "exceptions_ref", None),
+                    "repealed": bool(getattr(row, "repealed", False)),
+                    "preempted_by": getattr(row, "preempted_by", None),
+                    "effective_date": str(getattr(row, "effective_date", "")) if getattr(row, "effective_date", None) else None,
+                    "source_url": getattr(row, "source_url", None)
+                })
+
+        # Parent-Child deduplication
+        seen_sections: Set[Tuple[str, str, str]] = set()
+        deduped: List[Dict] = []
+        for r in results:
+            sec_key = (r["jurisdiction"], r.get("state") or "", r.get("section") or r.get("title") or str(r["id"]))
+            if sec_key not in seen_sections:
+                seen_sections.add(sec_key)
+                deduped.append(r)
+            if len(deduped) >= limit:
+                break
+
+        # Sibling / Hierarchy auto-hydration
+        if hydrate_hierarchy and deduped:
+            refs_to_fetch = set()
+            for r in deduped:
+                if r.get("definitions_ref"):
+                    refs_to_fetch.add((r["jurisdiction"], r["definitions_ref"]))
+                if r.get("exceptions_ref"):
+                    refs_to_fetch.add((r["jurisdiction"], r["exceptions_ref"]))
+
+            existing_sections = {d.get("section") for d in deduped}
+            for jur, ref_sec in refs_to_fetch:
+                if ref_sec not in existing_sections:
+                    sibling = db.query(LawVector).filter(
+                        LawVector.jurisdiction == jur,
+                        (LawVector.section == ref_sec) | (LawVector.section == f"Section {ref_sec}")
+                    ).first()
+                    if sibling:
+                        deduped.append({
+                            "id": sibling.id,
+                            "jurisdiction": sibling.jurisdiction,
+                            "state": sibling.state,
+                            "city": sibling.city or sibling.city_or_county,
+                            "county": sibling.county,
+                            "city_or_county": sibling.city_or_county or sibling.city,
+                            "topic": sibling.topic,
+                            "title": f"[Referenced Hierarchy] {sibling.title}",
+                            "section": sibling.section,
+                            "content": sibling.content,
+                            "chunk_index": sibling.chunk_index,
+                            "similarity": 0.95,
+                            "parent_section": sibling.parent_section,
+                            "hierarchy_level": sibling.hierarchy_level,
+                            "authority_class": sibling.authority_class,
+                            "definitions_ref": sibling.definitions_ref,
+                            "exceptions_ref": sibling.exceptions_ref,
+                            "repealed": bool(sibling.repealed),
+                            "preempted_by": sibling.preempted_by,
+                            "effective_date": str(sibling.effective_date) if sibling.effective_date else None,
+                            "source_url": sibling.source_url,
+                            "is_hydrated_context": True
+                        })
+                        existing_sections.add(ref_sec)
+
+        return deduped
+    except Exception as e:
+        logger.error(f"Vector search retrieval error: {e}", exc_info=True)
+        raise RetrievalError(f"Database statutory retrieval failed: {str(e)}") from e
+    finally:
+        if close_session:
+            db.close()
+
+
+def generate_legal_analysis(
+    case_facts: str,
+    case_title: str,
+    laws: List[Dict],
+    case_id: Optional[int] = None,
+    db_session: Optional[Session] = None
+) -> Tuple[str, Dict[str, Any], List[Dict[str, Any]]]:
+    """
+    Generate structured legal analysis grounding client matter facts with retrieved laws.
+    Executes assertion-level verification, persists GroundingReport, and returns
+    (full_response_text, grounding_stats, claim_records).
+    """
+    if not laws:
+        advisory = (
             "### ⚠️ No Relevant Authorities Found\n\n"
             "No relevant statutes or ordinances were found in the database matching the matter facts. "
             "Please ensure you have ingested applicable municipal or state datasets.\n\n"
             f"> **Note**: {UPL_DISCLAIMER}"
         )
+        return advisory, {"pass_rate": 0.0, "total_claims": 0}, []
 
-    # Format retrieved legal citations
     context_blocks = []
     for idx, law in enumerate(laws, 1):
         loc = []
@@ -393,12 +992,21 @@ def generate_legal_analysis(case_facts: str, case_title: str, laws: List[Dict]) 
             loc.append(f"State: {law['state']}")
         if law.get("city_or_county"):
             loc.append(f"Jurisdiction: {law['city_or_county']}")
-        loc_str = ", ".join(loc) if loc else "Federal / General"
-        
+        loc_str = ", ".join(loc) if loc else "General"
         sim_pct = round(law.get("similarity", 0.0) * 100, 1)
+
+        hierarchy_info = []
+        if law.get("authority_class"):
+            hierarchy_info.append(f"Authority: {law['authority_class']}")
+        if law.get("hierarchy_level"):
+            hierarchy_info.append(f"Level: {law['hierarchy_level']}")
+        if law.get("effective_date"):
+            hierarchy_info.append(f"In Force: {str(law['effective_date'])[:10]}")
+        h_str = f" [{', '.join(hierarchy_info)}]" if hierarchy_info else ""
+
         block = (
-            f"[{idx}] {law.get('title', 'Unknown Title')} — {law.get('section', 'General')}\n"
-            f"Authority: {law.get('jurisdiction', 'Municipal Code')} ({loc_str}) [Relevance Match: {sim_pct}%]\n"
+            f"[{idx}] {law.get('title', 'Unknown Title')} — {law.get('section', 'General')}{h_str}\n"
+            f"Jurisdiction: {law.get('jurisdiction', 'Municipal Code')} ({loc_str}) [Relevance Match: {sim_pct}%]\n"
             f"Text:\n{law.get('content', '').strip()}\n"
         )
         context_blocks.append(block)
@@ -449,21 +1057,138 @@ Draft the legal analysis following the required headings. Conclude with an ethic
             )
             resp.raise_for_status()
             analysis_text = resp.json().get("response", "").strip()
-            
-            # Grounding verification guardrail
-            _, _, grounding_notice = verify_citation_grounding(analysis_text, laws)
 
-            # Append grounding notice and formal UPL disclaimer
+            is_grounded, claim_records, grounding_notice, stats = verify_assertion_grounding(analysis_text, laws)
+
+            db = db_session
+            own_session = False
+            if db is None:
+                db = SessionLocal()
+                own_session = True
+
+            try:
+                if case_id:
+                    report_id = str(uuid.uuid4())
+                    report = GroundingReport(
+                        id=report_id,
+                        case_id=case_id,
+                        total_claims=stats.get("total_claims", 0),
+                        supported_claims=stats.get("supported_claims", 0),
+                        unsupported_claims=stats.get("unsupported_claims", 0),
+                        invented_citations=stats.get("invented_citations", 0),
+                        stale_law_citations=stats.get("stale_law_citations", 0),
+                        pass_rate=stats.get("pass_rate", 100.0),
+                        claims_json=json.dumps(claim_records),
+                        advisory_markdown=grounding_notice
+                    )
+                    db.add(report)
+                    db.commit()
+            except Exception as pe:
+                logger.warning(f"Could not persist GroundingReport: {pe}")
+            finally:
+                if own_session:
+                    db.close()
+
             full_response = f"{analysis_text}{grounding_notice}\n\n---\n\n> ⚖️ **Ethical & Regulatory Notice**:\n> {UPL_DISCLAIMER}"
-            return full_response
-            
+            return full_response, stats, claim_records
+
     except httpx.ConnectError as e:
-        return (
+        msg = (
             f"### ❌ Inference Connection Error\n\n"
             f"Could not connect to the local LLM at `{settings.OLLAMA_BASE_URL}`. "
             f"Please verify that Ollama is active and that the model `{settings.OLLAMA_LLM_MODEL}` is loaded.\n\n"
             f"**Error Details**: {e}"
         )
+        return msg, {"pass_rate": 0.0, "total_claims": 0}, []
     except Exception as e:
-        return f"### ❌ Error Generating Analysis\n\nAn unexpected error occurred during analysis generation: {str(e)}"
+        msg = f"### ❌ Error Generating Analysis\n\nAn unexpected error occurred during analysis generation: {str(e)}"
+        return msg, {"pass_rate": 0.0, "total_claims": 0}, []
+
+
+def retrieve_matter_evidence(
+    matter_id: int,
+    text_query: Optional[str] = None,
+    limit: int = 5,
+    doc_type: Optional[str] = None,
+    db_session: Optional[Session] = None
+) -> List[Dict[str, Any]]:
+    """
+    Search client discovery documents and case exhibits strictly within a single matter.
+    Guarantees sovereign client data isolation.
+    """
+    close_session = False
+    db = db_session
+    if db is None:
+        db = SessionLocal()
+        close_session = True
+
+    try:
+        query = db.query(MatterEvidence).filter(MatterEvidence.matter_id == matter_id)
+        if doc_type:
+            query = query.filter(MatterEvidence.doc_type == doc_type)
+
+        rows = query.all()
+        if not rows:
+            return []
+
+        if not text_query:
+            return [
+                {
+                    "id": r.id,
+                    "matter_id": r.matter_id,
+                    "filename": r.filename,
+                    "doc_type": r.doc_type,
+                    "page_number": r.page_number,
+                    "section_locator": r.section_locator,
+                    "chunk_index": r.chunk_index,
+                    "content": r.content,
+                    "similarity": 1.0,
+                    "created_at": r.created_at.isoformat() if r.created_at else None
+                }
+                for r in rows[:limit]
+            ]
+
+        # Score matching
+        q_vec = get_embedding(text_query)
+        norm_q = math.sqrt(sum(a * a for a in q_vec)) if q_vec else 0.0
+        q_tokens = set(re.findall(r'\b[a-zA-Z0-9\.\-]{3,}\b', text_query.lower()))
+
+        scored_results = []
+        for r in rows:
+            cos_sim = 0.0
+            if q_vec and r.embedding:
+                try:
+                    emb = json.loads(r.embedding) if isinstance(r.embedding, str) else r.embedding
+                    dot = sum(a * b for a, b in zip(q_vec, emb))
+                    norm_e = math.sqrt(sum(b * b for b in emb))
+                    if norm_q > 0 and norm_e > 0:
+                        cos_sim = dot / (norm_q * norm_e)
+                except Exception:
+                    cos_sim = 0.0
+
+            lex_score = 0.0
+            if q_tokens:
+                doc_text = f"{r.filename} {r.section_locator or ''} {r.content}".lower()
+                matches = sum(1 for t in q_tokens if t in doc_text)
+                lex_score = min(1.0, matches / max(1, len(q_tokens)))
+
+            score = (0.7 * cos_sim) + (0.3 * lex_score)
+            scored_results.append({
+                "id": r.id,
+                "matter_id": r.matter_id,
+                "filename": r.filename,
+                "doc_type": r.doc_type,
+                "page_number": r.page_number,
+                "section_locator": r.section_locator,
+                "chunk_index": r.chunk_index,
+                "content": r.content,
+                "similarity": round(float(score), 4),
+                "created_at": r.created_at.isoformat() if r.created_at else None
+            })
+
+        scored_results.sort(key=lambda x: x["similarity"], reverse=True)
+        return scored_results[:limit]
+    finally:
+        if close_session:
+            db.close()
 

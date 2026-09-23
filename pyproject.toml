@@ -54,3 +54,8 @@ exclude = [".venv", "__pycache__"]
 [tool.ruff.lint]
 select = ["E", "F", "W"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402", "F401", "F841"]
+"scripts/*" = ["E402", "F401"]
+"alembic/*" = ["E402"]

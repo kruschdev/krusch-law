@@ -59,5 +59,40 @@ services:
     depends_on:
       - backend
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: kruschlaw-worker
+    restart: unless-stopped
+    command: ["python", "-m", "src.backend.worker"]
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-kruschlaw}:${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD must be defined in your .env file}@db:5432/${POSTGRES_DB:-kruschlaw_db}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_EMBED_HOST=${OLLAMA_EMBED_HOST:-http://host.docker.internal:11434}
+      - OLLAMA_EMBED_MODEL=${OLLAMA_EMBED_MODEL:-bge-large}
+      - KRUSCH_NEXUS_PATH=${KRUSCH_NEXUS_PATH:-/nexus/src}
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ${KRUSCH_NEXUS_DIR:-../krusch-nexus}:/nexus:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: kruschlaw-ollama
+    restart: unless-stopped
+    profiles:
+      - with-ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - kruschlaw_ollama_data:/root/.ollama
+
 volumes:
   kruschlaw_db_data:
+  kruschlaw_ollama_data:
