@@ -17,7 +17,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .config import settings, is_loopback_or_private_host
 from .db import (
-    init_db, SessionLocal, Case, IngestJob, GroundingReport, AuditLog, MatterEvidence
+    init_db, SessionLocal, Case, IngestJob, GroundingReport, AuditLog, MatterEvidence,
+    StatuteCodeTraceability, LawVector
 )
 from .rag import (
     get_embedding, retrieve_laws, generate_legal_analysis,
@@ -298,6 +299,36 @@ class ExportDocxRequest(BaseModel):
     retrieved_laws: Optional[List[Dict[str, Any]]] = None
 
 
+class BriefDraftRequest(BaseModel):
+    facts: Optional[str] = None
+    case_id: Optional[int] = None
+    title: Optional[str] = None
+    state: Optional[str] = "CA"
+    city: Optional[str] = "Oakland"
+    matter_facts: Optional[Dict[str, Any]] = None
+
+
+class VerifyAssertionsRequest(BaseModel):
+    draft_text: str
+    laws: Optional[List[Dict[str, Any]]] = None
+    matter_facts: Optional[Dict[str, Any]] = None
+    as_of_date: Optional[str] = None
+
+
+class TraceabilityItem(BaseModel):
+    id: int
+    statute_id: str
+    symbol_id: str
+    repository: str
+    file_path: str
+    doctrine: str
+    status: str
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    statutory_digest: Optional[str] = None
+    notes: Optional[str] = None
+
+
 # --- API Endpoints ---
 
 @app.get("/health", tags=["System"])
@@ -576,6 +607,209 @@ def search_laws(
     except Exception as e:
         logger.error(f"Unexpected search error: {e}")
         raise HTTPException(status_code=500, detail=f"Retrieval error: {str(e)}")
+
+
+@app.get("/api/laws/search", tags=["Laws"])
+def search_laws_alias(
+    q: Optional[str] = Query(None, description="Natural language search inquiry"),
+    limit: Optional[int] = Query(5, ge=1, le=20, description="Max results to return"),
+    state: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    topic: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """Bridge endpoint for companion context agents querying statutory search."""
+    try:
+        results = retrieve_laws(
+            text_query=q,
+            limit=limit,
+            state_filter=state,
+            city_filter=city,
+            topic_filter=topic,
+            db_session=db
+        )
+        return {"results": results}
+    except Exception as e:
+        logger.error(f"Search laws alias error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/laws/section", tags=["Laws"])
+def get_law_section(
+    section: str = Query(..., description="Section identifier e.g. 'OMC 8.22.360'"),
+    jurisdiction: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """Retrieve unabridged statutory text, parent/child relationships, and exception clauses."""
+    clean_sec = section.strip()
+    query = db.query(LawVector).filter(
+        (LawVector.section == clean_sec) | 
+        (LawVector.section == f"Section {clean_sec}") |
+        (LawVector.section.like(f"%{clean_sec}%"))
+    )
+    if jurisdiction:
+        query = query.filter(LawVector.jurisdiction == jurisdiction)
+    law = query.first()
+    if not law:
+        raise HTTPException(status_code=404, detail=f"Section '{section}' not found in sovereign corpus.")
+
+    return {
+        "section": law.section,
+        "title": law.title,
+        "chapter": law.parent_section or "",
+        "article": law.hierarchy_level or "section",
+        "authority_tier": law.authority_class or "controlling_statute",
+        "authority_weight": 1.0,
+        "body": law.content,
+        "content": law.content,
+        "status": law.status,
+        "effective_date": law.effective_date.isoformat() if law.effective_date else None,
+        "repealed": law.repealed
+    }
+
+
+@app.post("/api/verify/assertions", tags=["Verification"])
+def verify_assertions_endpoint(
+    payload: VerifyAssertionsRequest,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Two-pass assertion grounding verifier:
+      Pass A: Cheap deterministic mechanical verification.
+      Pass B: Propositional entailment with numeric, negation, and statutory exception checks.
+    """
+    laws = payload.laws
+    if not laws:
+        laws = retrieve_laws(text_query=payload.draft_text, limit=5, db_session=db)
+
+    is_g, claims, notice, stats = verify_assertion_grounding(
+        analysis_text=payload.draft_text,
+        laws=laws,
+        matter_facts=payload.matter_facts,
+        as_of_date=payload.as_of_date
+    )
+
+    return {
+        "is_grounded": is_g,
+        "claims": claims,
+        "notice": notice,
+        "stats": stats,
+        "verified_draft": stats.get("verified_draft", payload.draft_text)
+    }
+
+
+@app.post("/api/cases/brief", tags=["Consultation"])
+def draft_brief_endpoint(
+    payload: BriefDraftRequest,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Stages an air-gapped legal brief with mandatory assertion-level grounding.
+    Refuses to draft if governing authorities are absent. Hard verifier gate.
+    """
+    facts = payload.facts
+    title = payload.title or "Preliminary Legal Consultation"
+    case_id = payload.case_id
+
+    if not facts and case_id:
+        case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
+        if case:
+            facts = case.facts
+            title = case.title
+
+    if not facts:
+        raise HTTPException(status_code=400, detail="Factual narrative or valid case_id is required.")
+
+    # Retrieve governing authorities
+    matched_laws = retrieve_laws(
+        text_query=facts,
+        limit=5,
+        state_filter=payload.state,
+        city_filter=payload.city,
+        matter_facts=payload.matter_facts,
+        db_session=db
+    )
+
+    if not matched_laws:
+        return {
+            "status": "CANNOT_DRAFT_WITHOUT_AUTHORITIES",
+            "message": f"No governing authorities found in the local corpus for {payload.city}, {payload.state}."
+        }
+
+    # Generate analysis
+    res = generate_legal_analysis(
+        case_facts=facts,
+        case_title=title,
+        laws=matched_laws,
+        case_id=case_id,
+        db_session=db
+    )
+
+    analysis_text = res[0] if isinstance(res, tuple) else str(res)
+
+    # Hard gate: Verify assertion grounding
+    is_g, claims, notice, stats = verify_assertion_grounding(
+        analysis_text=analysis_text,
+        laws=matched_laws,
+        matter_facts=payload.matter_facts
+    )
+
+    verified_draft = stats.get("verified_draft", analysis_text)
+
+    return {
+        "status": "COMPLETED",
+        "brief_markdown": verified_draft,
+        "raw_analysis": analysis_text,
+        "grounding_audit": {
+            "supported_count": stats.get("supported_claims", 0),
+            "divergent_count": stats.get("wrong_propositions", 0) + stats.get("contradicted_claims", 0),
+            "stale_count": stats.get("stale_law_citations", 0),
+            "refused_count": stats.get("refused_claims_count", 0),
+            "pass_rate": stats.get("pass_rate", 100.0),
+            "is_grounded": is_g
+        },
+        "is_grounded": is_g
+    }
+
+
+@app.get("/api/compliance/traceability", response_model=List[TraceabilityItem], tags=["Compliance & Traceability"])
+def get_code_traceability(
+    doctrine: Optional[str] = Query(None, description="Doctrine filter (e.g. 'Security Deposits', 'Just Cause')"),
+    status: Optional[str] = Query(None, description="Status filter (e.g. 'manually_verified')"),
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Curated statute-to-code traceability registry with attorney review dates and attestation notes.
+    Provides verifiable compliance invariants for California residential housing doctrine.
+    """
+    query = db.query(StatuteCodeTraceability)
+    if doctrine:
+        query = query.filter(StatuteCodeTraceability.doctrine == doctrine)
+    if status:
+        query = query.filter(StatuteCodeTraceability.status == status)
+
+    rows = query.order_by(StatuteCodeTraceability.id.asc()).all()
+    return [
+        TraceabilityItem(
+            id=r.id,
+            statute_id=r.statute_id,
+            symbol_id=r.symbol_id,
+            repository=r.repository,
+            file_path=r.file_path,
+            doctrine=r.doctrine,
+            status=r.status,
+            reviewed_by=r.reviewed_by,
+            reviewed_at=r.reviewed_at.isoformat() if r.reviewed_at else None,
+            statutory_digest=r.statutory_digest,
+            notes=r.notes
+        )
+        for r in rows
+    ]
 
 
 @app.post("/api/ingest/mock", response_model=IngestResponse, tags=["Ingestion"])

@@ -238,6 +238,28 @@ class MatterEvidence(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class StatuteCodeTraceability(Base):
+    """
+    Manually curated statute-to-code traceability table with review dates and attorney attestations.
+    Replaces fragile docstring/comment parsing with deterministic binding invariants.
+    """
+    __tablename__ = "statute_code_traceability"
+
+    id = Column(Integer, primary_key=True, index=True)
+    statute_id = Column(String(100), nullable=False, index=True)         # e.g., "Cal. Civ. Code § 1950.5(c)"
+    symbol_id = Column(String(255), nullable=False, index=True)           # e.g., "deposit_validator.validate_deposit_cap"
+    repository = Column(String(100), nullable=False, default="krusch-law")
+    file_path = Column(String(255), nullable=False)
+    doctrine = Column(String(100), nullable=False, default="Security Deposits") # Security Deposits, Habitability, Just Cause
+    status = Column(String(50), nullable=False, default="manually_verified")   # manually_verified, suggested_candidate, deprecated
+    reviewed_by = Column(String(100), nullable=True)                     # e.g., "attorney:krusch"
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    statutory_digest = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 def init_db(target_engine=None):
     """Initialize database tables, pgvector extension, HNSW vector indexes, and GIN full-text index."""
     eng = target_engine or engine

@@ -6,12 +6,12 @@ import json
 import hashlib
 import logging
 from typing import Optional, List, Dict, Tuple, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import pandas as pd
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .db import SessionLocal, LawVector, IngestJob, MatterEvidence
+from .db import SessionLocal, LawVector, IngestJob, MatterEvidence, StatuteCodeTraceability
 from .rag import get_embeddings_batch
 
 logger = logging.getLogger("kruschlaw.ingest")
@@ -548,13 +548,107 @@ def chunk_statute_content(
             "source_hash": h,
             "chunk_index": chunk_idx
         })
-
     return chunks
+
+
+# ---------------------------------------------------------------------------
+# STATUTE-TO-CODE TRACEABILITY GOLD FIXTURES (California Residential Housing)
+#
+# Curated doctrine vertical: Habitability, Security Deposits, Just Cause Notices.
+# Models explicit attorney review dates, bound symbols, and statutory digests.
+# Replaces docstrings/comments with auditable, versioned database records.
+# ---------------------------------------------------------------------------
+SEED_STATUTE_CODE_TRACEABILITY: List[Dict[str, Any]] = [
+    {
+        "statute_id": "Cal. Civ. Code § 1950.5(c)",
+        "symbol_id": "deposit_validator.validate_deposit_cap",
+        "repository": "krusch-law",
+        "file_path": "src/backend/rag.py",
+        "doctrine": "Security Deposits",
+        "status": "manually_verified",
+        "reviewed_by": "attorney:krusch",
+        "reviewed_at": datetime(2024, 7, 2, tzinfo=timezone.utc),
+        "statutory_digest": "AB 12 strict 1-month security deposit cap on residential units.",
+        "notes": "Verified against Stats. 2023, ch. 290. Prohibits 2-month unfurnished deposits."
+    },
+    {
+        "statute_id": "Cal. Civ. Code § 1950.5(g)",
+        "symbol_id": "deposit_accounting.generate_itemized_disposition",
+        "repository": "krusch-law",
+        "file_path": "src/backend/rag.py",
+        "doctrine": "Security Deposits",
+        "status": "manually_verified",
+        "reviewed_by": "attorney:krusch",
+        "reviewed_at": datetime(2024, 7, 2, tzinfo=timezone.utc),
+        "statutory_digest": "Mandatory 21 calendar day post-tenancy itemized security accounting.",
+        "notes": "Failure to provide itemization subjects landlord to statutory damages."
+    },
+    {
+        "statute_id": "Cal. Civ. Code § 1941.1",
+        "symbol_id": "habitability_auditor.verify_substandard_conditions",
+        "repository": "krusch-law",
+        "file_path": "src/backend/rag.py",
+        "doctrine": "Habitability",
+        "status": "manually_verified",
+        "reviewed_by": "attorney:krusch",
+        "reviewed_at": datetime(2024, 1, 10, tzinfo=timezone.utc),
+        "statutory_digest": "Affirmative duty to provide habitable premises: waterproof roof/walls, hot water, heating.",
+        "notes": "Substandard premises bar rent collection under Section 1942.4."
+    },
+    {
+        "statute_id": "Cal. Civ. Code § 1946.2",
+        "symbol_id": "just_cause_adviser.evaluate_tenancy_termination",
+        "repository": "krusch-law",
+        "file_path": "src/backend/rag.py",
+        "doctrine": "Just Cause",
+        "status": "manually_verified",
+        "reviewed_by": "attorney:krusch",
+        "reviewed_at": datetime(2024, 1, 10, tzinfo=timezone.utc),
+        "statutory_digest": "Tenant Protection Act of 2019 mandatory at-fault and no-fault just cause eviction.",
+        "notes": "Applies after 12 continuous months of occupancy."
+    },
+    {
+        "statute_id": "Cal. Civ. Code § 1946.2(e)",
+        "symbol_id": "just_cause_adviser.check_owner_occupied_exemption",
+        "repository": "krusch-law",
+        "file_path": "src/backend/rag.py",
+        "doctrine": "Just Cause",
+        "status": "manually_verified",
+        "reviewed_by": "attorney:krusch",
+        "reviewed_at": datetime(2024, 1, 10, tzinfo=timezone.utc),
+        "statutory_digest": "Statutory exemptions from AB 1482: owner-occupied duplex and single-family home.",
+        "notes": "Owner must occupy one unit at tenancy inception and continuously throughout."
+    },
+    {
+        "statute_id": "Oakland Municipal Code § 8.22.030",
+        "symbol_id": "rap_notice_checker.verify_required_disclosures",
+        "repository": "krusch-law",
+        "file_path": "src/backend/rag.py",
+        "doctrine": "Rent Adjustment Program",
+        "status": "manually_verified",
+        "reviewed_by": "attorney:krusch",
+        "reviewed_at": datetime(2024, 3, 15, tzinfo=timezone.utc),
+        "statutory_digest": "Mandatory written notice of Oakland Rent Adjustment Program at inception and rent hike.",
+        "notes": "Failure to serve notice voids any proposed rent increase."
+    },
+    {
+        "statute_id": "Alameda County Code § 6.04.050",
+        "symbol_id": "county_island_router.route_unincorporated_tenancy",
+        "repository": "krusch-law",
+        "file_path": "src/backend/rag.py",
+        "doctrine": "Jurisdiction Boundary",
+        "status": "manually_verified",
+        "reviewed_by": "attorney:krusch",
+        "reviewed_at": datetime(2024, 3, 15, tzinfo=timezone.utc),
+        "statutory_digest": "Unincorporated Alameda County island parcels governed by county/state, not municipal OMC.",
+        "notes": "Fact-pattern gate for Castro Valley, San Lorenzo, and Ashland parcels."
+    }
+]
 
 
 def ingest_mock_data(db: Optional[Session] = None) -> int:
     """
-    Ingest versioned California legal graph fixtures into the database.
+    Ingest versioned California legal graph fixtures and statute-code traceability into the database.
     Populates hierarchy, authority ranking, dates, and definitions/exceptions references.
     """
     own_session = False
@@ -621,6 +715,26 @@ def ingest_mock_data(db: Optional[Session] = None) -> int:
                 )
                 db.add(law_vec)
                 inserted += 1
+
+        # Seed statute-to-code traceability table
+        for trace in SEED_STATUTE_CODE_TRACEABILITY:
+            trace_exists = db.query(StatuteCodeTraceability).filter_by(
+                statute_id=trace["statute_id"],
+                symbol_id=trace["symbol_id"]
+            ).first()
+            if not trace_exists:
+                db.add(StatuteCodeTraceability(
+                    statute_id=trace["statute_id"],
+                    symbol_id=trace["symbol_id"],
+                    repository=trace.get("repository", "krusch-law"),
+                    file_path=trace["file_path"],
+                    doctrine=trace.get("doctrine", "Security Deposits"),
+                    status=trace.get("status", "manually_verified"),
+                    reviewed_by=trace.get("reviewed_by"),
+                    reviewed_at=trace.get("reviewed_at"),
+                    statutory_digest=trace.get("statutory_digest"),
+                    notes=trace.get("notes")
+                ))
 
         db.commit()
         logger.info(f"Mock ingestion completed: {inserted} records inserted.")

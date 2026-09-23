@@ -733,10 +733,13 @@ def verify_assertion_grounding(
             sec_norm = re.sub(r'[\(\)\[\]\s]', '', primary_sec).lower()
 
             matched_law = None
-            for auth_key, law_obj in law_by_sec.items():
-                if sec_norm == auth_key or sec_norm.startswith(auth_key) or auth_key.startswith(sec_norm):
-                    matched_law = law_obj
-                    break
+            if sec_norm in law_by_sec:
+                matched_law = law_by_sec[sec_norm]
+            else:
+                for auth_key, law_obj in law_by_sec.items():
+                    if sec_norm.startswith(auth_key) or auth_key.startswith(sec_norm):
+                        matched_law = law_obj
+                        break
 
             # Pass A: Mechanical Verification
             pass_a_ok, pass_a_verdict, pass_a_details = verify_mechanical_pass_a(
@@ -1050,8 +1053,14 @@ def filter_authorities_by_jurisdiction(
             if other_preempts:
                 try:
                     p_list = json.loads(other_preempts) if isinstance(other_preempts, str) else other_preempts
-                    if any(c.get("section") in p or p in c.get("title", "") for p in p_list):
-                        is_preempted = True
+                    c_sec = (c.get("section") or "").strip().lower()
+                    c_title = (c.get("title") or "").strip().lower()
+                    for p in p_list:
+                        p_str = str(p).strip().lower()
+                        if p_str and (c_sec == p_str or c_title == p_str or (p_str in c_sec and len(p_str) >= len(c_sec)) or (p_str in c_title and len(p_str) > 10)):
+                            is_preempted = True
+                            break
+                    if is_preempted:
                         break
                 except Exception:
                     pass
