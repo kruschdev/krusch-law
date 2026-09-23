@@ -1,9 +1,11 @@
 import os
 from typing import Optional
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """Centralized configuration for KruschLaw backend."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Database
     DATABASE_URL: str = os.getenv(
@@ -59,10 +61,6 @@ class Settings(BaseSettings):
     @property
     def is_sqlite(self) -> bool:
         return self.DATABASE_URL.startswith("sqlite")
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
 
 
 def is_loopback_or_private_host(url_or_host: str) -> bool:

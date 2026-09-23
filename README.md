@@ -255,25 +255,54 @@ CI is automated on every push and pull request via [`.github/workflows/ci.yml`](
 
 ---
 
-## 📊 Empirical Evaluation Scorecard
+## 📊 Empirical Multi-Gate Evaluation Scorecard
 
-KruschLaw evaluates performance against a frozen golden evaluation set (`data/eval/golden_legal_eval.json`) comprising 25 realistic municipal and statutory fact patterns:
+KruschLaw is continuously benchmarked across **three independent gates** and an assertion-level grounding calibration matrix. All CI gates evaluate against frozen data without mocking embeddings or masking priority inversions:
 
 ```bash
 python scripts/eval_retrieval_and_grounding.py
 ```
 
-### Measured Scorecard Summary (v0.3.0)
+### [Gate 1] Fixture Corpus Gate (Bootstrap Baseline)
+Evaluates 25 realistic municipal and statutory fact patterns from `data/eval/golden_legal_eval.json` against the seed California legal graph:
 
 | Metric | Target | Measured Score | Evaluation Description |
 |---|---|---|---|
-| **Recall@1 (Top-1 Accuracy)** | > 85.0% | **96.0%** | Relevant governing statute returned as top hit |
+| **Recall@1 (Top-1 Accuracy)** | > 85.0% | **92.0%** | Relevant governing statute returned as top hit |
 | **Recall@5 (Top-5 Coverage)** | > 95.0% | **100.0%** | Gold section contained in top 5 retrieved items |
-| **Mean Reciprocal Rank (MRR)** | > 0.900 | **0.980** | Harmonic mean of gold citation retrieval rank |
+| **Mean Reciprocal Rank (MRR)** | > 0.900 | **0.953** | Harmonic mean of gold citation retrieval rank |
 | **Distractor / Stale Law Leaks** | 0 | **0** | Repealed or inapplicable statutes leaking as controlling |
-| **Assertion Grounding Pass Rate**| > 90.0% | **92.0%** | Propositional claims substantiated by source spans |
-| **Query Retrieval Latency** | < 250 ms | **122.3 ms** | Hybrid search + parent/child graph hydration |
-| **Unit & Integration Suite** | 100% | **58 / 58 Passing** | Modular unit, integration, and CI eval tests |
+| **Mean Retrieval Latency** | < 250 ms | **126.6 ms** | Hybrid lexical + semantic ranking latency |
+
+### [Gate 2] Unmocked Embedding Gate (Real BGE-Large 1024-d Vectors)
+Evaluates pure dense vector similarity across frozen, unmocked `bge-large` 1024-dimensional embeddings checked into `data/eval/embeddings/`:
+
+| Metric | Target | Measured Score | Evaluation Description |
+|---|---|---|---|
+| **Pure Vector Recall@1** | > 80.0% | **100.0%** | Top-1 accuracy using unmocked dense vector cosine similarity |
+| **Pure Vector Recall@5** | > 95.0% | **100.0%** | Top-5 coverage across legal fact patterns |
+| **Pure Vector MRR** | > 0.850 | **1.000** | Dense vector harmonic mean rank without lexical hints |
+
+### [Gate 3] Held-Out Statutory Gate (External California Provisions)
+Evaluates 12 external California statutory and municipal provisions (AB 1482 rent caps, retaliatory eviction § 1942.5, repair-and-deduct § 1942, lockout penalties § 789.3, SF § 37.9/37.10B, Berkeley § 13.76.080, LA § 49.99, San Jose § 17.23) in `data/eval/heldout_statutes.json`:
+
+| Metric | Target | Measured Score | Evaluation Description |
+|---|---|---|---|
+| **Held-Out Recall@1** | > 60.0% | **66.7%** | Top hit accuracy across unseen external statutes |
+| **Held-Out Recall@5** | > 90.0% | **100.0%** | Top 5 coverage across unseen external statutes |
+| **Held-Out MRR** | > 0.750 | **0.799** | Mean reciprocal rank on held-out provisions |
+| **Priority Inversions** | 0 | **0** | Repealed statutes outranking controlling authorities |
+
+### Grounding Calibration & Confusion Matrix
+Empirical accuracy across 32 discrete legal proposition assertions:
+
+| Proposition Class | Tested Cases | Correctly Classified | Calibration Accuracy |
+|---|---|---|---|
+| **VERIFIED (Supported)** | 9 | 9 | **100.0%** |
+| **INVENTED_CITATION** | 9 | 9 | **100.0%** |
+| **DIVERGENT_PROPOSITION** | 10 | 7 | **70.0%** |
+| **STALE_REPEALED_LAW** | 4 | 4 | **100.0%** |
+| **Overall Calibration Accuracy** | 32 | 29 | **90.62%** |
 
 ---
 

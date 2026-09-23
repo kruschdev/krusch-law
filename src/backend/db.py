@@ -11,6 +11,7 @@ except ImportError:
     from sqlalchemy.types import UserDefinedType
     import json
     class Vector(UserDefinedType):
+        cache_ok = True
         def __init__(self, dim=1024):
             self.dim = dim
         def get_col_spec(self, **kw):
@@ -29,6 +30,8 @@ except ImportError:
                 return value
             return process
 
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from .config import settings
 
 # Configure engine based on dialect
@@ -40,7 +43,29 @@ else:
     engine_kwargs["pool_size"] = 10
     engine_kwargs["max_overflow"] = 20
 
-engine = create_engine(settings.DATABASE_URL, **engine_kwargs)
+try:
+    engine = create_engine(settings.DATABASE_URL, **engine_kwargs)
+except (ImportError, Exception) as exc:
+    import logging
+    logging.getLogger("kruschlaw.db").warning(
+        f"Database engine initialization failed ({exc}). Falling back to local SQLite engine."
+    )
+    engine = create_engine("sqlite:///kruschlaw.db", connect_args={"check_same_thread": False})
+
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    """Enforce foreign key constraints on SQLite connections."""
+    if "sqlite" in str(type(dbapi_connection)).lower() or hasattr(dbapi_connection, "cursor"):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+        except Exception:
+            pass
+        finally:
+            cursor.close()
+
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

@@ -10,7 +10,7 @@ import os
 import time
 import logging
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -36,7 +36,7 @@ def claim_next_job(db: Session, worker_id: str) -> Optional[IngestJob]:
         if job:
             job.status = "running"
             job.worker_id = worker_id
-            job.heartbeat_at = datetime.utcnow()
+            job.heartbeat_at = datetime.now(timezone.utc)
             db.commit()
             db.refresh(job)
             return job
@@ -57,7 +57,7 @@ def claim_next_job(db: Session, worker_id: str) -> Optional[IngestJob]:
             if job:
                 job.status = "running"
                 job.worker_id = worker_id
-                job.heartbeat_at = datetime.utcnow()
+                job.heartbeat_at = datetime.now(timezone.utc)
                 db.commit()
                 db.refresh(job)
                 return job

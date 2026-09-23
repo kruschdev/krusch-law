@@ -13,7 +13,7 @@ from fastapi import (
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .config import settings, is_loopback_or_private_host
 from .db import (
@@ -146,6 +146,8 @@ class CaseUpdate(BaseModel):
 
 
 class CaseResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     matter_number: Optional[str] = None
     client_name: Optional[str] = None
@@ -154,9 +156,6 @@ class CaseResponse(BaseModel):
     facts: str
     created_at: str
     updated_at: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 class ParquetIngestRequest(BaseModel):

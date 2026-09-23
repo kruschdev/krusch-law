@@ -596,7 +596,17 @@ def verify_assertion_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[bo
                 target_content = matched_law.get("content", "") if matched_law else full_corpus
                 overlap, best_span = find_best_supporting_span(claim, target_content)
 
-                if has_verbatim_quote or overlap >= 0.30:
+                # Detect numeric term contradictions (e.g. 60 days vs 21 days, 50% vs CPI)
+                claim_digits = set(re.findall(r'\b\d+(?:\.\d+)?%?\b', claim))
+                sec_digits = set(re.findall(r'\b\d+(?:\.\d+)?%?\b', primary_sec))
+                substantive_claim_digits = claim_digits - sec_digits
+                source_digits = set(re.findall(r'\b\d+(?:\.\d+)?%?\b', target_content))
+
+                has_contradiction = False
+                if substantive_claim_digits and not (substantive_claim_digits & source_digits):
+                    has_contradiction = True
+
+                if not has_contradiction and (has_verbatim_quote or overlap >= 0.38):
                     supported_count += 1
                     claim_records.append({
                         "claim": claim,
@@ -607,12 +617,13 @@ def verify_assertion_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[bo
                     })
                 else:
                     wrong_prop_count += 1
+                    detail = "numeric contradiction with statutory terms" if has_contradiction else f"low textual overlap: {round(overlap*100)}%"
                     claim_records.append({
                         "claim": claim,
                         "citation": primary_sec,
                         "source_excerpt": best_span or (target_content[:180] + "..."),
                         "status": "wrong_proposition",
-                        "reason": f"Cited section '{primary_sec}' does not substantiate this claim (low textual overlap: {round(overlap*100)}%)."
+                        "reason": f"Cited section '{primary_sec}' does not substantiate this claim ({detail})."
                     })
         else:
             overlap, best_span = find_best_supporting_span(claim, full_corpus)
