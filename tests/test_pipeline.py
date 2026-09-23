@@ -120,7 +120,7 @@ class TestKruschLawPipeline(unittest.TestCase):
         data = resp.json()
         self.assertEqual(data["status"], "healthy")
         self.assertEqual(data["service"], "kruschlaw-backend")
-        self.assertEqual(data["version"], "0.2.0-dev")
+        self.assertEqual(data["version"], "0.3.0")
         self.assertIn("security", data)
         self.assertIn("auth_enabled", data["security"])
         self.assertIn("ollama_host_is_local_or_private", data["security"])

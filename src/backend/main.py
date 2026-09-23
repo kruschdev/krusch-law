@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="KruschLaw API",
     description="Air-Gapped, Privacy-First Legal RAG & Ordinance Intelligence Engine (Research Prototype)",
-    version="0.2.0-dev",
+    version="0.3.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan
@@ -312,7 +312,7 @@ def health_check():
         return {
             "status": "healthy",
             "service": "kruschlaw-backend",
-            "version": "0.2.0-dev",
+            "version": "0.3.0",
             "auth_enforced": True,
             "air_gap_verified": bool(ollama_local and embed_local)
         }
@@ -320,7 +320,7 @@ def health_check():
     return {
         "status": "healthy",
         "service": "kruschlaw-backend",
-        "version": "0.2.0-dev",
+        "version": "0.3.0",
         "security": {
             "auth_enabled": bool(settings.API_KEY),
             "ollama_host_is_local_or_private": ollama_local,

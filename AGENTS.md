@@ -1,7 +1,7 @@
 # KruschLaw — Agent Guidelines & Architecture
 
 > **Status**: Sovereign Legal AI & Ordinance Intelligence Engine (Research Prototype)  
-> **Version**: 0.2.0-dev  
+> **Version**: 0.3.0  
 > **Ingestion Spine**: KruschNexus (v0.2.3)  
 > **Last updated**: 2026-09-22  
 

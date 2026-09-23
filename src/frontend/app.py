@@ -188,7 +188,7 @@ st.markdown("""
         </div>
         <div style="display: flex; gap: 8px;">
             <div class="badge-pill badge-prototype">
-                🔬 Research Prototype (v0.2.0-dev)
+                🔬 Sovereign Edition (v0.3.0)
             </div>
             <div class="badge-pill">
                 🔒 100% On-Premise Air-Gap
@@ -385,7 +385,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         "<div style='font-size: 0.78rem; color: #64748b; line-height: 1.4;'>"
-        "<strong>KruschLaw v0.2.0-dev (Research Prototype)</strong><br>"
+        "<strong>KruschLaw v0.3.0 (Sovereign Edition)</strong><br>"
         "Open-source local legal intelligence.<br>"
         "Released under the MIT License."
         "</div>",

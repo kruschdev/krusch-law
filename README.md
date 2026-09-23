@@ -4,7 +4,7 @@
 > *Private municipal code retrieval, assertion-level grounding verification, and audit-logged issue analysis using on-premise open-weight models.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Version: 0.3.0-dev](https://img.shields.io/badge/Version-0.3.0--dev-green.svg)](https://github.com/kruschdev/krusch-law)
+[![Version: 0.3.0](https://img.shields.io/badge/Version-0.3.0-green.svg)](https://github.com/kruschdev/krusch-law)
 [![Python 3.11 | 3.12](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.31+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io)
@@ -263,7 +263,7 @@ KruschLaw evaluates performance against a frozen golden evaluation set (`data/ev
 python scripts/eval_retrieval_and_grounding.py
 ```
 
-### Measured Scorecard Summary (v0.3.0-dev)
+### Measured Scorecard Summary (v0.3.0)
 
 | Metric | Target | Measured Score | Evaluation Description |
 |---|---|---|---|

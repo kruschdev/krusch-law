@@ -463,7 +463,7 @@ def process_request(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 },
                 "serverInfo": {
                     "name": "kruschlaw-mcp",
-                    "version": "0.3.0-dev"
+                    "version": "0.3.0"
                 }
             }
         }
