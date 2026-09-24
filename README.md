@@ -4,13 +4,13 @@
 > *Private municipal code retrieval, assertion-level grounding verification, and audit-logged issue analysis using on-premise open-weight models.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Version: 0.3.1](https://img.shields.io/badge/Version-0.3.1-green.svg)](https://github.com/kruschdev/krusch-law)
+[![Version: 0.4.0](https://img.shields.io/badge/Version-0.4.0-green.svg)](https://github.com/kruschdev/krusch-law)
 [![Python 3.11 | 3.12](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.31+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![pgvector](https://img.shields.io/badge/PostgreSQL-pgvector%2016-336791.svg?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-Local%20Inference-black.svg)](https://ollama.com)
-[![Tests: 80 Passing](https://img.shields.io/badge/Tests-80%20Passing-brightgreen.svg)](tests/)
+[![Tests: 88 Passing](https://img.shields.io/badge/Tests-88%20Passing-brightgreen.svg)](tests/)
 [![Eval Gate: Passing](https://img.shields.io/badge/Golden%20Eval-100%25%20Recall%405-brightgreen.svg)](data/eval/golden_legal_eval.json)
 
 ---
@@ -38,8 +38,9 @@ Law firms, legal aid organizations, and corporate counsel face a critical dilemm
 ## 🚀 Core Capabilities
 
 * 🔒 **Sovereign Air-Gapped Topology**: Loopback bindings (`127.0.0.1`), zero telemetry, redacting production `/health` diagnostics, and mandatory pre-shared API keys in non-development modes.
-* 🌲 **Versioned Statutory Graph**: Preserves legal hierarchy (title, chapter, article, section, subsection, definitions, exceptions) with parent/child linking (`parent_id`, `parent_section`) and temporal validity tracking (`effective_date`, `amended_date`, `repealed`, `preempted_by`).
-* ⚖️ **Authority-Weighted Retrieval**: Prioritizes controlling statutes (1.25x) over implementing regulations (1.15x), municipal ordinances (1.0x), and commentary (0.8x), with automatic hydration of referenced definition and exception sections.
+* 🌲 **Versioned Statutory Graph & Multi-Hop Resolver**: Preserves legal hierarchy with parent/child linking (`parent_id`, `parent_section`), temporal validity tracking (`effective_date`, `amended_date`, `repealed`, `preempted_by`), and multi-hop DAG traversal (`resolve_controlling_law`) walking preemption, amendment, and exception chains as-of target matter dates.
+* ⚖️ **Authority Precedence Hierarchy**: Canonical ranking of controlling statutes over implementing regulations, municipal ordinances, and commentary, with automatic hydration of referenced definitions (`definitions_ref`) and statutory carve-outs (`exceptions_ref`).
+* 🚨 **Statutory Conflict Detection Engine**: Automated detection of preemption conflicts (state acts overriding municipal code), temporal conflicts (sunset/repealed law cited for modern matters), and statutory exemption conflicts (owner-occupied duplex / single-family home exemptions).
 * 🛡️ **Assertion-Level Grounding & Failure Taxonomy**: Decomposes legal drafts into discrete claims and verifies each against retrieved authorities, classifying failure modes into:
   * ❌ **Invented Citation**: Cites non-existent or fabricated statutory sections.
   * ⚠️ **Wrong Proposition**: Cites a genuine statutory section for an unsupported proposition (semantic divergence).
@@ -49,13 +50,13 @@ Law firms, legal aid organizations, and corporate counsel face a critical dilemm
 * 📁 **Dedicated Client Discovery & Evidence Isolation**: Complete database partition between public statutory codes (`laws_vectors`) and confidential client discovery exhibits (`matter_evidence` via `GET /api/cases/{case_id}/evidence`), strictly preventing cross-matter fact contamination.
 * 📄 **Professional Legal Export (.docx & .md)**: Single-click export of formal legal memorandums featuring law office caption blocks, mandatory UPL disclaimers, 4-part legal brief structure, Appendix A (Assertion-Level Grounding Audit Table), and Appendix B (Table of Authorities Retrieved).
 * 🔄 **Persistent Crash-Resilient Ingestion Worker**: Dedicated worker process (`src.backend.worker`) utilizing PostgreSQL `SKIP LOCKED` (and atomic SQLite transaction locks), byte-level SHA-256 deduplication, and resumable offsets.
-* 🏷️ **Ensemble Legal Chunk Tagging & Micro-Digests**: Ingestion pipeline (`src.backend.tagger`) performs an ensemble merge combining deterministic regex statutory citations (`sec-1950.5`, matching `Civil Code`, `Civ. Code`, `CC`, `§`, `Section`) and doctrinal keyword anchors with local Ollama (`qwen2.5-coder:7b`) extracting 3–5 lowercase semantic tags (`habitability-defense`, `unlawful-detainer`) and 1-sentence micro-digests. Includes deterministic fallback so statutory anchors are never lost on timeout.
+* 🏷️ **Ensemble Legal Chunk Tagging & Slot Extraction**: Ingestion pipeline (`src.backend.tagger`) performs an ensemble merge combining deterministic statutory slot extraction (notice days, deposit caps, statutory damages multipliers, hourly entry notice) with local Ollama (`qwen2.5-coder:7b`) extracting 3–5 lowercase semantic tags and 1-sentence micro-digests.
 * 🔍 **Dual-Path Semantic Recall & Traceability Registry**: Combines exact statutory section lookup with hybrid BM25 lexical (`tsvector` / `ts_rank_cd`) and dense vector similarity (`bge-large` 1024-dim, RRF $k=60$). Matches receive a +20% exact tag boost with canonical doctrine filtering. Features a persistent Code-to-Statute Traceability Registry (Tab 4 & MCP tool `get_code_traceability`) linking municipal enforcement provisions directly to controlling state codes.
 * 📄 **KruschNexus Sovereign Ingestion Spine**: Integrated parser supporting PDF (with OCR fallback), DOCX, EML, Markdown, and TXT with page-true and section-true citations.
 * 🗑️ **Enterprise Hard Purge & Audit Trail**: Immutable local audit logging (`AuditLog`) for all searches, consults, ingests, and matter mutations, plus cryptographic matter hard purge (`DELETE /api/cases/{case_id}/purge`).
-* 🔌 **Hardened Model Context Protocol (MCP)**: Native stdio JSON-RPC server with 7 tools (`search_ordinances`, `get_section`, `log_matter`, `draft_brief`, `list_matters`, `get_grounding_report`, `get_code_traceability`), refusing to draft briefs unless valid governing authorities exist in the corpus.
+* 🔌 **Hardened Model Context Protocol (MCP)**: Native stdio JSON-RPC server with 9 tools (`search_ordinances`, `get_section`, `log_matter`, `draft_brief`, `list_matters`, `get_grounding_report`, `get_code_traceability`, `resolve_controlling_law`, `detect_statutory_conflicts`), refusing to draft briefs unless valid governing authorities exist in the corpus.
 * ⚡ **LRU Embedding Cache**: Thread-safe in-memory cache keyed by `model:sha256(text)` eliminating redundant embedding calls across search, consult, and deduplication.
-* 🧪 **CI Gate & Golden Legal Benchmark**: Automated GitHub Actions CI pipeline running Ruff linting, 80 unit/integration tests, and a 25-case golden legal evaluation harness.
+* 🧪 **CI Gate & Golden Legal Benchmark**: Automated GitHub Actions CI pipeline running Ruff linting, 88 unit/integration tests, and a 25-case golden legal evaluation harness.
 
 ---
 

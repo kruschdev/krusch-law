@@ -25,6 +25,12 @@ from .rag import (
     UPL_DISCLAIMER, RetrievalError, verify_assertion_grounding,
     expand_legal_query, retrieve_matter_evidence
 )
+from .resolver import (
+    resolve_controlling_law,
+    detect_legal_conflicts,
+    STATEWIDE_PREEMPTION_REGISTRY,
+    AUTHORITY_RANKS
+)
 from .ingest import (
     ingest_mock_data, ingest_locus_parquet, process_parquet_job,
     ingest_matter_document, ingest_uploaded_matter_file
@@ -1196,3 +1202,79 @@ def export_case_docx(
     except Exception as e:
         logger.error(f"Error generating DOCX export for matter #{case_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate DOCX export: {e}")
+
+
+# ===========================================================================
+# STATUTORY PRECEDENCE GRAPH & CONTROLLING AUTHORITY RESOLVER ENDPOINTS
+# ===========================================================================
+
+class ConflictCheckRequest(BaseModel):
+    authorities: List[Dict[str, Any]]
+    matter_facts: Optional[Dict[str, Any]] = None
+    as_of_date: Optional[str] = None
+
+
+@app.get("/api/resolver/controlling", tags=["Statutory Precedence Graph"])
+def get_controlling_law(
+    doctrine: str = Query(..., description="Legal doctrine or topic (e.g., 'Security Deposits', 'Just Cause')"),
+    city: Optional[str] = Query(None, description="City name (e.g. 'Oakland', 'San Francisco')"),
+    county: Optional[str] = Query(None, description="County name (e.g. 'Alameda County')"),
+    as_of_date: Optional[str] = Query(None, description="Incident or inquiry date in ISO format (e.g., '2024-08-01')"),
+    matter_facts_json: Optional[str] = Query(None, description="Optional JSON-encoded dictionary of fact patterns"),
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Multi-hop Legal DAG Resolver:
+    Determines controlling legal authority as of a specific date by walking preemption,
+    amendment, and statutory exception chains.
+    """
+    facts = {}
+    if matter_facts_json:
+        try:
+            facts = json.loads(matter_facts_json)
+        except Exception:
+            pass
+
+    resolution = resolve_controlling_law(
+        doctrine_or_topic=doctrine,
+        city=city,
+        county=county,
+        as_of_date=as_of_date,
+        matter_facts=facts,
+        db=db
+    )
+    return resolution.to_dict()
+
+
+@app.post("/api/resolver/conflicts", tags=["Statutory Precedence Graph"])
+def detect_statutory_conflicts_endpoint(
+    req: ConflictCheckRequest,
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Detects substantive statutory conflicts across proposed legal authorities:
+    preemption conflicts, temporal amendment conflicts, and statutory exemptions.
+    """
+    conflicts = detect_legal_conflicts(
+        authorities=req.authorities,
+        matter_facts=req.matter_facts,
+        as_of_date=req.as_of_date
+    )
+    return {
+        "conflict_count": len(conflicts),
+        "conflicts": conflicts,
+        "as_of_date": req.as_of_date
+    }
+
+
+@app.get("/api/resolver/registry", tags=["Statutory Precedence Graph"])
+def get_preemption_registry(
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """Returns canonical statewide preemption registry and authority ranking hierarchy."""
+    return {
+        "authority_ranks": AUTHORITY_RANKS,
+        "statewide_preemptions": STATEWIDE_PREEMPTION_REGISTRY
+    }
+

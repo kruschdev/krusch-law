@@ -15,6 +15,13 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import SessionLocal, LawVector, GroundingReport, MatterEvidence
+from .resolver import (
+    resolve_controlling_law,
+    detect_legal_conflicts,
+    LegalResolution,
+    extract_statutory_slots
+)
+from .tagger import extract_legal_slots
 
 logger = logging.getLogger("kruschlaw.rag")
 
@@ -1129,7 +1136,36 @@ def filter_authorities_by_jurisdiction(
 
         final_governing.extend(hydrated_nodes)
 
+    # Attach deterministic statutory slots to all surviving governing authorities
+    for item in final_governing:
+        if "slots" not in item:
+            item["slots"] = extract_legal_slots(item.get("content", ""))
+
     return final_governing, pruned
+
+
+def resolve_controlling_authority(
+    doctrine: str,
+    city: Optional[str] = None,
+    county: Optional[str] = None,
+    as_of_date: Optional[Any] = None,
+    matter_facts: Optional[Dict[str, Any]] = None,
+    db: Optional[Session] = None
+) -> Dict[str, Any]:
+    """
+    Exposes multi-hop legal precedence DAG resolver to API and MCP endpoints.
+    Resolves controlling statute/ordinance, derives precedence chain, and checks active carve-outs.
+    """
+    res = resolve_controlling_law(
+        doctrine_or_topic=doctrine,
+        city=city,
+        county=county,
+        as_of_date=as_of_date,
+        matter_facts=matter_facts,
+        db=db
+    )
+    return res.to_dict()
+
 
 
 def apply_statutory_amendment(

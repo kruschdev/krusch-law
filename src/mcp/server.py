@@ -187,6 +187,59 @@ TOOLS_CATALOG = [
                 }
             }
         }
+    },
+    {
+        "name": "resolve_controlling_law",
+        "description": "Deterministically resolve controlling legal authority by walking multi-hop preemption, amendment, and statutory exception chains as of an inquiry/incident date.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "doctrine": {
+                    "type": "string",
+                    "description": "Legal doctrine or topic (e.g. 'Security Deposits', 'Just Cause', 'Rent Control')"
+                },
+                "city": {
+                    "type": "string",
+                    "description": "City name for municipal context (e.g. 'Oakland', 'San Francisco')"
+                },
+                "county": {
+                    "type": "string",
+                    "description": "County name for unincorporated parcel check (e.g. 'Alameda County')"
+                },
+                "as_of_date": {
+                    "type": "string",
+                    "description": "Matter incident or lease execution date in ISO format (e.g. '2024-08-01')"
+                },
+                "matter_facts": {
+                    "type": "object",
+                    "description": "Fact patterns (e.g. {'unincorporated': true, 'single_family': true, 'owner_occupied_duplex': true})"
+                }
+            },
+            "required": ["doctrine"]
+        }
+    },
+    {
+        "name": "detect_statutory_conflicts",
+        "description": "Detect substantive legal conflicts across proposed authorities, including state preemption, temporal amendment invalidity, and statutory exemptions.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "authorities": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "List of retrieved legal authority objects to evaluate"
+                },
+                "matter_facts": {
+                    "type": "object",
+                    "description": "Client matter factual matrix"
+                },
+                "as_of_date": {
+                    "type": "string",
+                    "description": "Incident date in ISO format"
+                }
+            },
+            "required": ["authorities"]
+        }
     }
 ]
 
@@ -498,6 +551,45 @@ def handle_get_code_traceability(args: Dict[str, Any]) -> Dict[str, Any]:
         db.close()
 
 
+def handle_resolve_controlling_law(args: Dict[str, Any]) -> Dict[str, Any]:
+    doctrine = args.get("doctrine", "")
+    city = args.get("city")
+    county = args.get("county")
+    as_of_date = args.get("as_of_date")
+    matter_facts = args.get("matter_facts") or {}
+    db = SessionLocal()
+    try:
+        from ..backend.resolver import resolve_controlling_law
+        res = resolve_controlling_law(
+            doctrine_or_topic=doctrine,
+            city=city,
+            county=county,
+            as_of_date=as_of_date,
+            matter_facts=matter_facts,
+            db=db
+        )
+        return res.to_dict()
+    finally:
+        db.close()
+
+
+def handle_detect_statutory_conflicts(args: Dict[str, Any]) -> Dict[str, Any]:
+    authorities = args.get("authorities") or []
+    matter_facts = args.get("matter_facts") or {}
+    as_of_date = args.get("as_of_date")
+    from ..backend.resolver import detect_legal_conflicts
+    conflicts = detect_legal_conflicts(
+        authorities=authorities,
+        matter_facts=matter_facts,
+        as_of_date=as_of_date
+    )
+    return {
+        "conflict_count": len(conflicts),
+        "conflicts": conflicts,
+        "as_of_date": as_of_date
+    }
+
+
 def process_request(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     req_id = request.get("id")
     method = request.get("method")
@@ -539,7 +631,9 @@ def process_request(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "list_matters": handle_list_matters,
             "get_grounding_report": handle_get_grounding_report,
             "draft_brief": handle_draft_brief,
-            "get_code_traceability": handle_get_code_traceability
+            "get_code_traceability": handle_get_code_traceability,
+            "resolve_controlling_law": handle_resolve_controlling_law,
+            "detect_statutory_conflicts": handle_detect_statutory_conflicts
         }
 
         if tool_name not in handlers:

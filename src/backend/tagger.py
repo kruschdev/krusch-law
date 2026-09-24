@@ -65,6 +65,84 @@ DOCTRINE_PATTERNS = [
 ]
 
 
+
+def extract_legal_slots(content: str) -> Dict[str, Any]:
+    """
+    Deterministic quantitative extraction of binding statutory numbers and deadlines.
+    Extracts notice timelines, deposit caps, damages multipliers, and interest terms.
+    """
+    slots: Dict[str, Any] = {}
+    if not content:
+        return slots
+
+    content_lower = content.lower()
+
+    # 1. Statutory Notice Periods
+    notice_matches = re.findall(r'(\d+)\s*(?:business\s+|calendar\s+)?days?\b', content, re.IGNORECASE)
+    if notice_matches:
+        days_list = sorted(list({int(d) for d in notice_matches if int(d) < 365}))
+        slots["statutory_notice_days"] = days_list
+        if 21 in days_list and ("security deposit" in content_lower or "1950.5" in content):
+            slots["deposit_accounting_days"] = 21
+        if 3 in days_list and ("pay or quit" in content_lower or "cure" in content_lower):
+            slots["cure_notice_days"] = 3
+        if 14 in days_list and ("inspection" in content_lower):
+            slots["inspection_request_days"] = 14
+        if 180 in days_list and ("retaliat" in content_lower or "presumption" in content_lower):
+            slots["retaliation_presumption_days"] = 180
+
+    # Hours notice for landlord entry
+    hour_match = re.search(r'(\d+)\s*hours?\s*(?:written\s+)?notice', content, re.IGNORECASE)
+    if hour_match:
+        slots["entry_notice_hours"] = int(hour_match.group(1))
+
+    # 2. Security Deposit Cap (Months of Rent)
+    if "one month's rent" in content_lower or "1 month's rent" in content_lower or "one month rent" in content_lower:
+        slots["deposit_cap_months"] = 1.0
+    elif "two months' rent" in content_lower or "2 months' rent" in content_lower or "two months rent" in content_lower:
+        slots["deposit_cap_months"] = 2.0
+    elif "three months' rent" in content_lower or "3 months' rent" in content_lower:
+        slots["deposit_cap_months"] = 3.0
+
+    # 3. Statutory Damages Multiplier
+    if re.search(r'twice\s+the\s+amount|2x|double\s+damages|two\s+times', content_lower):
+        slots["statutory_damages_multiplier"] = 2.0
+    elif re.search(r'treble\s+damages|three\s+times|3x', content_lower):
+        slots["statutory_damages_multiplier"] = 3.0
+
+    # 4. Daily Statutory Penalty (e.g. § 789.3 utility shutoff)
+    penalty_match = re.search(r'(?:one\s+hundred|100)\s*dollars?\s*(?:for\s+each|per)\s*day', content_lower)
+    if penalty_match or "$100" in content:
+        slots["daily_statutory_penalty"] = 100.0
+
+    # 5. Rent Increase Caps (AB 1482 5% + CPI max 10%)
+    if "5 percent" in content_lower or "5%" in content:
+        slots["rent_cap_base_pct"] = 5.0
+    if "10 percent" in content_lower or "10%" in content:
+        slots["rent_cap_max_pct"] = 10.0
+
+    # 6. Relocation Assistance
+    if "one month of the tenant's rent" in content_lower or "one month's rent" in content_lower:
+        if "relocation" in content_lower:
+            slots["relocation_assistance_months"] = 1.0
+
+    # 7. Normalized Citations
+    cites = []
+    for pattern in [
+        r'Cal(?:ifornia)?\.?\s*Civ(?:il)?\.?\s*Code\s*§*\s*([0-9\.\(\)a-zA-Z]+)',
+        r'Cal(?:ifornia)?\.?\s*C\.?C\.?P\.?\s*§*\s*([0-9\.\(\)a-zA-Z]+)',
+        r'OMC\s*§*\s*([0-9\.\(\)a-zA-Z]+)',
+        r'Oakland\s*Municipal\s*Code\s*§*\s*([0-9\.\(\)a-zA-Z]+)'
+    ]:
+        found = re.findall(pattern, content, re.IGNORECASE)
+        for f in found:
+            cites.append(f.strip())
+    if cites:
+        slots["statutory_citations"] = sorted(list(set(cites)))
+
+    return slots
+
+
 def heuristic_tag_chunk(
     content: str,
     filename: str = "",
@@ -115,10 +193,13 @@ def heuristic_tag_chunk(
             if len(deduped_tags) >= 5:
                 break
 
+    slots = extract_legal_slots(content)
+
     return {
         "summary": summary,
         "tags": deduped_tags,
-        "doctrine": matched_doctrine
+        "doctrine": matched_doctrine,
+        "slots": slots
     }
 
 
@@ -253,7 +334,8 @@ def tag_legal_chunk(
             return {
                 "summary": summary_text,
                 "tags": merged_tags[:7],
-                "doctrine": doctrine_name
+                "doctrine": doctrine_name,
+                "slots": heuristic.get("slots", {})
             }
 
     return heuristic
