@@ -72,24 +72,47 @@ KruschLaw consumes **KruschNexus** as its native document ingestion and citation
 3. **No Automated Court Filings**: KruschLaw is an advisory research prototype. All generated briefs require independent Shepardizing and human attorney verification under CCP § 128.7 and CRPC 3.3.
 4. **Citation Accountability**: Every generated assertion must link back to physical page numbers and section headers extracted by KruschNexus.
 
-## 4. KruschContext MCP Ecosystem Integration
+## 4. 3-Tier MCP Ecosystem & KruschLaw Tool Integration
 
-KruschLaw is integrated into the fleet agentic ecosystem via **KruschContext MCP**:
-- **Modular Companion Extension**: `krusch-context-mcp/src/extensions/law/` provides decoupled access via `npm run start:law` or `--extensions=law`.
-- **L2 Neural Semantic Routing**: Natural language statutory questions automatically route to KruschLaw tools (`krusch_law_search_ordinances`, `krusch_law_get_section`, `krusch_law_draft_brief`, `krusch_law_verify_grounding`).
-- **Proactive Trajectory Grounding**: KruschContext's `proactive_nudge` detects statutory citations and checks governing authorities before agent operations execute.
-- **Matter Memory & State Briefing**: Case factual records, procedural deadlines, and legal theories persist across sessions in KruschContext's Lakebase (`.agent/memory.db`) with active superseding and invalidation.
+KruschLaw is fully integrated into the fleet agentic ecosystem via the 3-Tier MCP standard:
+
+### Tier 1: Working Memory & Invariant Steering (`krusch-context-mcp`)
+- **Hydration**: Call `krusch_context_retrieve({ query: "krusch-law legal statutory", project: "krusch-law", include_state: true })` at session start.
+- **Pre-Commit Invariant Audits**: Run `krusch_context_nudge({ trigger: "pre_commit", code: "<diff>" })` before modifying database schemas, RAG pipelines, or verification rules.
+- **Matter Memory & Holdings**: Legal decisions, statutory interpretations, and procedural invariants persist to SQLite Lakebase (`.agent/context.db`) with active superseding and invalidation.
+
+### Tier 2: Codebase Structure & AST Symbol Graphs (`krusch-git`)
+- **Symbol Search**: Locate FastAPI endpoints, database models, and RAG handlers via `krusch_git_search_symbols({ repo: "krusch-law", query: "<symbol>" })`.
+- **Dependency Blast Radius**: Trace caller/callee graphs via `krusch_git_dependency_graph({ repo: "krusch-law", symbol: "<symbol>" })` before refactoring database tables or ingestion pipelines.
+- **Semantic Code Search**: Search codebase implementations via `krusch_git_semantic_search({ repo: "krusch-law", query: "<query>" })`.
+
+### Tier 3: Staged Execution & Verification (`krusch-harness`)
+- Verify staged diffs and unit test passes (`krusch_run`, `krusch_diff`, `krusch_apply_diff`) before applying mutations to core models or migration scripts.
+
+### Native Sovereign Legal MCP Server (`kruschlaw-mcp`)
+KruschLaw exposes its own stdio JSON-RPC MCP server (`src/mcp/server.py`) for IDE and coding agent access:
+- `search_ordinances`: Hybrid full-text (BM25) and dense vector search across municipal codes and California statutes.
+- `get_section`: Unabridged statutory text and metadata retrieval by section number.
+- `log_matter`: Confidential client matter intake with dense local embeddings (strictly isolated from public statutory store).
+- `list_matters`: Active matter tracking with docket codes and client references.
+- `get_grounding_report`: Proposition-level grounding audit table with 4-class failure taxonomy.
+- `draft_brief`: Staged 4-part legal memorandum generation for human attorney review (refuses to draft without governing authorities).
 
 ---
 
 ## 5. Testing & Verification
 
-Run the complete test suite (in-memory SQLite + mock Ollama, 0 external network dependencies):
+Run the full pytest suite (72 tests, in-memory SQLite + mock Ollama, 0 external network dependencies):
 ```bash
-.venv/bin/python -m unittest discover tests
+.venv/bin/pytest tests
+```
+
+Run the 4-gate empirical retrieval & proposition grounding evaluation harness:
+```bash
+.venv/bin/python scripts/eval_retrieval_and_grounding.py
 ```
 
 Run cross-repo integration tests with KruschNexus:
 ```bash
-.venv/bin/python -m unittest tests/test_nexus_integration.py
+.venv/bin/pytest tests/test_nexus_integration.py
 ```
