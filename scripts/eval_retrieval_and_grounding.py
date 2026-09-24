@@ -539,6 +539,72 @@ def run_grounding_calibration() -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# GATE 5: Labeled Grounding Benchmark (False Support Rate Headline Metric)
+# ---------------------------------------------------------------------------
+def run_labeled_grounding_gate(dataset_path: Optional[str] = None) -> Dict[str, Any]:
+    dataset_path = dataset_path or os.path.join(PROJECT_ROOT, "data", "eval", "labeled_grounding_golden.json")
+    if not os.path.exists(dataset_path):
+        raise FileNotFoundError(f"Golden evaluation dataset not found at {dataset_path}")
+
+    with open(dataset_path, "r", encoding="utf-8") as f:
+        dataset = json.load(f)
+
+    total = len(dataset)
+    correct = 0
+    false_support_count = 0
+    non_supported_count = 0
+    taxonomy_breakdown: Dict[str, Dict[str, int]] = {}
+
+    for case in dataset:
+        claim = case["claim"]
+        laws = case["retrieved_laws"]
+        matter_facts = case.get("matter_facts")
+        expected_status = case["expected_status"]
+
+        if expected_status not in taxonomy_breakdown:
+            taxonomy_breakdown[expected_status] = {"correct": 0, "total": 0}
+        taxonomy_breakdown[expected_status]["total"] += 1
+
+        is_grounded, claims, notice, stats = verify_assertion_grounding(
+            analysis_text=claim,
+            laws=laws,
+            matter_facts=matter_facts
+        )
+
+        record = claims[0] if claims else {"status": "unknown", "refused": True}
+        pred_status = record.get("status")
+
+        if expected_status != "supported":
+            non_supported_count += 1
+            if pred_status == "supported" or not record.get("refused", True):
+                false_support_count += 1
+
+        if pred_status == expected_status:
+            correct += 1
+            taxonomy_breakdown[expected_status]["correct"] += 1
+
+    accuracy = (correct / total) * 100.0 if total else 0.0
+    false_support_rate = (false_support_count / non_supported_count) * 100.0 if non_supported_count > 0 else 0.0
+
+    return {
+        "total_cases": total,
+        "correct": correct,
+        "accuracy": round(accuracy, 2),
+        "false_support_count": false_support_count,
+        "non_supported_count": non_supported_count,
+        "false_support_rate": round(false_support_rate, 2),
+        "taxonomy_breakdown": {
+            k: {
+                "correct": v["correct"],
+                "total": v["total"],
+                "accuracy": round((v["correct"] / v["total"]) * 100.0, 1) if v["total"] else 0.0
+            }
+            for k, v in taxonomy_breakdown.items()
+        }
+    }
+
+
+# ---------------------------------------------------------------------------
 # CLI Runner
 # ---------------------------------------------------------------------------
 def main():
@@ -588,6 +654,17 @@ def main():
     for k, p in g4["pairs"].items():
         status_icon = "✅" if p["passed"] else "❌"
         print(f"   {status_icon} {p['description']}")
+
+    # Gate 5
+    print("\n----------------------------------------------------------------------------")
+    print(" [GATE 5] LABELED GROUNDING BENCHMARK (False Support Rate Headline Metric)")
+    print("----------------------------------------------------------------------------")
+    g5 = run_labeled_grounding_gate()
+    print(f" Total Golden Cases       : {g5['total_cases']}")
+    print(f" Golden Accuracy          : {g5['accuracy']}% (Target: 100.0%)")
+    print(f" False Support Rate       : {g5['false_support_rate']}% (Target: 0.00% - STRICT)")
+    for cat, stats in g5["taxonomy_breakdown"].items():
+        print(f"   • {cat:<20}: {stats['correct']:2d} / {stats['total']:2d} ({stats['accuracy']}%)")
 
     # Grounding Calibration Matrix
     print("\n----------------------------------------------------------------------------")

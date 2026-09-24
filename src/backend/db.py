@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, DateTime,
     Boolean, UniqueConstraint, func, text, Float
@@ -86,10 +87,46 @@ class Case(Base):
     embedding = Column(Vector(settings.EMBEDDING_DIM), nullable=True)
 
 
+class StatutoryArtifact(Base):
+    """
+    Official authoritative source-of-truth statutory or municipal ordinance artifact.
+    Completely separated from derived chunks and vector embeddings.
+    Records provenance: source URL, retrieved-at timestamp, SHA-256 hash, publisher, and edition.
+    Derived vectors in laws_vectors are 100% rebuildable from these records.
+    """
+    __tablename__ = "statutory_artifacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    artifact_hash = Column(String(64), unique=True, nullable=False, index=True)  # SHA-256 of raw canonical content
+    jurisdiction_pack_id = Column(String(100), nullable=True, index=True)        # e.g., "ca_oakland_pack_v1"
+    state = Column(String(50), nullable=True, index=True)                         # e.g., "CA"
+    municipality = Column(String(100), nullable=True, index=True)                  # e.g., "Oakland"
+    county = Column(String(100), nullable=True, index=True)                        # e.g., "Alameda County"
+    code_family = Column(String(100), nullable=False, index=True)                 # e.g., "California Civil Code", "Oakland Municipal Code"
+    citation = Column(String(100), nullable=False, index=True)                    # e.g., "Cal. Civ. Code § 1950.5"
+    section_number = Column(String(50), nullable=True, index=True)                # e.g., "1950.5"
+    title = Column(String(255), nullable=True)
+    topic = Column(String(100), nullable=True, index=True)                        # e.g., "Security Deposits", "Just Cause"
+    authority_class = Column(String(50), default="controlling_statute", nullable=False, index=True)
+    raw_content = Column(Text, nullable=False)                                    # Unabridged canonical statutory text
+    source_url = Column(String(500), nullable=True)                               # Official legislative or municipal publisher URL
+    publisher = Column(String(100), nullable=True)                                # e.g., "California Office of Legislative Counsel"
+    edition = Column(String(50), nullable=True)                                  # e.g., "2024 General Session", "OMC Supp. 104"
+    enacted_date = Column(DateTime(timezone=True), nullable=True)
+    effective_date = Column(DateTime(timezone=True), nullable=True)
+    repeal_date = Column(DateTime(timezone=True), nullable=True)
+    retrieved_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    is_canonical = Column(Boolean, default=True, nullable=False, index=True)
+    metadata_json = Column(Text, nullable=True)                                   # JSON dict for slots, preemption refs, exceptions
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class LawVector(Base):
     """
     Statutory, municipal ordinance, or regulatory provision in a hierarchical, versioned legal graph
     with dense vector embedding and hybrid search metadata.
+    Derived and rebuildable from StatutoryArtifact.
     """
     __tablename__ = "laws_vectors"
     __table_args__ = (
@@ -97,6 +134,7 @@ class LawVector(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    artifact_id = Column(Integer, nullable=True, index=True)         # Reference to parent StatutoryArtifact source-of-truth
     jurisdiction = Column(String(100), nullable=False, index=True)  # e.g., "California Civil Code", "Oakland Municipal Code"
     state = Column(String(50), nullable=True, index=True)           # e.g., "CA"
     city = Column(String(100), nullable=True, index=True)            # e.g., "Oakland"
@@ -165,8 +203,10 @@ class GroundingReport(Base):
     exception_applies_claims = Column(Integer, default=0, nullable=False)
     insufficient_context_claims = Column(Integer, default=0, nullable=False)
     not_in_corpus_claims = Column(Integer, default=0, nullable=False)
+    abstain_claims = Column(Integer, default=0, nullable=False)
     refused_claims_count = Column(Integer, default=0, nullable=False)
     pass_rate = Column(Float, default=100.0, nullable=False)
+    false_support_rate = Column(Float, default=0.0, nullable=False)
     claims_json = Column(Text, nullable=False)                      # JSON list of verified claims & spans
     verified_draft = Column(Text, nullable=True)                    # Redacted/annotated draft with per-claim refusal
     advisory_markdown = Column(Text, nullable=True)
@@ -189,6 +229,8 @@ class AuditLog(Base):
     model_name = Column(String(100), nullable=True)
     model_version = Column(String(50), nullable=True)
     prompt_hash = Column(String(64), nullable=True)
+    tombstone_hash = Column(String(64), nullable=True, index=True)
+    details_json = Column(Text, nullable=True)
     grounding_verdict = Column(String(50), nullable=True)           # PASS, WARNING, FAIL
     duration_ms = Column(Integer, nullable=True)
 
@@ -265,6 +307,25 @@ class StatuteCodeTraceability(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class ClaimFeedback(Base):
+    """
+    Local human-in-the-loop feedback table for attorney verification.
+    Records attorney accept/reject decisions per claim with rationales and corrections,
+    providing local reinforcement/eval signals without telemetry leakage.
+    """
+    __tablename__ = "claim_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, nullable=False, index=True)
+    report_id = Column(String(36), nullable=True, index=True)
+    claim_text = Column(Text, nullable=False)
+    citation = Column(String(100), nullable=True)
+    decision = Column(String(20), nullable=False)  # "accepted" | "rejected" | "modified"
+    correction = Column(Text, nullable=True)
+    attorney_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
 def init_db(target_engine=None):
     """Initialize database tables, pgvector extension, HNSW vector indexes, and GIN full-text index."""
     eng = target_engine or engine
@@ -306,4 +367,72 @@ def init_db(target_engine=None):
             conn.execute(text("ALTER TABLE matter_evidence ADD COLUMN IF NOT EXISTS doctrine VARCHAR(100);"))
             conn.execute(text("ALTER TABLE laws_vectors ADD COLUMN IF NOT EXISTS tags TEXT;"))
             conn.execute(text("ALTER TABLE laws_vectors ADD COLUMN IF NOT EXISTS summary TEXT;"))
+            conn.execute(text("ALTER TABLE laws_vectors ADD COLUMN IF NOT EXISTS artifact_id INTEGER;"))
             conn.commit()
+
+
+def rebuild_vectors_from_artifacts(db: SessionLocal, pack_id: Optional[str] = None) -> int:
+    """
+    Rebuild derived laws_vectors rows exclusively from canonical statutory_artifacts.
+    Enforces the invariant: Official artifacts are the source of truth; vectors are rebuildable derived views.
+    """
+    import hashlib
+    import json
+
+    q = db.query(StatutoryArtifact)
+    if pack_id:
+        q = q.filter(StatutoryArtifact.jurisdiction_pack_id == pack_id)
+    artifacts = q.all()
+
+    rebuilt_count = 0
+    for art in artifacts:
+        # Delete existing vectors derived from this canonical artifact
+        db.query(LawVector).filter(LawVector.artifact_id == art.id).delete()
+
+        # Parse metadata
+        meta = {}
+        if art.metadata_json:
+            try:
+                meta = json.loads(art.metadata_json)
+            except Exception:
+                meta = {}
+
+        # Chunk the raw text (simple paragraph/section chunking for demonstration/sovereignty)
+        raw_text = art.raw_content.strip()
+        paragraphs = [p.strip() for p in raw_text.split("\n\n") if p.strip()]
+        if not paragraphs:
+            paragraphs = [raw_text]
+
+        for idx, chunk_text in enumerate(paragraphs):
+            c_hash = hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()
+            lv = LawVector(
+                artifact_id=art.id,
+                jurisdiction=art.code_family,
+                state=art.state,
+                city=art.municipality,
+                county=art.county,
+                city_or_county=art.municipality or art.county or art.state,
+                topic=art.topic,
+                title=art.title,
+                section=art.citation,
+                content=chunk_text,
+                source_hash=c_hash,
+                chunk_index=idx,
+                is_substantive=True,
+                authority_class=art.authority_class,
+                effective_date=art.effective_date,
+                effective_from=art.effective_date,
+                effective_to=art.repeal_date,
+                repealed=(art.repeal_date is not None),
+                preempted_by=meta.get("preempted_by"),
+                preempts=json.dumps(meta.get("preempts", [])) if meta.get("preempts") else None,
+                defines_terms=json.dumps(meta.get("defines_terms", [])) if meta.get("defines_terms") else None,
+                exceptions_ref=meta.get("exceptions_ref"),
+                source_url=art.source_url
+            )
+            db.add(lv)
+            rebuilt_count += 1
+
+    db.commit()
+    return rebuilt_count
+

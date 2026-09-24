@@ -1,0 +1,185 @@
+pack_id: "ca_oakland_pack_v1"
+version: "1.0.0"
+state: "CA"
+municipality: "Oakland"
+county: "Alameda County"
+code_families:
+  - "California Civil Code"
+  - "Oakland Municipal Code"
+description: "Authoritative California statewide statutes and Oakland municipal ordinances governing residential tenancy, security deposits, rent control, and just cause evictions."
+publisher: "California Office of Legislative Counsel & City of Oakland / Municode"
+edition: "2024 Legislative Session / OMC Title 8 Supp. 104"
+retrieved_at: "2026-09-24T12:00:00Z"
+
+coverage:
+  covered_topics:
+    - "Security Deposits"
+    - "Just Cause Evictions"
+    - "Rent Control & Preemption"
+    - "Rent Increases"
+    - "Utility Shutoff & Lockouts"
+    - "Owner Move-In"
+  known_uncovered_topics:
+    - "Commercial Lease Evictions"
+    - "Mobile Home Residency Law"
+    - "Agricultural Tenancies"
+    - "Short-Term Vacation Rentals"
+
+statutes:
+  - citation: "Cal. Civ. Code § 1950.5(c)"
+    section_number: "1950.5(c)"
+    title: "Residential Security Deposit Limits & Enactment of Assembly Bill 12"
+    topic: "Security Deposits"
+    authority_class: "controlling_statute"
+    hierarchy_level: "subsection"
+    effective_date: "2024-07-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1950.5"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2023, ch. 290 (AB 12)"
+    raw_content: |
+      Under Section 1950.5(c) as amended by Assembly Bill 12 (effective July 1, 2024), a landlord may not demand or receive security, however denominated, in an amount or value in excess of an amount equal to one month's rent, in addition to any rent for the first month paid on or before initial occupancy.
+
+      This one-month rent limitation applies to both unfurnished and furnished residential rental properties. A limited exception exists for a natural person or family LLC owning no more than two residential rental properties that collectively comprise no more than four units, who may demand up to two months' rent unless the tenant is a service member.
+
+      Within 21 calendar days after the tenant has vacated the premises, the landlord shall furnish the tenant with a copy of an itemized statement indicating the basis for, and the amount of, any security received and the disposition of the security, and shall return any remaining portion of the security to the tenant. Bad faith retention of security subjects the landlord to statutory damages of up to twice the amount of the security.
+    statutory_slots:
+      deposit_cap_months: 1.0
+      small_landlord_cap_months: 2.0
+      accounting_days: 21
+      statutory_damages_multiplier: 2.0
+    preempts:
+      - "Oakland Municipal Code § 8.99.010"
+
+  - citation: "Cal. Civ. Code § 1954.52"
+    section_number: "1954.52"
+    title: "Costa-Hawkins Rental Housing Act — Statewide Rent Control Preemption"
+    topic: "Rent Control & Preemption"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1996-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1954.52"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 1995, ch. 331"
+    raw_content: |
+      Notwithstanding any other provision of law, an owner of residential real property may establish the initial and all subsequent rental rates for a dwelling or a unit about which any of the following is true:
+      (1) It has a certificate of occupancy issued after February 1, 1995.
+      (2) It has already been exempt from the residential rent control ordinance of any city, county, or city and county on or before February 1, 1995.
+      (3) It is alienable separate from the title to any other dwelling unit, including single-family residences, condominiums, and townhomes.
+
+      Statewide preemption under Costa-Hawkins restricts local rent control ordinances from establishing rent ceilings on post-1995 construction or single-family homes, but preserves local authority over eviction grounds and habitability standards.
+    statutory_slots:
+      vacancy_decontrol: true
+      single_family_exempt: true
+    preempts:
+      - "Local Municipal Rent Ceilings on Post-1995 Units"
+
+  - citation: "Cal. Civ. Code § 1946.2"
+    section_number: "1946.2"
+    title: "California Tenant Protection Act of 2019 — Statewide Just Cause Evictions"
+    topic: "Just Cause Evictions"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2020-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1946.2"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2019, ch. 597 (AB 1482)"
+    raw_content: |
+      Notwithstanding any other law, after a tenant has continuously and lawfully occupied a residential real property for 12 months, the owner of the residential real property shall not terminate the tenancy without just cause, which shall be stated in the written notice to terminate tenancy.
+
+      Just cause is divided into At-Fault Just Cause (including nonpayment of rent, material breach of lease, nuisance, waste, refusal to sign a lease extension) and No-Fault Just Cause (including owner move-in, withdrawal from the rental market under the Ellis Act, government compliance orders, or substantial remodeling).
+
+      For a no-fault just cause termination, the owner shall either provide direct relocation assistance equal to one month of the tenant's rent or waive in writing the payment of the final month's rent. Local just cause ordinances adopted on or before September 1, 2019, or local ordinances providing greater tenant protections, are not preempted and remain enforceable.
+    statutory_slots:
+      occupancy_threshold_months: 12
+      relocation_months: 1.0
+      preserves_local_just_cause: true
+
+  - citation: "Cal. Civ. Code § 1947.12"
+    section_number: "1947.12"
+    title: "California Tenant Protection Act of 2019 — Statewide Rent Increase Caps"
+    topic: "Rent Increases"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2020-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1947.12"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2019, ch. 597 (AB 1482)"
+    raw_content: |
+      An owner of residential real property shall not, over the course of any 12-month period, increase the gross rental rate for a dwelling or a unit more than 5 percent plus the percentage change in the cost of living (Consumer Price Index), or 10 percent, whichever is lower, of the lowest gross rental rate charged for that dwelling or unit at any time during the 12 months prior to the effective date of the increase.
+
+      Gross rental rate does not include tenant concessions or credits. Rent increases are capped at no more than two increments over any 12-month period.
+    statutory_slots:
+      base_cap_percent: 5.0
+      max_cap_percent: 10.0
+      max_increases_per_year: 2
+
+  - citation: "Cal. Civ. Code § 789.3"
+    section_number: "789.3"
+    title: "Prohibition of Utility Interruption, Lockout, and Unlawful Eviction Tactics"
+    topic: "Utility Shutoff & Lockouts"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1979-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=789.3"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 1979, ch. 333"
+    raw_content: |
+      A landlord shall not with intent to terminate the occupancy under any lease or other tenancy or estate at will, however created, of property used by a tenant as his residence willfully cause, directly or indirectly, the interruption or termination of any utility service furnished the tenant, including, but not limited to, water, heat, light, electricity, gas, telephone, elevator, or refrigeration, whether or not the utility service is under the control of the landlord.
+
+      A landlord who violates this section shall be liable to the tenant in a civil action for all actual damages sustained by the tenant, plus an amount not to exceed one hundred dollars ($100) for each calendar day that the landlord remains in violation of this section, with a minimum statutory damages recovery of not less than two hundred fifty dollars ($250). In any action under this section, the court shall award reasonable attorney's fees to the prevailing party.
+    statutory_slots:
+      daily_statutory_penalty: 100.0
+      minimum_statutory_damages: 250.0
+      prevailing_attorney_fees: true
+
+  - citation: "Oakland Municipal Code § 8.22.030"
+    section_number: "8.22.030"
+    title: "Oakland Just Cause for Eviction Ordinance — Permissible Grounds for Eviction"
+    topic: "Just Cause Evictions"
+    authority_class: "municipal_ordinance"
+    hierarchy_level: "section"
+    effective_date: "2002-11-05"
+    source_url: "https://library.municode.com/ca/oakland/codes/code_of_ordinances?nodeId=TIT8HESA_CH8.22RECHJUCAEV"
+    publisher: "City of Oakland / Municode"
+    edition: "Measure EE / OMC Supp. 104"
+    raw_content: |
+      No landlord shall endeavor to recover possession, issue a notice terminating tenancy, or evict a tenant from any residential rental unit subject to the Just Cause for Eviction Ordinance except upon demonstrating one or more of the enumerated just cause grounds:
+      A. Nonpayment of rent.
+      B. Material violation of a lawful obligation of tenancy after written notice to cease.
+      C. Creating a substantial and continuous nuisance.
+      D. Causing substantial damage to the unit beyond normal wear and tear.
+      E. Disorderly conduct destroying the peace and quiet of other tenants.
+      F. Refusal to provide landlord reasonable access after proper written notice.
+      G. Owner move-in or relative move-in for use as a principal residence, provided the landlord is a natural person holding at least 33% recorded ownership interest, and no comparable vacant unit exists in the building.
+      H. Eviction under the Ellis Act to withdraw all rental units from the rental market permanently.
+
+      Landlords terminating tenancy for no-fault grounds (owner move-in or repairs) must pay mandatory Oakland municipal relocation payments pursuant to OMC Section 8.22.820.
+    statutory_slots:
+      minimum_ownership_percent_omi: 33.0
+      requires_relocation_payment: true
+      requires_written_warning_notice: true
+    exceptions_ref: "Oakland Municipal Code § 8.22.030(B)"
+
+  - citation: "Oakland Municipal Code § 8.22.020"
+    section_number: "8.22.020"
+    title: "Oakland Just Cause for Eviction Ordinance — Operative Definitions"
+    topic: "Just Cause Evictions"
+    authority_class: "municipal_ordinance"
+    hierarchy_level: "section"
+    effective_date: "2002-11-05"
+    source_url: "https://library.municode.com/ca/oakland/codes/code_of_ordinances?nodeId=TIT8HESA_CH8.22RECHJUCAEV"
+    publisher: "City of Oakland / Municode"
+    edition: "Measure EE / OMC Supp. 104"
+    raw_content: |
+      For purposes of Chapter 8.22, the following words and phrases shall have the meanings set forth herein:
+      'Covered Unit' means any rental residential real property located in the City of Oakland, except those specifically exempted by California state law (such as units constructed after 1995 under Costa-Hawkins).
+      'Disabled' means a person who has a physical or mental impairment that limits one or more major life activities within the meaning of the Americans with Disabilities Act.
+      'Catastrophically Ill' means a person suffering from a severe, life-threatening chronic illness.
+      'Senior Citizen' means a person sixty-two (62) years of age or older.
+      'Tenant' means a person entitled by written or oral agreement, or by sufferance, to the use or occupancy of a rental unit.
+    defines_terms:
+      - "Covered Unit"
+      - "Disabled"
+      - "Catastrophically Ill"
+      - "Senior Citizen"
+      - "Tenant"

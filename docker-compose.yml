@@ -11,6 +11,8 @@ services:
       - "${DATABASE_BIND_IP:-127.0.0.1}:${DATABASE_PORT:-5435}:5432"
     volumes:
       - kruschlaw_db_data:/var/lib/postgresql/data
+    networks:
+      - kruschlaw_internal
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kruschlaw} -d ${POSTGRES_DB:-kruschlaw_db}"]
       interval: 5s
@@ -39,6 +41,9 @@ services:
       - ${KRUSCH_NEXUS_DIR:-../krusch-nexus}:/nexus:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - kruschlaw_internal
+      - kruschlaw_ingress
     depends_on:
       db:
         condition: service_healthy
@@ -56,6 +61,9 @@ services:
       - "${FRONTEND_BIND_IP:-127.0.0.1}:${FRONTEND_PORT:-8505}:8501"
     volumes:
       - ./src:/app/src
+    networks:
+      - kruschlaw_internal
+      - kruschlaw_ingress
     depends_on:
       - backend
 
@@ -78,6 +86,8 @@ services:
       - ${KRUSCH_NEXUS_DIR:-../krusch-nexus}:/nexus:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - kruschlaw_internal
     depends_on:
       db:
         condition: service_healthy
@@ -92,6 +102,15 @@ services:
       - "127.0.0.1:11434:11434"
     volumes:
       - kruschlaw_ollama_data:/root/.ollama
+    networks:
+      - kruschlaw_internal
+
+networks:
+  kruschlaw_internal:
+    driver: bridge
+    internal: true  # Air-gap boundary: no external internet routing or public egress
+  kruschlaw_ingress:
+    driver: bridge
 
 volumes:
   kruschlaw_db_data:

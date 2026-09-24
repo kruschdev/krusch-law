@@ -15,12 +15,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import SessionLocal, LawVector, GroundingReport, MatterEvidence
-from .resolver import (
-    resolve_controlling_law,
-    detect_legal_conflicts,
-    LegalResolution,
-    extract_statutory_slots
-)
+from .resolver import resolve_controlling_law
 from .tagger import extract_legal_slots
 
 logger = logging.getLogger("kruschlaw.rag")
@@ -365,6 +360,47 @@ def is_section_grounded(cited_sec: str, authorized_sections: Set[str]) -> bool:
     return False
 
 
+def enforce_generation_citation_constraints(text: str, laws: List[Dict]) -> str:
+    """
+    Enforces strict citation constraints on generated LLM draft text.
+    Bans unretrieved bare sections by identifying citations that do not exist
+    in the retrieved authority set and replacing them with:
+    [UNAUTHORIZED CITATION STRIPPED: ...]
+    """
+    if not text or not laws:
+        return text
+
+    authorized_sections: Set[str] = set()
+    for law in laws:
+        sec = law.get("section") or ""
+        title = law.get("title") or ""
+        authorized_sections |= extract_section_identifiers(sec)
+        authorized_sections |= extract_section_identifiers(title)
+        if sec:
+            authorized_sections.add(sec.replace("Section", "").strip())
+
+    citation_pattern = re.compile(
+        r'\b(?:(?:OMC|O\.M\.C\.|LAMC|L\.A\.M\.C\.|SFPC|SFAC|Cal\.\s*Civ\.\s*Code|California\s*Civil\s*Code|Civ\.\s*Code|CC|Police\s*Code|Admin\.\s*Code|Health\s*&\s*Saf\.\s*Code|Gov\.\s*Code)\s*)?'
+        r'(?:§+|Section|Sec\.)\s*([0-9]+[A-Za-z0-9\.\-\(\)]*)',
+        re.IGNORECASE
+    )
+
+    def _replace_unauthorized(match):
+        full_cite = match.group(0)
+        start_idx = match.start()
+        prefix_window = text[max(0, start_idx - 35):start_idx]
+        if "UNAUTHORIZED CITATION STRIPPED" in prefix_window:
+            return full_cite
+        sec_num = match.group(1).rstrip('.,;:')
+        if len(sec_num) > 1 or (sec_num.isdigit() and int(sec_num) > 10):
+            if not is_section_grounded(sec_num, authorized_sections):
+                return f"[UNAUTHORIZED CITATION STRIPPED: {full_cite}]"
+        return full_cite
+
+    return citation_pattern.sub(_replace_unauthorized, text)
+
+
+
 def verify_citation_grounding(analysis_text: str, laws: List[Dict]) -> Tuple[bool, List[str], str]:
     """
     Verify whether statutory citations and quote spans in the generated brief
@@ -536,6 +572,14 @@ def verify_mechanical_pass_a(
       4. Status is live on relevant matter date (not repealed, sunset, or enjoined)
       5. Quote is a real substring or normalized near-quote
     """
+    # Check if section was stripped by generation constraints
+    if "[UNAUTHORIZED CITATION STRIPPED" in claim:
+        return False, "not_in_corpus", {
+            "status": "invented_citation",
+            "verdict": "not_in_corpus",
+            "reason": f"Cited section '{cited_sec}' is an unauthorized citation stripped by generation constraints."
+        }
+
     if not cited_sec or not matched_law:
         return False, "not_in_corpus", {
             "status": "invented_citation",
@@ -572,10 +616,12 @@ def verify_proposition_pass_b(
 ) -> Tuple[str, str, float, Optional[str]]:
     """
     Pass B — Propositional Entailment:
-      Decomposes draft into atomic claims, binds spans, and classifies into 5 states:
-        - entailed: Claim strictly follows from bound span(s) + definitions.
+      Decomposes draft into atomic claims, binds spans, and classifies into discrete states:
+        - entailed: Claim strictly follows from bound span(s) + definitions with high confidence.
         - contradicted: Claim directly conflicts with span (numeric or duty inversion).
         - exception_applies: General rule claimed, but statutory exception precludes it.
+        - abstain: Borderline support (partial overlap without verbatim quote, or non-statutory commentary);
+                   requires human review. High-overlap excerpt != proposition is supported.
         - insufficient_context: Provision touched on, but fails to substantiate proposition.
         - not_in_corpus: Rule/span not present.
     Returns (verdict, reason, confidence, supporting_span).
@@ -584,6 +630,15 @@ def verify_proposition_pass_b(
 
     quotes = re.findall(r'["“]([^"”]{15,})["”]', claim)
     has_verbatim_quote = any(q.strip().lower() in target_content.lower() for q in quotes) if target_content else False
+
+    # Check for secondary commentary / non-statute authority
+    if matched_law and matched_law.get("authority_class") in ("secondary_commentary", "treatise", "commentary"):
+        return (
+            "abstain",
+            "Cited source is secondary commentary rather than an authoritative statutory provision. Human review required.",
+            0.50,
+            best_span
+        )
 
     # 1. Numeric and Duration Term Contradiction
     primary_sec = matched_law.get("section", "") if matched_law else ""
@@ -643,7 +698,11 @@ def verify_proposition_pass_b(
                         exc[:180]
                     )
 
-    # 4. Textual Support / Entailment vs Insufficient Context
+    # 4. Textual Support / Entailment vs Abstain vs Insufficient Context
+    # Thresholds with teeth:
+    # High Confidence Entailment: verbatim quote span or overlap >= 0.35
+    # Abstain Range: 0.18 <= overlap < 0.35 without verbatim quote -> requires human review
+    # Low overlap: < 0.18 -> insufficient context
     if has_verbatim_quote or overlap >= 0.35:
         return (
             "entailed",
@@ -653,9 +712,9 @@ def verify_proposition_pass_b(
         )
     elif overlap >= 0.15:
         return (
-            "entailed",
-            "Supported by general contextual statutory issue-spotting.",
-            0.75,
+            "abstain",
+            f"Partial textual overlap ({round(overlap*100)}%) without verbatim quote span; proposition is ambiguous or not strictly entailed. Human attorney review required.",
+            round(overlap, 2),
             best_span
         )
     else:
@@ -683,8 +742,9 @@ def verify_assertion_grounding(
         return False, [], "No authorities retrieved to verify grounding.", {
             "total_claims": 0, "supported_claims": 0, "unsupported_claims": 0,
             "invented_citations": 0, "wrong_propositions": 0, "stale_law_citations": 0,
-            "contradicted_claims": 0, "exception_applies_claims": 0, "insufficient_context_claims": 0,
-            "not_in_corpus_claims": 0, "refused_claims_count": 0, "pass_rate": 0.0,
+            "abstain_claims": 0, "contradicted_claims": 0, "exception_applies_claims": 0,
+            "insufficient_context_claims": 0, "not_in_corpus_claims": 0, "refused_claims_count": 0,
+            "pass_rate": 0.0, "false_support_rate": 0.0,
             "verified_draft": "[REFUSED: No authorities available to ground analysis.]"
         }
 
@@ -725,6 +785,7 @@ def verify_assertion_grounding(
     wrong_prop_count = 0
     stale_count = 0
     supported_count = 0
+    abstain_count = 0
     contradicted_count = 0
     exception_applies_count = 0
     insufficient_context_count = 0
@@ -768,6 +829,9 @@ def verify_assertion_grounding(
                         "claim": claim,
                         "citation": primary_sec,
                         "source_excerpt": "None (Citation not present in retrieved authorities)",
+                        "quote_span": "",
+                        "entailment_score": 0.0,
+                        "human_review_flag": True,
                         "status": "invented_citation",
                         "verdict": "not_in_corpus",
                         "reason": pass_a_details["reason"],
@@ -780,6 +844,9 @@ def verify_assertion_grounding(
                         "claim": claim,
                         "citation": primary_sec,
                         "source_excerpt": (matched_law.get("content", "")[:180] + "...") if matched_law else "",
+                        "quote_span": "",
+                        "entailment_score": 0.0,
+                        "human_review_flag": True,
                         "status": "stale_law",
                         "verdict": "stale_law",
                         "reason": pass_a_details["reason"],
@@ -806,10 +873,32 @@ def verify_assertion_grounding(
                     "claim": claim,
                     "citation": primary_sec,
                     "source_excerpt": best_span or (target_content[:180] + "..."),
+                    "quote_span": best_span or "",
+                    "entailment_score": round(confidence, 2),
+                    "human_review_flag": False,
                     "status": "supported",
                     "verdict": "entailed",
                     "reason": reason,
                     "refused": False,
+                    "confidence": confidence
+                })
+            elif verdict == "abstain":
+                abstain_count += 1
+                refused_count += 1
+                refusal_banner = f"[CLAIM REFUSED: ABSTAIN - {reason}]"
+                verified_draft_parts.append(refusal_banner)
+                claim_records.append({
+                    "claim": claim,
+                    "citation": primary_sec,
+                    "source_excerpt": best_span or (target_content[:180] + "..."),
+                    "quote_span": best_span or "",
+                    "entailment_score": round(confidence, 2),
+                    "human_review_flag": True,
+                    "status": "abstain",
+                    "verdict": "abstain",
+                    "reason": reason,
+                    "refused": True,
+                    "refusal_notice": refusal_banner,
                     "confidence": confidence
                 })
             else:
@@ -829,6 +918,9 @@ def verify_assertion_grounding(
                     "claim": claim,
                     "citation": primary_sec,
                     "source_excerpt": best_span or (target_content[:180] + "..."),
+                    "quote_span": best_span or "",
+                    "entailment_score": round(confidence, 2),
+                    "human_review_flag": True,
                     "status": "wrong_proposition",
                     "verdict": verdict,
                     "reason": reason,
@@ -853,11 +945,33 @@ def verify_assertion_grounding(
                 claim_records.append({
                     "claim": claim,
                     "citation": "Retrieved Context",
-                    "source_excerpt": best_span,
+                    "source_excerpt": best_span or "",
+                    "quote_span": best_span or "",
+                    "entailment_score": round(confidence, 2),
+                    "human_review_flag": False,
                     "status": "supported",
                     "verdict": "entailed",
                     "reason": reason,
                     "refused": False,
+                    "confidence": confidence
+                })
+            elif verdict == "abstain":
+                abstain_count += 1
+                refused_count += 1
+                refusal_banner = f"[CLAIM REFUSED: ABSTAIN - {reason}]"
+                verified_draft_parts.append(refusal_banner)
+                claim_records.append({
+                    "claim": claim,
+                    "citation": "Uncited",
+                    "source_excerpt": best_span or "No matching excerpt found.",
+                    "quote_span": best_span or "",
+                    "entailment_score": round(confidence, 2),
+                    "human_review_flag": True,
+                    "status": "abstain",
+                    "verdict": "abstain",
+                    "reason": reason,
+                    "refused": True,
+                    "refusal_notice": refusal_banner,
                     "confidence": confidence
                 })
             else:
@@ -876,6 +990,9 @@ def verify_assertion_grounding(
                     "claim": claim,
                     "citation": "Uncited",
                     "source_excerpt": best_span or "No matching excerpt found.",
+                    "quote_span": best_span or "",
+                    "entailment_score": round(confidence, 2),
+                    "human_review_flag": True,
                     "status": "wrong_proposition",
                     "verdict": verdict,
                     "reason": reason,
@@ -885,7 +1002,7 @@ def verify_assertion_grounding(
                 })
 
     total_claims = len(claim_records)
-    unsupported_total = invented_count + wrong_prop_count + stale_count
+    unsupported_total = invented_count + wrong_prop_count + stale_count + abstain_count
     pass_rate = round((supported_count / total_claims) * 100, 1) if total_claims > 0 else 100.0
     verified_draft = " ".join(verified_draft_parts)
 
@@ -896,12 +1013,14 @@ def verify_assertion_grounding(
         "invented_citations": invented_count,
         "wrong_propositions": wrong_prop_count,
         "stale_law_citations": stale_count,
+        "abstain_claims": abstain_count,
         "contradicted_claims": contradicted_count,
         "exception_applies_claims": exception_applies_count,
         "insufficient_context_claims": insufficient_context_count,
         "not_in_corpus_claims": not_in_corpus_count,
         "refused_claims_count": refused_count,
         "pass_rate": pass_rate,
+        "false_support_rate": 0.0,
         "verified_draft": verified_draft
     }
 
@@ -916,6 +1035,8 @@ def verify_assertion_grounding(
         advisories.append(f"> ⚠️ **Statutory Exceptions Apply ({exception_applies_count})**: General rules asserted where an explicit statutory exception controls.")
     if insufficient_context_count > 0:
         advisories.append(f"> 🟠 **Insufficient Context ({insufficient_context_count})**: Assertions made with low factual or statutory overlap to cited sections.")
+    if abstain_count > 0:
+        advisories.append(f"> 🟡 **Ambiguous / Abstain ({abstain_count})**: Assertions have partial overlap or secondary commentary requiring manual attorney review.")
 
     if advisories:
         advisory_md = (
@@ -975,8 +1096,6 @@ def filter_authorities_by_jurisdiction(
     matter_prop_type = matter_facts.get("property_type")
 
     for cand in candidates:
-        sec = cand.get("section", "Unknown")
-
         # 1. Temporal Validity Filter
         if exclude_repealed:
             if cand.get("repealed") or cand.get("status") in ("repealed", "sunset", "enjoined"):
@@ -1073,7 +1192,7 @@ def filter_authorities_by_jurisdiction(
                     pass
 
         if is_preempted:
-            pruned.append({**c, "prune_reason": f"Preempted by higher priority controlling node"})
+            pruned.append({**c, "prune_reason": "Preempted by higher priority controlling node"})
             continue
 
         final_governing.append(c)
@@ -1667,6 +1786,7 @@ Draft the legal analysis following the required headings. Conclude with an ethic
             )
             resp.raise_for_status()
             analysis_text = resp.json().get("response", "").strip()
+            analysis_text = enforce_generation_citation_constraints(analysis_text, laws)
 
             is_grounded, claim_records, grounding_notice, stats = verify_assertion_grounding(analysis_text, laws)
 
@@ -1687,12 +1807,14 @@ Draft the legal analysis following the required headings. Conclude with an ethic
                         unsupported_claims=stats.get("unsupported_claims", 0),
                         invented_citations=stats.get("invented_citations", 0),
                         stale_law_citations=stats.get("stale_law_citations", 0),
+                        abstain_claims=stats.get("abstain_claims", 0),
                         contradicted_claims=stats.get("contradicted_claims", 0),
                         exception_applies_claims=stats.get("exception_applies_claims", 0),
                         insufficient_context_claims=stats.get("insufficient_context_claims", 0),
                         not_in_corpus_claims=stats.get("not_in_corpus_claims", 0),
                         refused_claims_count=stats.get("refused_claims_count", 0),
                         pass_rate=stats.get("pass_rate", 100.0),
+                        false_support_rate=stats.get("false_support_rate", 0.0),
                         claims_json=json.dumps(claim_records),
                         verified_draft=stats.get("verified_draft"),
                         advisory_markdown=grounding_notice
@@ -1762,6 +1884,9 @@ def retrieve_matter_evidence(
                     tags_list = json.loads(r.tags) if isinstance(r.tags, str) else list(r.tags)
                 except Exception:
                     tags_list = [t.strip() for t in str(r.tags).split(",") if t.strip()]
+            from .crypto import EvidenceEncryptor
+            decrypted_content = EvidenceEncryptor.decrypt_text(r.content)
+            decrypted_summary = EvidenceEncryptor.decrypt_text(r.summary) if r.summary else None
             return {
                 "id": r.id,
                 "matter_id": r.matter_id,
@@ -1770,9 +1895,9 @@ def retrieve_matter_evidence(
                 "page_number": r.page_number,
                 "section_locator": r.section_locator,
                 "chunk_index": r.chunk_index,
-                "content": r.content,
+                "content": decrypted_content,
                 "tags": tags_list,
-                "summary": r.summary,
+                "summary": decrypted_summary,
                 "doctrine": r.doctrine,
                 "similarity": round(float(score_val), 4),
                 "created_at": r.created_at.isoformat() if r.created_at else None

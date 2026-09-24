@@ -28,15 +28,13 @@ import re
 import json
 import logging
 from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Union
 
+from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .db import LawVector, SessionLocal
-from .tagger import extract_legal_slots
-
-extract_statutory_slots = extract_legal_slots
 
 logger = logging.getLogger("kruschlaw.resolver")
 
@@ -121,14 +119,91 @@ def normalize_statutory_citation(cite: Optional[str]) -> str:
     return cleaned.strip()
 
 
+class LawNode(BaseModel):
+    """Strongly typed legal authority node."""
+    id: Optional[int] = None
+    section: Optional[str] = None
+    citation: Optional[str] = None
+    title: Optional[str] = None
+    topic: Optional[str] = None
+    jurisdiction: Optional[str] = None
+    state: Optional[str] = None
+    city: Optional[str] = None
+    county: Optional[str] = None
+    authority_class: Optional[str] = None
+    effective_date: Optional[str] = None
+    effective_from: Optional[str] = None
+    effective_to: Optional[str] = None
+    status: Optional[str] = None
+    repealed: bool = False
+    content: Optional[str] = None
+    source_url: Optional[str] = None
+
+
+class ResolutionHop(BaseModel):
+    """Individual step in the statutory authority resolution graph walk."""
+    step: int
+    hop_type: str = Field(..., description="PREEMPTION, AMENDMENT, EXCEPTION, SPATIAL_FILTER, TEMPORAL_LOOKBACK, TERMINAL, COVERAGE_CHECK")
+    from_node: Optional[str] = None
+    to_node: Optional[str] = None
+    action: str = Field(..., description="FOLLOW_PREEMPTION, FOLLOW_AMENDMENT, HISTORICAL_LOOKBACK, EXCEPTION_APPLIED, TERMINAL_CONTROLLING_NODE, COVERAGE_HOLE, FILTER_OUT")
+    decision: str = Field("KEPT", description="KEPT, DISCARDED, OVERRIDDEN, SUPERSEDED, NOT_YET_ENACTED, REPEALED, COVERAGE_HOLE")
+    reason: str = Field(..., description="Explicit rationale for this hop or discard decision")
+    as_of_date: str
+
+
+class CoverageHole(BaseModel):
+    """Explicit, first-class result indicating an absent legal authority."""
+    topic: str
+    jurisdiction: str
+    as_of_date: str
+    searched_criteria: Dict[str, Any] = Field(default_factory=dict)
+    reason: str = "No controlling section found in authoritative corpus for this topic and jurisdiction."
+    fallback_neighbors_suppressed: bool = True
+    is_coverage_hole: bool = True
+
+    @property
+    def doctrine(self) -> str:
+        return self.topic
+
+
+class DiscardedCandidate(BaseModel):
+    """Candidate authority node considered and discarded with documented rationale."""
+    node_id: Optional[int] = None
+    citation: str
+    title: Optional[str] = None
+    reason: str
+    category: str  # PREEMPTED, NOT_YET_ENACTED, REPEALED, SUPERSEDED, SPATIAL_MISMATCH, LOWER_AUTHORITY_RANK
+
+
+class ResolutionTrace(BaseModel):
+    """Complete provenance and audit trail for a controlling law resolution."""
+    as_of_date: str
+    query_topic: str
+    jurisdiction: str
+    city: Optional[str] = None
+    county: Optional[str] = None
+    controlling_node: Optional[LawNode] = None
+    governing_citation: str
+    hops: List[ResolutionHop] = Field(default_factory=list)
+    discarded_nodes: List[DiscardedCandidate] = Field(default_factory=list)
+    coverage_hole: Optional[CoverageHole] = None
+    active_exceptions: List[Dict[str, Any]] = Field(default_factory=list)
+    mandatory_definitions: List[Dict[str, Any]] = Field(default_factory=list)
+    statutory_slots: Dict[str, Any] = Field(default_factory=dict)
+    confidence_score: float = 1.0
+    notes: str = ""
+
+
 class LegalResolution:
     """
     Structured result of a multi-hop controlling legal authority resolution.
     Provides complete provenance, derivation chain, and quantitative terms for attorneys.
+    Backed by strongly typed Pydantic ResolutionTrace and explicit CoverageHole models.
     """
     def __init__(
         self,
-        controlling_node: Optional[Dict[str, Any]],
+        controlling_node: Optional[Union[Dict[str, Any], LawNode]],
         governing_citation: str,
         topic: str,
         jurisdiction: str,
@@ -138,9 +213,16 @@ class LegalResolution:
         mandatory_definitions: List[Dict[str, Any]],
         statutory_slots: Dict[str, Any],
         confidence_score: float = 1.0,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
+        trace: Optional[ResolutionTrace] = None,
+        coverage_hole: Optional[CoverageHole] = None,
+        discarded_nodes: Optional[List[Union[Dict[str, Any], DiscardedCandidate]]] = None
     ):
-        self.controlling_node = controlling_node
+        if isinstance(controlling_node, LawNode):
+            self.controlling_node = controlling_node.model_dump()
+        else:
+            self.controlling_node = controlling_node
+
         self.governing_citation = governing_citation
         self.topic = topic
         self.jurisdiction = jurisdiction
@@ -151,6 +233,13 @@ class LegalResolution:
         self.statutory_slots = statutory_slots
         self.confidence_score = confidence_score
         self.notes = notes or ""
+        self.trace = trace
+        self.coverage_hole = coverage_hole
+        self.discarded_nodes = discarded_nodes or []
+
+    @property
+    def is_coverage_hole(self) -> bool:
+        return self.coverage_hole is not None or "COVERAGE_HOLE" in self.governing_citation
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -164,7 +253,13 @@ class LegalResolution:
             "mandatory_definitions": self.mandatory_definitions,
             "statutory_slots": self.statutory_slots,
             "confidence_score": round(self.confidence_score, 3),
-            "notes": self.notes
+            "notes": self.notes,
+            "trace": self.trace.model_dump() if self.trace else None,
+            "coverage_hole": self.coverage_hole.model_dump() if self.coverage_hole else None,
+            "discarded_nodes": [
+                d.model_dump() if isinstance(d, BaseModel) else d
+                for d in self.discarded_nodes
+            ]
         }
 
 
@@ -234,7 +329,42 @@ def resolve_controlling_law(
                 )
             ).limit(10).all()
 
+        hops: List[ResolutionHop] = []
+        discarded_candidates: List[DiscardedCandidate] = []
+
         if not candidates:
+            cov_hole = CoverageHole(
+                topic=doctrine_or_topic,
+                jurisdiction=jurisdiction or city or "California",
+                as_of_date=target_date.isoformat(),
+                searched_criteria={"doctrine_or_topic": doctrine_or_topic, "city": city, "county": county},
+                reason=f"No controlling section found in authoritative corpus for '{doctrine_or_topic}' in {jurisdiction or city or 'California'} as of {target_date.isoformat()}.",
+                fallback_neighbors_suppressed=True
+            )
+            hops.append(ResolutionHop(
+                step=1,
+                hop_type="COVERAGE_CHECK",
+                from_node=None,
+                to_node=None,
+                action="COVERAGE_HOLE",
+                decision="COVERAGE_HOLE",
+                reason=f"Zero matching statutory sections found for '{doctrine_or_topic}' in {jurisdiction or city or 'California'}",
+                as_of_date=target_date.isoformat()
+            ))
+            trace = ResolutionTrace(
+                as_of_date=target_date.isoformat(),
+                query_topic=doctrine_or_topic,
+                jurisdiction=jurisdiction or city or "California",
+                city=city,
+                county=county,
+                controlling_node=None,
+                governing_citation="No authority found in corpus",
+                hops=hops,
+                discarded_nodes=discarded_candidates,
+                coverage_hole=cov_hole,
+                confidence_score=0.0,
+                notes="Explicit coverage hole detected. Suppressed weak semantic vector neighbor."
+            )
             return LegalResolution(
                 controlling_node=None,
                 governing_citation="No authority found in corpus",
@@ -246,7 +376,10 @@ def resolve_controlling_law(
                 mandatory_definitions=[],
                 statutory_slots={},
                 confidence_score=0.0,
-                notes="Zero candidate nodes found for doctrine/jurisdiction in local law store."
+                notes="Zero candidate nodes found for doctrine/jurisdiction in local law store.",
+                trace=trace,
+                coverage_hole=cov_hole,
+                discarded_nodes=discarded_candidates
             )
 
         # Step 2: Filter spatial applicability (unincorporated vs incorporated)
@@ -256,20 +389,41 @@ def resolve_controlling_law(
         spatially_valid = []
         for cand in candidates:
             applies_if_raw = cand.applies_if
+            discard_reason = None
             if applies_if_raw:
                 try:
                     conds = json.loads(applies_if_raw) if isinstance(applies_if_raw, str) else applies_if_raw
                     if "unincorporated" in conds:
                         if is_unincorporated and conds["unincorporated"] is False:
-                            continue
+                            discard_reason = "Excluded by spatial filter: jurisdiction requires incorporated parcel"
                         if not is_unincorporated and conds["unincorporated"] is True:
-                            continue
+                            discard_reason = "Excluded by spatial filter: jurisdiction requires unincorporated parcel"
                     if "city" in conds and fact_city:
                         if conds["city"].lower() != fact_city.lower():
-                            continue
+                            discard_reason = f"Excluded by spatial filter: applies to {conds['city']}, not {fact_city}"
                 except Exception:
                     pass
-            spatially_valid.append(cand)
+
+            if discard_reason:
+                discarded_candidates.append(DiscardedCandidate(
+                    node_id=cand.id,
+                    citation=cand.section or "Unknown Section",
+                    title=cand.title,
+                    reason=discard_reason,
+                    category="SPATIAL_MISMATCH"
+                ))
+                hops.append(ResolutionHop(
+                    step=len(hops) + 1,
+                    hop_type="SPATIAL_FILTER",
+                    from_node=cand.section,
+                    to_node=None,
+                    action="FILTER_OUT",
+                    decision="DISCARDED",
+                    reason=discard_reason,
+                    as_of_date=target_date.isoformat()
+                ))
+            else:
+                spatially_valid.append(cand)
 
         if not spatially_valid:
             spatially_valid = candidates
@@ -316,6 +470,24 @@ def resolve_controlling_law(
                 chain_step["preempted_by"] = preempted_by
                 precedence_chain.append(chain_step)
 
+                discarded_candidates.append(DiscardedCandidate(
+                    node_id=current_node.id,
+                    citation=current_node.section or "Unknown",
+                    title=current_node.title,
+                    reason=f"Municipal ordinance preempted by statewide statute {preempted_by}",
+                    category="PREEMPTED"
+                ))
+                hops.append(ResolutionHop(
+                    step=steps,
+                    hop_type="PREEMPTION",
+                    from_node=current_node.section,
+                    to_node=preempted_by,
+                    action="FOLLOW_PREEMPTION",
+                    decision="PREEMPTED",
+                    reason=f"{current_node.section} is preempted by statewide statute {preempted_by}",
+                    as_of_date=target_date.isoformat()
+                ))
+
                 # Find the preempting state statute in DB
                 clean_target = re.sub(r'[^0-9\.]', '', preempted_by)
                 preempting_node = None
@@ -346,7 +518,6 @@ def resolve_controlling_law(
                     break
 
             # Check 4B: Amendment Edge (Older node -> Newer enacted amendment)
-            # If superseded_by_id is set, or if an amended node exists
             next_amendment = None
             if current_node.superseded_by_id:
                 cand_next = db.query(LawVector).filter(LawVector.id == current_node.superseded_by_id).first()
@@ -373,6 +544,25 @@ def resolve_controlling_law(
                 chain_step["action"] = "FOLLOW_AMENDMENT"
                 chain_step["superseded_by_id"] = next_amendment.id
                 precedence_chain.append(chain_step)
+
+                eff_str = next_amendment.effective_date.isoformat() if next_amendment.effective_date else "effective date"
+                discarded_candidates.append(DiscardedCandidate(
+                    node_id=current_node.id,
+                    citation=current_node.section or "Unknown",
+                    title=current_node.title,
+                    reason=f"Superseded by legislative amendment {next_amendment.section} effective {eff_str}",
+                    category="SUPERSEDED"
+                ))
+                hops.append(ResolutionHop(
+                    step=steps,
+                    hop_type="AMENDMENT",
+                    from_node=current_node.section,
+                    to_node=next_amendment.section,
+                    action="FOLLOW_AMENDMENT",
+                    decision="SUPERSEDED",
+                    reason=f"Superseded by newer legislative amendment {next_amendment.section} as of {target_date.isoformat()}",
+                    as_of_date=target_date.isoformat()
+                ))
                 current_node = next_amendment
                 continue
 
@@ -389,12 +579,40 @@ def resolve_controlling_law(
                     chain_step["action"] = "HISTORICAL_LOOKBACK"
                     chain_step["prior_node_id"] = prior_node.id
                     precedence_chain.append(chain_step)
+
+                    discarded_candidates.append(DiscardedCandidate(
+                        node_id=current_node.id,
+                        citation=current_node.section or "Unknown",
+                        title=current_node.title,
+                        reason=f"Enacted on {node_eff.isoformat()} which is after incident date {target_date.isoformat()}",
+                        category="NOT_YET_ENACTED"
+                    ))
+                    hops.append(ResolutionHop(
+                        step=steps,
+                        hop_type="TEMPORAL_LOOKBACK",
+                        from_node=current_node.section,
+                        to_node=prior_node.section,
+                        action="HISTORICAL_LOOKBACK",
+                        decision="NOT_YET_ENACTED",
+                        reason=f"Modern amendment not yet in force as of {target_date.isoformat()}; rolled back to prior enacted law",
+                        as_of_date=target_date.isoformat()
+                    ))
                     current_node = prior_node
                     continue
 
             # Terminal node reached
             chain_step["action"] = "TERMINAL_CONTROLLING_NODE"
             precedence_chain.append(chain_step)
+            hops.append(ResolutionHop(
+                step=steps,
+                hop_type="TERMINAL",
+                from_node=current_node.section,
+                to_node=current_node.section,
+                action="TERMINAL_CONTROLLING_NODE",
+                decision="KEPT",
+                reason=f"Controlling legal authority confirmed as of {target_date.isoformat()}",
+                as_of_date=target_date.isoformat()
+            ))
             break
 
         # Step 5: Gather Mandatory Definitions along active path
@@ -456,6 +674,16 @@ def resolve_controlling_law(
                         "content": exc.content,
                         "triggering_fact": "Matched matter facts to statutory carve-out"
                     })
+                    hops.append(ResolutionHop(
+                        step=len(hops) + 1,
+                        hop_type="EXCEPTION",
+                        from_node=current_node.section,
+                        to_node=exc.section,
+                        action="EXCEPTION_APPLIED",
+                        decision="KEPT",
+                        reason=f"Statutory exception triggered by matter facts: {exc.section}",
+                        as_of_date=target_date.isoformat()
+                    ))
 
         # Step 7: Deterministic Slot Extraction from controlling node
         statutory_slots = extract_statutory_slots(current_node.content or "")
@@ -464,6 +692,44 @@ def resolve_controlling_law(
         gov_cite = current_node.section or current_node.title or "California Controlling Statute"
         if not gov_cite.startswith("Section") and not gov_cite.startswith("Cal.") and not gov_cite.startswith("OMC"):
             gov_cite = f"Section {gov_cite}"
+
+        law_node = LawNode(
+            id=current_node.id,
+            section=current_node.section,
+            citation=gov_cite,
+            title=current_node.title,
+            topic=current_node.topic,
+            jurisdiction=current_node.jurisdiction,
+            state=current_node.state,
+            city=current_node.city or current_node.city_or_county,
+            county=current_node.county,
+            authority_class=current_node.authority_class,
+            effective_date=current_node.effective_date.isoformat() if current_node.effective_date else None,
+            effective_from=current_node.effective_from.isoformat() if current_node.effective_from else None,
+            effective_to=current_node.effective_to.isoformat() if current_node.effective_to else None,
+            status=current_node.status,
+            repealed=bool(current_node.repealed),
+            content=current_node.content,
+            source_url=current_node.source_url
+        )
+
+        trace = ResolutionTrace(
+            as_of_date=target_date.isoformat(),
+            query_topic=doctrine_or_topic,
+            jurisdiction=current_node.jurisdiction,
+            city=current_node.city or current_node.city_or_county,
+            county=current_node.county,
+            controlling_node=law_node,
+            governing_citation=gov_cite,
+            hops=hops,
+            discarded_nodes=discarded_candidates,
+            coverage_hole=None,
+            active_exceptions=active_exceptions,
+            mandatory_definitions=mandatory_definitions,
+            statutory_slots=statutory_slots,
+            confidence_score=0.98 if precedence_chain else 0.85,
+            notes=f"Resolved via {len(precedence_chain)} graph steps as of {target_date.isoformat()}."
+        )
 
         return LegalResolution(
             controlling_node={
@@ -492,7 +758,10 @@ def resolve_controlling_law(
             mandatory_definitions=mandatory_definitions,
             statutory_slots=statutory_slots,
             confidence_score=0.98 if precedence_chain else 0.85,
-            notes=f"Resolved via {len(precedence_chain)} graph steps as of {target_date.isoformat()}."
+            notes=f"Resolved via {len(precedence_chain)} graph steps as of {target_date.isoformat()}.",
+            trace=trace,
+            coverage_hole=None,
+            discarded_nodes=discarded_candidates
         )
 
     except Exception as e:
@@ -513,6 +782,97 @@ def resolve_controlling_law(
     finally:
         if close_db:
             db.close()
+
+
+def explain_why_not_controlling(
+    citation: str,
+    doctrine_or_topic: str,
+    as_of_date: Optional[Any] = None,
+    city: Optional[str] = None,
+    county: Optional[str] = None,
+    matter_facts: Optional[Dict[str, Any]] = None,
+    db: Optional[Session] = None
+) -> Dict[str, Any]:
+    """
+    Authoritative diagnostics tool: Explains why a specific statutory section is NOT
+    controlling for the given topic, jurisdiction, and as-of date.
+    Traces preemption, legislative amendments, temporal effective boundaries, or spatial limits.
+    """
+    target_date = to_utc_date(as_of_date)
+    res = resolve_controlling_law(
+        doctrine_or_topic=doctrine_or_topic,
+        city=city,
+        county=county,
+        as_of_date=target_date,
+        matter_facts=matter_facts,
+        db=db
+    )
+
+    controlling_cite = res.governing_citation or "NONE_FOUND"
+    clean_target = re.sub(r'[^0-9\.]', '', citation)
+
+    # 1. Check if explicitly in discarded candidates or hops
+    discard_reasons = []
+    if res.trace:
+        for d in res.trace.discarded_nodes:
+            d_cite = (d.citation or "").lower()
+            d_title = (d.title or "").lower()
+            target_l = citation.lower()
+            d_clean = re.sub(r'[^0-9\.]', '', d.citation or "")
+            if (target_l in d_cite) or (d_cite and d_cite in target_l) or (target_l in d_title) or (clean_target and clean_target == d_clean):
+                discard_reasons.append(f"[{d.category}] {d.reason}")
+        for hop in res.trace.hops:
+            if hop.from_node:
+                from_l = hop.from_node.lower()
+                target_l = citation.lower()
+                from_clean = re.sub(r'[^0-9\.]', '', hop.from_node)
+                if (target_l in from_l) or (from_l in target_l) or (clean_target and clean_target == from_clean):
+                    if hop.decision != "KEPT":
+                        discard_reasons.append(f"[{hop.action}] {hop.reason}")
+
+    if discard_reasons:
+        return {
+            "citation": citation,
+            "is_controlling": False,
+            "controlling_authority": controlling_cite,
+            "as_of_date": target_date.isoformat(),
+            "reasons": discard_reasons,
+            "explanation": " ; ".join(discard_reasons)
+        }
+
+    # 2. Check if candidate matches the controlling node
+    is_ctrl = False
+    if res.controlling_node:
+        ctrl_sec = (res.controlling_node.get("section") or "").lower()
+        ctrl_title = (res.controlling_node.get("title") or "").lower()
+        ctrl_cite = controlling_cite.lower()
+        target_l = citation.lower()
+        clean_ctrl = re.sub(r'[^0-9\.]', '', controlling_cite)
+
+        if (target_l == ctrl_sec) or (target_l in ctrl_cite) or (ctrl_sec and target_l in ctrl_sec) or (target_l in ctrl_title):
+            is_ctrl = True
+        elif clean_target and clean_target == clean_ctrl and not any(tag in target_l for tag in ["pre-", "superseded", "repealed"]):
+            is_ctrl = True
+
+    if is_ctrl:
+        return {
+            "citation": citation,
+            "is_controlling": True,
+            "controlling_authority": controlling_cite,
+            "as_of_date": target_date.isoformat(),
+            "explanation": f"{citation} IS the controlling authority for {doctrine_or_topic} as of {target_date.isoformat()}."
+        }
+
+    # 3. Otherwise, not controlling
+    generic_reason = f"Section {citation} was superseded, preempted, or not identified as controlling authority for '{controlling_cite}' as of {target_date.isoformat()}."
+    return {
+        "citation": citation,
+        "is_controlling": False,
+        "controlling_authority": controlling_cite,
+        "as_of_date": target_date.isoformat(),
+        "reasons": [generic_reason],
+        "explanation": generic_reason
+    }
 
 
 def extract_statutory_slots(text_content: str) -> Dict[str, Any]:
@@ -626,8 +986,8 @@ def detect_legal_conflicts(
                     "as_of_date": target_date.isoformat(),
                     "issue": f"Provision '{sec}' sunset on {eff_to_date} and was NOT in effect on matter date {target_date}.",
                     "attorney_advisory": (
-                        f"Check legislative history for chaptered amendment. Applying repealed provisions "
-                        f"violates ABA Model Rule 3.3 (Candor Toward the Tribunal)."
+                        "Check legislative history for chaptered amendment. Applying repealed provisions "
+                        "violates ABA Model Rule 3.3 (Candor Toward the Tribunal)."
                     )
                 })
 

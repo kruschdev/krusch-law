@@ -178,6 +178,26 @@ def generate_brief_docx(
             qrun.font.name = "Times New Roman"
             qrun.font.size = Pt(10.5)
             qrun.font.italic = True
+        elif any(marker in line_s for marker in ("[CLAIM REFUSED:", "[COVERAGE GAP:", "[UNAUTHORIZED CITATION STRIPPED:")):
+            gap_table = doc.add_table(rows=1, cols=1)
+            gap_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+            gap_cell = gap_table.rows[0].cells[0]
+            gap_cell.width = Inches(6.5)
+            set_cell_background(gap_cell, "FFF3E0")
+            set_cell_margins(gap_cell, top=100, bottom=100, left=140, right=140)
+            gp = gap_cell.paragraphs[0]
+            gp.paragraph_format.space_after = Pt(0)
+            gr_lbl = gp.add_run("⚠️ STATUTORY COVERAGE GAP (UNGROUNDED / REFUSED PROPOSITION):\n")
+            gr_lbl.font.name = "Arial"
+            gr_lbl.font.size = Pt(9.5)
+            gr_lbl.font.bold = True
+            gr_lbl.font.color.rgb = RGBColor(180, 50, 20)
+            gr_text = gp.add_run(line_s)
+            gr_text.font.name = "Arial"
+            gr_text.font.size = Pt(9.0)
+            gr_text.font.italic = True
+            gr_text.font.color.rgb = RGBColor(90, 70, 50)
+            doc.add_paragraph().paragraph_format.space_after = Pt(4)
         elif line_s.startswith(("- ", "* ")):
             bp = doc.add_paragraph(style='List Bullet')
             bp.paragraph_format.space_after = Pt(3)
@@ -238,6 +258,7 @@ def generate_brief_docx(
             "supported": "E8F5E9",
             "invented_citation": "FFEBEE",
             "wrong_proposition": "FFF3E0",
+            "abstain": "FFF8E1",
             "stale_law": "EDE7F6"
         }
 

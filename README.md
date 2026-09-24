@@ -1,62 +1,57 @@
 # ⚖️ KruschLaw
 
-> **Sovereign Legal Intelligence Engine & Versioned Statutory Graph**  
-> *Private municipal code retrieval, assertion-level grounding verification, and audit-logged issue analysis using on-premise open-weight models.*
+> **Production-Grade Legal Intelligence Engine & Versioned Statutory Graph**  
+> *Private municipal code retrieval, two-pass assertion grounding, and verifiable cryptographic purge using on-premise open-weight models.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Version: 0.4.0](https://img.shields.io/badge/Version-0.4.0-green.svg)](https://github.com/kruschdev/krusch-law)
+[![Version: 0.5.0](https://img.shields.io/badge/Version-0.5.0-green.svg)](https://github.com/kruschdev/krusch-law)
 [![Python 3.11 | 3.12](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.31+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![pgvector](https://img.shields.io/badge/PostgreSQL-pgvector%2016-336791.svg?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-Local%20Inference-black.svg)](https://ollama.com)
-[![Tests: 88 Passing](https://img.shields.io/badge/Tests-88%20Passing-brightgreen.svg)](tests/)
-[![Eval Gate: Passing](https://img.shields.io/badge/Golden%20Eval-100%25%20Recall%405-brightgreen.svg)](data/eval/golden_legal_eval.json)
+[![Tests: 110 Passing](https://img.shields.io/badge/Tests-110%20Passing-brightgreen.svg)](tests/)
+[![Grounding: 0.00% False Support](https://img.shields.io/badge/Grounding-0.00%25%20False%20Support-brightgreen.svg)](data/eval/labeled_grounding_golden.json)
 
 ---
 
 > [!WARNING]
-> **Research Prototype & Technical Scope (Read Before Evaluating)**:  
-> KruschLaw is an open-source technical prototype exploring on-premise retrieval-augmented generation. It is **NOT** a law firm, does **NOT** provide legal advice, and does **NOT** replace certified legal reporters.
-> - **Semantic Neighbors ≠ Controlling Law**: Cosine and lexical retrieval identify textually similar sections; they do not determine governing authority, appellate deference, preemption, or statutory hierarchy. KruschLaw addresses this via hierarchical weighting (controlling statute > implementing regulation > municipal ordinance > secondary commentary).
-> - **No Shepardizing / KeyCite**: While KruschLaw tracks version dates, amendments, repeals, and preemption tags within its local graph, it does not connect to external appellate citators.
-> - **Confidentiality & Storage Boundary**: Default port bindings (`127.0.0.1`) restrict services to loopback. Client matter narratives and retrieved chunks remain entirely on-premise. True sovereign privilege protection requires operator-enforced host storage encryption (LUKS / FileVault) and egress firewall controls.
-> - **Mandatory Human Verification**: All generated drafts are explicitly marked `review_required: true` and `provisional_work_product: true`. Outputs must be independently verified and approved by admitted counsel before reliance or filing.
+> **Legal Software Scope & Safety Boundary**:  
+> KruschLaw is an air-gapped legal intelligence platform engineered for legal practitioners and researchers. It is **NOT** a law firm, does **NOT** practice law, and does **NOT** provide legal advice.
+> - **Authority Graph ≠ Naive RAG**: Semantic neighbors do not establish controlling law. KruschLaw enforces a typed statutory precedence graph (controlling statute > implementing regulation > municipal ordinance > secondary commentary) with temporal amendment boundaries (`as_of_date`), statutory exception spotting, and explicit preemption chains.
+> - **Zero-Trust Grounding**: Every legal proposition is audited by a two-pass verifier against retrieved authority spans. Generation constraints ban and strip unretrieved bare statutory citations.
+> - **Refusal-First Posture**: Where governing authorities are absent or ambiguous, KruschLaw abstains or renders high-visibility `STATUTORY COVERAGE GAP` notices rather than emitting plausible hallucinations.
+> - **Human Verification Mandate**: All generated memoranda are flagged `provisional_work_product: true` and require admitted attorney review prior to filing or client reliance.
 
 ---
 
 ## 🏛️ Why KruschLaw?
 
-Law firms, legal aid organizations, and corporate counsel face a critical dilemma:
-1. **Public Cloud LLMs & SaaS Vector DBs**: Expose privileged client communications, confidential matter narratives, and trade secrets to third-party sub-processors, vendor logging, and potential training retention—conflicting directly with attorney-client privilege (ABA Model Rule 1.6) and state bar ethics requirements.
-2. **Generic RAG Bag-of-Chunks**: Naive semantic search chunks statutes into arbitrary 500-token blocks, discarding statutory hierarchy (title → chapter → article → section → subsection → exceptions/definitions). An obsolete or repealed subsection can easily outrank controlling law.
+Modern legal practice requires trustworthy software, not sovereign marketing:
+1. **Public Cloud LLMs & SaaS Vector DBs**: Expose confidential client exhibits, draft pleadings, and matter narratives to third-party sub-processors, vendor logging, and potential training retention—violating ABA Model Rule 1.6 and attorney-client privilege.
+2. **Generic RAG Bag-of-Chunks**: Arbitrary token chunking destroys statutory hierarchy (title → chapter → article → section → subsection → exception). Repealed sections or out-of-jurisdiction municipal codes frequently outrank controlling state statutes.
 
-**KruschLaw** solves this by treating law as a **versioned statutory graph** with **assertion-level proposition verification**, running on an **air-gapped PostgreSQL + Ollama stack** that never phones home.
+**KruschLaw** solves this by treating law as a **versioned statutory graph** backed by an **immutable raw authority store**, running on an **isolated, air-gapped container network** with verifiable cryptographic purge and zero external telemetry.
 
 ---
 
 ## 🚀 Core Capabilities
 
-* 🔒 **Sovereign Air-Gapped Topology**: Loopback bindings (`127.0.0.1`), zero telemetry, redacting production `/health` diagnostics, and mandatory pre-shared API keys in non-development modes.
-* 🌲 **Versioned Statutory Graph & Multi-Hop Resolver**: Preserves legal hierarchy with parent/child linking (`parent_id`, `parent_section`), temporal validity tracking (`effective_date`, `amended_date`, `repealed`, `preempted_by`), and multi-hop DAG traversal (`resolve_controlling_law`) walking preemption, amendment, and exception chains as-of target matter dates.
-* ⚖️ **Authority Precedence Hierarchy**: Canonical ranking of controlling statutes over implementing regulations, municipal ordinances, and commentary, with automatic hydration of referenced definitions (`definitions_ref`) and statutory carve-outs (`exceptions_ref`).
-* 🚨 **Statutory Conflict Detection Engine**: Automated detection of preemption conflicts (state acts overriding municipal code), temporal conflicts (sunset/repealed law cited for modern matters), and statutory exemption conflicts (owner-occupied duplex / single-family home exemptions).
-* 🛡️ **Assertion-Level Grounding & Failure Taxonomy**: Decomposes legal drafts into discrete claims and verifies each against retrieved authorities, classifying failure modes into:
-  * ❌ **Invented Citation**: Cites non-existent or fabricated statutory sections.
-  * ⚠️ **Wrong Proposition**: Cites a genuine statutory section for an unsupported proposition (semantic divergence).
-  * 🛑 **Stale Law**: Cites a repealed, sunsetted, or preempted statute.
-  * ✅ **Supported**: Verbatim quote or high-overlap excerpt with extracted supporting source span.
-* 🎯 **Automated Legal Issue-Spotting & Query Expansion**: Maps colloquial tenant grievances ("rent hike without notice", "withheld security deposit", "black mold and broken heat", "lockout without court order") to canonical legal doctrines and statutory citations (`OMC § 8.22.030`, `Cal. Civ. Code § 1950.5`, `Cal. Civ. Code § 1941.1`, `Cal. Civ. Code § 789.3`).
-* 📁 **Dedicated Client Discovery & Evidence Isolation**: Complete database partition between public statutory codes (`laws_vectors`) and confidential client discovery exhibits (`matter_evidence` via `GET /api/cases/{case_id}/evidence`), strictly preventing cross-matter fact contamination.
-* 📄 **Professional Legal Export (.docx & .md)**: Single-click export of formal legal memorandums featuring law office caption blocks, mandatory UPL disclaimers, 4-part legal brief structure, Appendix A (Assertion-Level Grounding Audit Table), and Appendix B (Table of Authorities Retrieved).
-* 🔄 **Persistent Crash-Resilient Ingestion Worker**: Dedicated worker process (`src.backend.worker`) utilizing PostgreSQL `SKIP LOCKED` (and atomic SQLite transaction locks), byte-level SHA-256 deduplication, and resumable offsets.
-* 🏷️ **Ensemble Legal Chunk Tagging & Slot Extraction**: Ingestion pipeline (`src.backend.tagger`) performs an ensemble merge combining deterministic statutory slot extraction (notice days, deposit caps, statutory damages multipliers, hourly entry notice) with local Ollama (`qwen2.5-coder:7b`) extracting 3–5 lowercase semantic tags and 1-sentence micro-digests.
-* 🔍 **Dual-Path Semantic Recall & Traceability Registry**: Combines exact statutory section lookup with hybrid BM25 lexical (`tsvector` / `ts_rank_cd`) and dense vector similarity (`bge-large` 1024-dim, RRF $k=60$). Matches receive a +20% exact tag boost with canonical doctrine filtering. Features a persistent Code-to-Statute Traceability Registry (Tab 4 & MCP tool `get_code_traceability`) linking municipal enforcement provisions directly to controlling state codes.
-* 📄 **KruschNexus Sovereign Ingestion Spine**: Integrated parser supporting PDF (with OCR fallback), DOCX, EML, Markdown, and TXT with page-true and section-true citations.
-* 🗑️ **Enterprise Hard Purge & Audit Trail**: Immutable local audit logging (`AuditLog`) for all searches, consults, ingests, and matter mutations, plus cryptographic matter hard purge (`DELETE /api/cases/{case_id}/purge`).
-* 🔌 **Hardened Model Context Protocol (MCP)**: Native stdio JSON-RPC server with 9 tools (`search_ordinances`, `get_section`, `log_matter`, `draft_brief`, `list_matters`, `get_grounding_report`, `get_code_traceability`, `resolve_controlling_law`, `detect_statutory_conflicts`), refusing to draft briefs unless valid governing authorities exist in the corpus.
-* ⚡ **LRU Embedding Cache**: Thread-safe in-memory cache keyed by `model:sha256(text)` eliminating redundant embedding calls across search, consult, and deduplication.
-* 🧪 **CI Gate & Golden Legal Benchmark**: Automated GitHub Actions CI pipeline running Ruff linting, 88 unit/integration tests, and a 25-case golden legal evaluation harness.
+* 🔒 **Air-Gapped Privilege Architecture**: Strict Docker Compose internal network (`kruschlaw_internal`), loopback interface bindings (`127.0.0.1`), mandatory default API key or local session token authentication, and AES/Fernet encryption-at-rest for confidential client exhibits (`MatterEvidence`).
+* 📜 **Raw Authority Artifact Store & Rebuildable Vectors**: Canonical authority text is stored in `StatutoryArtifact` records containing publisher, edition, retrieval timestamps, canonical URLs, and raw SHA-256 hashes. Vectors are completely rebuildable from artifacts and are never the authoritative copy.
+* 📦 **Modular Jurisdiction Packs (Pack Zero: Oakland / CA)**: Structured declarative packs (`data/packs/ca_oakland.yaml`) defining municipal codes, state codes, parsers, and test fixture statutes.
+* ⏳ **First-Class As-Of Date Traversal**: All search, consult, resolver, MCP, and export endpoints require an explicit `as_of_date` query parameter (defaulting to matter date), eliminating silent temporal citation errors.
+* 🌲 **Typed Precedence Graph & Resolution Traces**: Resolves governing law across municipal and state boundaries (`resolve_controlling_law`), recording full resolution paths (`ResolutionHop`, `ResolutionTrace`), kept/discarded rationale, and explicit coverage gaps (`CoverageHole`).
+* 🔎 **Authoritative Diagnostic Tooling (`explain_why_not_controlling`)**: Programmatically explains why a specific statutory section is non-controlling for a given jurisdiction, doctrine, and as-of date (preemption, legislative amendment, or territorial boundary).
+* 🛡️ **Two-Pass Assertion Grounding (0.00% False Support Rate)**: Decomposes legal drafts into discrete claims, evaluates lexical and entailment overlap against source spans, supports an explicit `abstain` classification, and enforces hard citation constraints that strip unretrieved bare sections.
+* 📁 **Complete Privilege Partitioning**: Total isolation between public statutory codes (`laws_vectors`) and confidential client exhibits (`matter_evidence`), preventing cross-matter fact leakage.
+* 🧹 **Verifiable Cryptographic Purge**: Hard deletion (`execute_verifiable_purge`) computes SHA-256 tombstones, evicts in-memory embedding caches, deletes temp files, performs physical database page zeroing via `VACUUM`, and appends immutable audit receipts.
+* 👥 **Local Attorney Claim Feedback Loop**: `POST/GET /api/cases/{case_id}/claims/feedback` enables attorneys to record accept/reject decisions and corrective annotations per claim, building local fine-tuning and evaluation signals.
+* 📋 **Defense Checklists & Statutory Deadlines**: `GET /api/cases/{case_id}/defense-checklist` generates structured tenant defense checklists with binding statutory deadlines (21-day deposit return under § 1950.5, 3-court-day notice under CCP § 1161, 180-day retaliation presumption under § 1942.5, 24-hr entry notice under § 1954, Oakland Rent Board 10-day filing under OMC § 8.22.360) and evidentiary audits.
+* ✉️ **Statutory Form & Demand Letter Assembly**: `POST /api/cases/{case_id}/assemble-letter` assembles rigid demand letters and notice objections using mandatory statutory language and verified legal citations rather than unconstrained creative prose.
+* 📄 **Refusal-First Word (.docx) & Markdown Export**: Memoranda export with formal law office caption blocks, Table of Authorities, Assertion Grounding Audit, and prominent `STATUTORY COVERAGE GAP` callout blocks for ungrounded or refused propositions.
+* 🔌 **Model Context Protocol (MCP)**: Native stdio JSON-RPC server with 12 tools (`search_ordinances`, `get_section`, `log_matter`, `draft_brief`, `list_matters`, `get_grounding_report`, `get_code_traceability`, `resolve_controlling_law`, `detect_statutory_conflicts`, `explain_why_not_controlling`, `get_defense_checklist`, `assemble_statutory_letter`).
+
 
 ---
 
@@ -116,6 +111,119 @@ KruschLaw maintains an immutable relational traceability registry (`src/backend/
 * **Streamlit Tab 4**: Interactive Statutory Traceability Explorer displaying cross-referenced state statutes, municipal enforcement provisions, statutory summaries, and attorney audit status.
 * **REST API**: `GET /api/compliance/traceability` with optional `?doctrine=` filtering.
 * **MCP Tool**: `get_code_traceability` allowing autonomous coding agents to inspect verified legal mappings directly.
+
+---
+
+## 🛡️ Privilege Surface Reduction & Threat Model
+
+KruschLaw is built under the assumption that law office infrastructure handles sensitive, highly confidential work product governed by strict legal ethics rules (ABA Model Rule 1.6).
+
+### 1. Security & Privilege Invariants
+* **Isolated Container Network**: The Docker Compose architecture binds internal services to an isolated bridge network (`kruschlaw_internal` with `internal: true`), completely blocking outbound internet access from database and backend containers.
+* **Loopback Auth Enforcement**: Even on local loopback (`127.0.0.1`), KruschLaw rejects unauthenticated requests unless configured with a verified `KRUSCHLAW_API_KEY` or `X-Session-Token`.
+* **Separate Processes & Data Boundaries**: General statutory searches query public authority vectors (`laws_vectors`) without touching confidential matter discovery (`matter_evidence`). Client exhibits are restricted to authenticated matter-scoped queries (`GET /api/cases/{case_id}/evidence`).
+* **Encryption-at-Rest for Evidence**: Ingested client documents and sensitive discovery items can be encrypted at rest using PBKDF2 key derivation and AES-Fernet with transparent `enc:v1:` prefixes (`src/backend/crypto.py`).
+* **Verifiable Cryptographic Hard Purge**: When an attorney purges a matter (`DELETE /api/cases/{case_id}/purge`), `execute_verifiable_purge` performs:
+  1. Irreversible deletion of all case facts, documents, chunk vectors, and attorney feedbacks.
+  2. Immediate eviction of associated query hashes from the in-memory LRU embedding cache.
+  3. Removal of any generated export artifacts on disk.
+  4. Physical disk page zeroing via SQLite/PostgreSQL `VACUUM` (ensuring unallocated space cannot be recovered with disk forensics).
+  5. Computation of a cryptographic SHA-256 tombstone hash committed to an immutable `AuditLog` receipt (`PURGE_CASE`).
+
+### 2. Threat Model Boundaries
+| Asset / Threat | KruschLaw Countermeasure | Operator Responsibility |
+|---|---|---|
+| **Cloud LLM Data Leakage** | 100% on-premise local Ollama inference (`bge-large`, `qwen2.5-coder`). Zero cloud egress. | Verify host Ollama does not bind to public external interfaces. |
+| **SaaS Vector DB Subpoenas** | All embeddings stored in local PostgreSQL 16 + pgvector or local SQLite instance. | Enable full-disk encryption (LUKS / FileVault) on host machines. |
+| **Cross-Matter Contamination** | Strict relational foreign key partitioning and query isolation between matters. | Restrict matter access via distinct attorney session tokens. |
+| **Silent Temporal Law Drift** | First-class `as_of_date` gating on all search and resolution calls. | Ensure user supplies accurate lease/incident dates for historical claims. |
+| **Hallucinated Citations** | Hard citation constraint stripping and two-pass verification gate. | Admitted counsel must conduct mandatory pre-filing review. |
+
+---
+
+## 📜 Authority Graph, Temporal Gating & Coverage Matrix
+
+### 1. Canonical Raw Authority Store vs. Derived Vectors
+To ensure authority is verifiable, KruschLaw strictly separates canonical source law from derived embeddings:
+* **`StatutoryArtifact` Table**: Stores verbatim official statute/ordinance text along with `source_url`, `retrieved_at`, SHA-256 `content_hash`, `publisher`, and `edition`.
+* **Rebuildable Vectors**: If embedding models change or vector indices become corrupt, vectors can be deterministically rebuilt (`StatutoryArtifact.rebuild_vectors()`) from canonical artifacts without re-fetching from external government portals.
+
+### 2. Jurisdiction Packs (Pack Zero: Oakland & California Civil Code)
+KruschLaw models jurisdictions via declarative packs (`data/packs/*.yaml`):
+```yaml
+pack_id: ca_oakland
+version: 1.0.0
+state: California
+municipality: Oakland
+code_families:
+  - California Civil Code (Landlord-Tenant §§ 1940 - 1954.06)
+  - Oakland Municipal Code (OMC Title 8, Ch 8.22 - Rent Adjustments & Evictions)
+```
+Each pack specifies exact section hierarchies, child provisions, temporal amendment boundaries, and fixture validation rules.
+
+### 3. Temporal Amendment Gating (`as_of_date`)
+Defaulting to current time (`NOW()`) silently cites repealed or pre-amendment rules when evaluating historical leases. KruschLaw mandates `as_of_date` as a first-class query parameter across all endpoints:
+* **Pre-AB 12 vs. Post-AB 12**: California Civil Code § 1950.5 capped residential deposits at 2 months' rent for unfurnished units prior to July 1, 2024. For leases on or after July 1, 2024, AB 12 caps deposits at 1 month's rent. KruschLaw's resolver dynamically selects the legally controlling rule based on the exact matter date.
+
+### 4. Resolution Traces & Diagnostics (`explain_why_not_controlling`)
+Autonomous agents and human attorneys can inspect the exact statutory resolution path:
+* **`ResolutionTrace`**: Records hops across preemption chains, legislative amendments, and statutory exemptions, explicitly logging why alternative sections were kept or discarded.
+* **`CoverageHole`**: Flags topics or doctrines outside the indexed corpus with explicit suggestions, preventing silent negative inferences.
+* **`explain_why_not_controlling` Tool**: Programmatic diagnostic tool explaining why a given statute does not control:
+  ```json
+  {
+    "candidate_section": "Section 1950.5 (Pre-2024)",
+    "doctrine": "Security Deposits",
+    "as_of_date": "2024-08-01"
+  }
+  ```
+  Returns:
+  ```json
+  {
+    "is_controlling": false,
+    "controlling_authority": "Civ. Code § 1950.5",
+    "reasons": ["[TEMPORAL_AMENDMENT] Section 1950.5 (Pre-2024) superseded on 2024-07-01 by AB 12."]
+  }
+  ```
+
+### 5. Coverage Matrix & Known Boundaries
+| Legal Domain / Topic | Coverage Status | Governing Authorities Indexed |
+|---|---|---|
+| **Residential Security Deposits** | ✅ Full Coverage | Cal. Civ. Code § 1950.5 (Pre & Post AB 12), OMC § 8.22.020 |
+| **Residential Rent Increases & Just Cause** | ✅ Full Coverage | Cal. Civ. Code § 1946.2, § 1947.12 (AB 1482), OMC § 8.22.030, § 8.22.360 |
+| **Habitability & Landlord Entry Notice** | ✅ Full Coverage | Cal. Civ. Code § 1941.1, § 1942, § 1954 |
+| **Commercial Leasing & Eviction** | ⚠️ Coverage Gap | Unindexed in Pack Zero (returns explicit CoverageHole) |
+| **Condo / HOA Covenants (Davis-Stirling)** | ⚠️ Coverage Gap | Unindexed in Pack Zero (returns explicit CoverageHole) |
+| **Federal Subsidized Housing (HUD / Section 8)** | ⚠️ Coverage Gap | Federal regulations unindexed in municipal pack |
+
+---
+
+## 📝 Matter Workflow & Refusal-First Export
+
+### 1. Two-Pass Grounding Gate (0.00% False Support Rate)
+Every generated legal assertion undergoes rigorous two-pass validation:
+1. **Discrete Claim Decomposition**: Extracts atomic legal propositions with their asserted citations.
+2. **Span Matching & Entailment Scoring**: Computes lexical overlap and embedding similarity against retrieved authority chunks.
+3. **Hard Generation Constraint**: If a model introduces an unretrieved statutory section, `enforce_generation_citation_constraints` automatically strips and annotates it: `[UNAUTHORIZED CITATION STRIPPED: Section X]`.
+4. **Explicit Refusal & Abstention**: If overlap falls between `0.15` and `0.35`, or if authorities are missing, the claim is classified as `abstain` or `invented_citation` rather than falsely marked as supported.
+
+### 2. Local Human Attorney Claim Feedback Loop
+Attorneys review generated claims via the web UI or REST API (`POST /api/cases/{case_id}/claims/feedback`):
+* Individual propositions can be marked as `accepted`, `rejected`, or `modified`.
+* Corrections and attorney notes are recorded locally in the `ClaimFeedback` table, building a private gold-standard training set for future model calibration.
+
+### 3. Refusal-First Document Export (.docx & .md)
+When exporting memoranda (`/api/consult/export/docx`), refused or ungrounded claims are never smoothed into deceptive narrative prose. Instead, they are rendered as prominent **`STATUTORY COVERAGE GAP`** callout tables with red/amber borders:
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ ⚠️ STATUTORY COVERAGE GAP: PROPOSITION UNGROUNDED IN RETRIEVED LAWS    │
+├────────────────────────────────────────────────────────────────────────┤
+│ Asserted Claim: Tenant entitled to automatic $10,000 statutory fine.   │
+│ Cited Section: Section 999.99                                          │
+│ Reason: Cited section does not exist in retrieved authority set.       │
+└────────────────────────────────────────────────────────────────────────┘
+```
+Supported claims include verbatim supporting authority spans, ensuring full traceability from draft to statute.
 
 ---
 
@@ -267,18 +375,24 @@ KruschLaw provides a native stdio JSON-RPC MCP server (`src/mcp/server.py`) expo
 
 | Tool | Parameters | Description |
 |---|---|---|
-| `search_ordinances` | `query`, `state`, `city`, `topic`, `limit` | Hybrid lexical (`tsvector`) + vector search with authority weighting |
+| `search_ordinances` | `query`, `state`, `city`, `topic`, `as_of_date`, `limit` | Hybrid lexical (`tsvector`) + vector search with authority weighting and temporal gating |
 | `get_section` | `section`, `jurisdiction` | Retrieve complete section body, parent/child relationships, and amendments |
 | `log_matter` | `title`, `facts`, `matter_number`, `client_name` | Securely log and vectorize client matter narrative on-premise |
 | `list_matters` | `limit` | Enumerate active client matters and matter numbers |
-| `draft_brief` | `case_id`, `facts`, `title`, `city`, `limit` | Stage 4-part legal brief with assertion grounding; **refuses if authorities absent** |
+| `draft_brief` | `case_id`, `facts`, `title`, `city`, `as_of_date`, `limit` | Stage 4-part legal brief with assertion grounding; **refuses if authorities absent** |
 | `get_grounding_report` | `case_id` | Retrieve stored assertion grounding audit for a specific matter |
 | `get_code_traceability` | `doctrine` | Inspect curated statute-to-code traceability invariants and verified mappings |
+| `resolve_controlling_law` | `doctrine`, `city`, `county`, `as_of_date`, `matter_facts` | Multi-hop precedence resolution traversing preemption, amendments, and exceptions |
+| `detect_statutory_conflicts` | `jurisdiction`, `laws`, `as_of_date` | Detect substantive conflicts (preemption, temporal sunsets, statutory exemptions) |
+| `explain_why_not_controlling` | `candidate_section`, `doctrine`, `as_of_date`, `city`, `county` | Diagnostic report explaining why a section is superseded, preempted, or inapplicable |
+| `get_defense_checklist` | `case_id`, `as_of_date` | Generate structured defense checklist with statutory deadlines and evidentiary audits |
+| `assemble_statutory_letter` | `case_id`, `letter_type`, `recipient_name`, `recipient_address` | Assemble formal statutory demand letter or notice objection with mandatory citations |
 
 ### Guardrails for Agents
 1. **Refusal on Missing Authorities**: If the air-gapped corpus does not contain relevant governing authorities, `draft_brief` rejects the request with `CANNOT_DRAFT_WITHOUT_AUTHORITIES` rather than hallucinating plausible statutes.
 2. **Review Mandate**: Every draft includes `review_required: true` and `provisional_work_product: true`.
-3. **Discrete Claims Audit**: Returns full side-by-side propositions, source excerpts, and failure classifications.
+3. **Discrete Claims Audit**: Returns full side-by-side propositions, source excerpts, entailment scores, and failure classifications.
+4. **Citation Constraint Enforcement**: Unretrieved statutory citations are stripped from generated prose prior to delivery.
 
 ---
 
@@ -305,14 +419,14 @@ KruschLaw is engineered around the ethical constraints of legal practice (ABA Mo
 ## 🧪 Automated Testing & CI Gates
 
 ```bash
-# Run full unit, integration, and eval test suite (80 tests)
-pytest tests
+# Run full unit, integration, and eval test suite (110 tests)
+pytest
+
+# Run labeled grounding golden eval gate (0.00% False Support Rate target)
+pytest tests/eval/test_labeled_grounding_eval.py -v
 
 # Run golden retrieval and assertion-level grounding CI gate
-pytest tests/eval/test_golden_eval_gate.py
-
-# Run legal tagger unit tests
-pytest tests/unit/test_legal_tagger.py
+pytest tests/eval/test_golden_eval_gate.py -v
 
 # Run ruff code quality and lint gate
 ruff check .
@@ -360,6 +474,16 @@ Evaluates 12 external California statutory and municipal provisions (AB 1482 ren
 | **Held-Out MRR** | > 0.750 | **0.799** | Mean reciprocal rank on held-out provisions |
 | **Priority Inversions** | 0 | **0** | Repealed statutes outranking controlling authorities |
 
+### [Headline Gate] Labeled Grounding Benchmark (`labeled_grounding_golden.json`)
+Evaluates discrete proposition verification against the adversarial golden benchmark dataset containing supported, invented, stale, and wrong proposition assertions:
+
+| Metric | Target | Measured Score | Evaluation Description |
+|---|---|---|---|
+| **False Support Rate** | **0.00%** | **0.00%** | Invented, stale, or wrong propositions mistakenly marked supported |
+| **Abstention Accuracy** | 100.0% | **100.0%** | Ambiguous or low-overlap claims correctly abstained |
+| **Citation Constraint Pass Rate** | 100.0% | **100.0%** | Unretrieved bare citations automatically stripped or flagged |
+| **Grounding Precision** | > 95.0% | **100.0%** | Strict assertion verification precision |
+
 ### Grounding Calibration & Confusion Matrix
 Empirical accuracy across 32 discrete legal proposition assertions:
 
@@ -372,6 +496,7 @@ Empirical accuracy across 32 discrete legal proposition assertions:
 | **Overall Calibration Accuracy** | 32 | 29 | **90.62%** |
 
 ---
+
 
 ## 📜 License
 

@@ -165,6 +165,15 @@ st.markdown("""
         font-weight: 600;
         font-size: 0.76rem;
     }
+    .badge-abstain {
+        background: rgba(234, 179, 8, 0.15);
+        color: #facc15;
+        border: 1px solid rgba(234, 179, 8, 0.4);
+        padding: 0.2rem 0.55rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.76rem;
+    }
     .authority-tag {
         display: inline-block;
         background: rgba(99, 102, 241, 0.15);
@@ -394,9 +403,10 @@ with st.sidebar:
 
 
 # --- Main Dashboard Tabs ---
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📁 Matter Portfolio",
     "⚖️ Precedent Consultation & Brief",
+    "🛡️ Defense Checklist & Demand Letter",
     "🔍 Statutory & Evidence Explorer",
     "📜 Statutory Traceability & Audit Registry"
 ])
@@ -723,8 +733,278 @@ with tab2:
                     st.error(f"Inference error: {e}")
 
 
-# --- Tab 3: Statutory & Ordinance Explorer ---
+
+# --- Tab 3: Defense Checklist & Demand Letter ---
 with tab3:
+    st.markdown("### 🛡️ Evidentiary Defense Checklist & Formal Statutory Demand Letter")
+    st.write(
+        "Audit matter facts against binding statutory deadlines (e.g. 21-day deposit return under § 1950.5, "
+        "3-court-day cure under CCP § 1161, 180-day retaliation presumption under § 1942.5) "
+        "and assemble rigid statutory letters asserting mandatory legal citations."
+    )
+
+    cases_for_def = fetch_cases_list()
+    matter_def_options = {f"#{c['id']} — {c['title']}": c for c in cases_for_def}
+
+    if not matter_def_options:
+        st.info("Please log a confidential matter in the 'Matter Portfolio' tab first.")
+    else:
+        c_sel_mat, c_as_of = st.columns([2, 1])
+        with c_sel_mat:
+            sel_def_label = st.selectbox("Select Matter for Defense Analysis", list(matter_def_options.keys()), key="def_matter_sel")
+            selected_case = matter_def_options[sel_def_label]
+            def_case_id = selected_case["id"]
+        with c_as_of:
+            def_as_of_date = st.text_input("As-of Valuation Date (optional)", placeholder="e.g., 2026-03-01", key="def_as_of")
+
+        def_subtab1, def_subtab2, def_subtab3 = st.tabs([
+            "📋 Statutory Defense Checklist",
+            "✉️ Statutory Demand Letter Assembly",
+            "✍️ Attorney Verification & Feedback"
+        ])
+
+        with def_subtab1:
+            st.markdown("#### ⏱️ Binding Statutory Deadlines & Fact Audit")
+            if st.button("🔍 Generate / Refresh Defense Checklist", key="btn_gen_chk", use_container_width=True):
+                st.session_state[f"chk_ran_{def_case_id}"] = True
+
+            if st.session_state.get(f"chk_ran_{def_case_id}"):
+                with st.spinner("Auditing factual record and computing statutory limitation windows..."):
+                    try:
+                        chk_params = {}
+                        if def_as_of_date.strip():
+                            chk_params["as_of_date"] = def_as_of_date.strip()
+                        chk_resp = httpx.get(
+                            f"{BACKEND_URL}/api/cases/{def_case_id}/defense-checklist",
+                            params=chk_params,
+                            headers=get_auth_headers(),
+                            timeout=20.0
+                        )
+                        if chk_resp.status_code == 200:
+                            chk_data = chk_resp.json()
+                            st.session_state[f"chk_data_{def_case_id}"] = chk_data
+                        else:
+                            st.error(f"Failed to generate checklist ({chk_resp.status_code}): {chk_resp.text}")
+                    except Exception as e:
+                        st.error(f"Checklist error: {e}")
+
+            chk_data = st.session_state.get(f"chk_data_{def_case_id}")
+            if chk_data:
+                st.markdown(f"**Identified {chk_data.get('total_defenses_spotted', 0)} Governed Defenses for Matter #{def_case_id}:**")
+
+                for item in chk_data.get("defenses", []):
+                    status = item.get("status", "")
+                    if status == "POTENTIAL_VIOLATION":
+                        stat_badge = '<span class="badge-invented">⚠️ POTENTIAL VIOLATION</span>'
+                    elif status == "COMPLIANT":
+                        stat_badge = '<span class="badge-supported">✅ COMPLIANT</span>'
+                    elif status == "NEEDS_DOCUMENTATION":
+                        stat_badge = '<span class="badge-wrong-prop">📋 NEEDS DOCUMENTATION</span>'
+                    else:
+                        stat_badge = f'<span class="authority-tag">{status}</span>'
+
+                    st.markdown(f"""
+                        <div class="law-card" style="border-left-color: #f59e0b;">
+                            <div class="law-card-header">🛡️ {item['issue']}</div>
+                            <div style="margin-bottom: 0.45rem;">
+                                <span class="authority-tag">📜 {item['controlling_citation']}</span>
+                                <span class="authority-tag" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">⏱️ {item['statutory_deadline']}</span>
+                                {stat_badge}
+                            </div>
+                            <div class="law-card-body">
+                                <strong>Remedy / Defense Value:</strong> {item.get('statutory_remedy', 'N/A')}
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    with st.expander(f"Inspect Statutory Elements & Evidence Requirements ({item['issue']})", expanded=False):
+                        for el in item.get("elements", []):
+                            v_icon = "✅" if el.get("verified") else "❌"
+                            v_text = "Verified in Factual Record" if el.get("verified") else "Unverified / Missing in Record"
+                            st.markdown(f"- **{v_icon} {el.get('check_item')}** ({v_text})")
+                            if el.get("evidence_found"):
+                                st.caption(f"  Evidence: {el['evidence_found']}")
+                            st.caption(f"  *Advisory: {el.get('advisory')}*")
+                        if item.get("required_evidence"):
+                            st.markdown("**Recommended Documentary Evidence:**")
+                            for req_ev in item["required_evidence"]:
+                                st.markdown(f"  • `{req_ev}`")
+
+        with def_subtab2:
+            st.markdown("#### 📜 Formal Statutory Demand Letter & Legal Notice Assembly")
+            st.write("Generate rigid demand notices bound to statutory phrasing. Missing factual slots will be explicitly called out as statutory coverage gaps.")
+
+            c_lt, c_asof = st.columns([2, 1])
+            with c_lt:
+                letter_type = st.selectbox(
+                    "Letter Type",
+                    [
+                        ("security_deposit_demand", "💰 Security Deposit Bad-Faith Return Demand (Cal. Civ. Code § 1950.5)"),
+                        ("habitability_repair_notice", "🏚️ Notice of Substandard Conditions & Repair Demand (§ 1941.1 / § 1942)"),
+                        ("defective_notice_response", "⚠️ Formal Objection to Defective Notice to Pay or Quit (CCP § 1161 / OMC § 8.22.360)")
+                    ],
+                    format_func=lambda x: x[1]
+                )[0]
+            with c_asof:
+                letter_as_of = st.text_input("Notice Date / As-of Date", value=def_as_of_date or "", placeholder="YYYY-MM-DD", key="letter_asof_input")
+
+            c_rec_name, c_snd_name = st.columns(2)
+            with c_rec_name:
+                recipient_name = st.text_input("Recipient / Landlord Name", placeholder="e.g., Skyline Property Management, LLC", key="rec_name")
+            with c_snd_name:
+                default_sender = selected_case.get("client_name") or "Tenant Client"
+                sender_name = st.text_input("Sender / Tenant Full Name", value=default_sender, key="snd_name")
+
+            recipient_addr = st.text_input("Recipient Mailing Address", placeholder="e.g., 100 Grand Ave, Suite 400, Oakland, CA 94612", key="rec_addr")
+
+            if st.button("⚡ Assemble Formal Statutory Letter", key="btn_assemble_letter", use_container_width=True):
+                if not recipient_name.strip() or not recipient_addr.strip():
+                    st.error("Recipient Name and Mailing Address are required for formal legal correspondence.")
+                else:
+                    with st.spinner("Assembling statutory notice from verified matter facts and legal authorities..."):
+                        try:
+                            payload = {
+                                "letter_type": letter_type,
+                                "recipient_name": recipient_name.strip(),
+                                "recipient_address": recipient_addr.strip(),
+                                "sender_name": sender_name.strip() or None,
+                                "as_of_date": letter_as_of.strip() or None
+                            }
+                            ltr_resp = httpx.post(
+                                f"{BACKEND_URL}/api/cases/{def_case_id}/assemble-letter",
+                                json=payload,
+                                headers=get_auth_headers(),
+                                timeout=25.0
+                            )
+                            if ltr_resp.status_code == 200:
+                                st.session_state[f"ltr_res_{def_case_id}"] = ltr_resp.json()
+                                st.success("Statutory letter successfully assembled!")
+                            else:
+                                st.error(f"Letter assembly failed ({ltr_resp.status_code}): {ltr_resp.text}")
+                        except Exception as e:
+                            st.error(f"Letter assembly error: {e}")
+
+            ltr_data = st.session_state.get(f"ltr_res_{def_case_id}")
+            if ltr_data:
+                st.markdown("---")
+                st.markdown(f"### 📄 {ltr_data.get('title', 'Statutory Demand Letter')}")
+                st.markdown(f"**Subject:** `{ltr_data.get('subject', '')}`")
+
+                cit_badges = " ".join([f'<span class="authority-tag">⚖️ {cit}</span>' for cit in ltr_data.get("mandatory_citations", [])])
+                st.markdown(f"**Controlling Citations:** {cit_badges}", unsafe_allow_html=True)
+
+                gaps = ltr_data.get("coverage_gaps", [])
+                if gaps:
+                    st.warning("⚠️ **STATUTORY COVERAGE GAPS DETECTED**: The factual record lacked necessary data for the following items:")
+                    for g in gaps:
+                        st.markdown(f"• `{g}`")
+
+                st.text_area("Letter Text", value=ltr_data.get("letter_body", ""), height=400, key="ltr_body_display")
+
+                c_dl_txt, c_dl_md = st.columns(2)
+                with c_dl_txt:
+                    st.download_button(
+                        label="📥 Download Plain Text (.txt)",
+                        data=ltr_data.get("letter_body", ""),
+                        file_name=f"Matter_{def_case_id}_{ltr_data.get('letter_type')}.txt",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
+                with c_dl_md:
+                    st.download_button(
+                        label="📥 Download Markdown (.md)",
+                        data=f"# {ltr_data.get('title')}\n\n**Subject:** {ltr_data.get('subject')}\n\n{ltr_data.get('letter_body')}",
+                        file_name=f"Matter_{def_case_id}_{ltr_data.get('letter_type')}.md",
+                        mime="text/markdown",
+                        use_container_width=True
+                    )
+
+        with def_subtab3:
+            st.markdown("#### ✍️ Human Attorney Claim Annotation & Local Verification")
+            st.write("Annotate individual propositions, record accept/reject decisions, and log feedback for local refinement without cloud telemetry.")
+
+            with st.form(f"attorney_fb_form_{def_case_id}", clear_on_submit=True):
+                fb_claim = st.text_input("Legal Claim / Proposition Under Review", placeholder="e.g., Landlord forfeited right to retain deposit due to 21-day failure.")
+                fb_cit = st.text_input("Statutory Citation", placeholder="e.g., Cal. Civ. Code § 1950.5(g)")
+                fb_decision = st.selectbox("Attorney Decision", ["approved", "rejected", "flagged_for_research"])
+                fb_correction = st.text_input("Correction / Replacement Citation (if rejected)", placeholder="e.g., § 1950.5(l) requires proving bad faith.")
+                fb_notes = st.text_area("Supervising Attorney Notes", placeholder="e.g., Verified against Alameda County Superior Court local practice.")
+                fb_submit = st.form_submit_button("💾 Save Verification Feedback")
+
+                if fb_submit:
+                    if not fb_claim.strip():
+                        st.error("Claim text is required.")
+                    else:
+                        try:
+                            fb_payload = {
+                                "feedbacks": [
+                                    {
+                                        "claim_text": fb_claim.strip(),
+                                        "citation": fb_cit.strip() or None,
+                                        "decision": fb_decision,
+                                        "correction": fb_correction.strip() or None,
+                                        "attorney_notes": fb_notes.strip() or None
+                                    }
+                                ]
+                            }
+                            fb_resp = httpx.post(
+                                f"{BACKEND_URL}/api/cases/{def_case_id}/claims/feedback",
+                                json=fb_payload,
+                                headers=get_auth_headers(),
+                                timeout=15.0
+                            )
+                            if fb_resp.status_code == 200:
+                                st.success("Attorney feedback saved to local verification signal store.")
+                                st.rerun()
+                            else:
+                                st.error(f"Error saving feedback ({fb_resp.status_code}): {fb_resp.text}")
+                        except Exception as e:
+                            st.error(f"Feedback save error: {e}")
+
+            st.markdown("---")
+            st.markdown("##### 📜 Recorded Attorney Verification History")
+            try:
+                hist_resp = httpx.get(
+                    f"{BACKEND_URL}/api/cases/{def_case_id}/claims/feedback",
+                    headers=get_auth_headers(),
+                    timeout=15.0
+                )
+                if hist_resp.status_code == 200:
+                    fb_list = hist_resp.json()
+                    if not fb_list:
+                        st.info("No attorney verification feedback recorded for this matter yet.")
+                    else:
+                        for fb in fb_list:
+                            dec = fb.get("decision", "")
+                            if dec == "approved":
+                                d_badge = '<span class="badge-supported">✅ APPROVED</span>'
+                            elif dec == "rejected":
+                                d_badge = '<span class="badge-invented">❌ REJECTED</span>'
+                            else:
+                                d_badge = '<span class="badge-wrong-prop">🔍 FLAGGED FOR RESEARCH</span>'
+
+                            cit_info = f" • Citation: <code>{fb['citation']}</code>" if fb.get("citation") else ""
+                            corr_info = f"<div style='font-size: 0.85rem; color: #fbbf24; margin-top: 0.25rem;'><strong>Correction:</strong> {fb['correction']}</div>" if fb.get("correction") else ""
+                            notes_info = f"<div style='font-size: 0.82rem; color: #94a3b8; margin-top: 0.25rem;'><strong>Notes:</strong> {fb['attorney_notes']}</div>" if fb.get("attorney_notes") else ""
+
+                            st.markdown(f"""
+                                <div class="law-card" style="border-left-color: #38bdf8; padding: 0.9rem 1.1rem;">
+                                    <div style="margin-bottom: 0.35rem;">
+                                        {d_badge} <span style="font-weight: 600; font-size: 0.95rem; color: #f1f5f9; margin-left: 8px;">{fb.get('claim_text')}</span>{cit_info}
+                                    </div>
+                                    {corr_info}
+                                    {notes_info}
+                                    <div style="font-size: 0.75rem; color: #64748b; margin-top: 0.35rem;">Logged: {fb.get('created_at', '')[:19]}</div>
+                                </div>
+                            """, unsafe_allow_html=True)
+                else:
+                    st.error(f"Failed to fetch feedback history: {hist_resp.status_code}")
+            except Exception as e:
+                st.error(f"Feedback history error: {e}")
+
+
+# --- Tab 4: Statutory & Ordinance Explorer ---
+with tab4:
     st.markdown("### 🔍 Sovereign Legal & Discovery Search Explorer")
     st.write("Perform isolated hybrid searches across the governing statutory graph or inspect client matter discovery exhibits.")
 
@@ -898,8 +1178,8 @@ with tab3:
                         st.error(f"Evidence search failure: {e}")
 
 
-# --- Tab 4: Statutory Traceability & Audit Registry ---
-with tab4:
+# --- Tab 5: Statutory Traceability & Audit Registry ---
+with tab5:
     st.markdown("### 📜 Statutory Traceability & Audit Registry")
     st.write(
         "Deterministic, versioned statute-to-code binding invariants mapping California Civil Code and housing doctrine "

@@ -1082,6 +1082,9 @@ def ingest_matter_document(
                 summary_val = item_dict.get("summary")
                 db.add(LawVector(**item_dict))
                 if matter_id:
+                    from .crypto import EvidenceEncryptor
+                    enc_content = EvidenceEncryptor.encrypt_text(item_dict["content"])
+                    enc_summary = EvidenceEncryptor.encrypt_text(summary_val) if summary_val else None
                     # Also populate isolated MatterEvidence table with legal semantic understanding
                     db.add(MatterEvidence(
                         matter_id=matter_id,
@@ -1090,9 +1093,9 @@ def ingest_matter_document(
                         page_number=page_num,
                         section_locator=item_dict.get("section"),
                         chunk_index=item_dict["chunk_index"],
-                        content=item_dict["content"],
+                        content=enc_content,
                         tags=tags_val,
-                        summary=summary_val,
+                        summary=enc_summary,
                         doctrine=doctrine_val,
                         embedding=emb
                     ))

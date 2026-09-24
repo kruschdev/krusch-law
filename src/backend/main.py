@@ -18,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .config import settings, is_loopback_or_private_host
 from .db import (
     init_db, SessionLocal, Case, IngestJob, GroundingReport, AuditLog, MatterEvidence,
-    StatuteCodeTraceability, LawVector
+    StatuteCodeTraceability, LawVector, ClaimFeedback
 )
 from .rag import (
     get_embedding, retrieve_laws, generate_legal_analysis,
@@ -35,6 +35,7 @@ from .ingest import (
     ingest_mock_data, ingest_locus_parquet, process_parquet_job,
     ingest_matter_document, ingest_uploaded_matter_file
 )
+from .checklist import generate_defense_checklist, assemble_statutory_letter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("kruschlaw.api")
@@ -64,25 +65,42 @@ app = FastAPI(
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
-def verify_api_key(api_key: Optional[str] = Security(api_key_header)) -> Optional[str]:
+def verify_api_key(
+    request: Request,
+    api_key: Optional[str] = Security(api_key_header)
+) -> Optional[str]:
     """
-    Verify API Key authentication.
-    In non-development environments, unauthenticated access is strictly blocked to protect client data.
+    Verify API Key or Local Session Token.
+    Loopback access without credentials is strictly rejected to prevent lateral privilege escalation.
+    In development, the local session token or configured API_KEY is required.
     """
-    is_dev = getattr(settings, "ENVIRONMENT", "development").lower() in ("development", "dev", "test")
-    if not is_dev and not settings.API_KEY:
-        raise HTTPException(
-            status_code=500,
-            detail="Server Misconfiguration: API_KEY must be configured in non-development environments to safeguard client matter confidentiality."
-        )
-    if not settings.API_KEY:
+    session_token = request.headers.get("X-Session-Token") if request else None
+    token = api_key or session_token
+
+    env = getattr(settings, "ENVIRONMENT", "development").lower()
+    is_test = env == "test"
+
+    # In test environment where API_KEY is explicitly None, permit backwards compatibility
+    if is_test and not settings.API_KEY and not token:
         return None
-    if not api_key or api_key.strip() != settings.API_KEY.strip():
+
+    expected_key = settings.API_KEY or (
+        settings.LOCAL_SESSION_TOKEN if getattr(settings, "REQUIRE_API_KEY", True) else None
+    )
+
+    if not expected_key:
+        return None
+
+    valid_keys = {expected_key.strip()}
+    if getattr(settings, "LOCAL_SESSION_TOKEN", None):
+        valid_keys.add(settings.LOCAL_SESSION_TOKEN.strip())
+
+    if not token or token.strip() not in valid_keys:
         raise HTTPException(
             status_code=401,
-            detail="Unauthorized: Missing or invalid X-API-Key header. Client matter data is protected."
+            detail="Unauthorized: Missing or invalid X-API-Key or X-Session-Token header. Loopback is not authentication."
         )
-    return api_key
+    return token
 
 
 app.add_middleware(
@@ -314,6 +332,7 @@ class BriefDraftRequest(BaseModel):
     title: Optional[str] = None
     state: Optional[str] = "CA"
     city: Optional[str] = "Oakland"
+    as_of_date: Optional[str] = None
     matter_facts: Optional[Dict[str, Any]] = None
 
 
@@ -565,25 +584,21 @@ def purge_case(
     _auth: Optional[str] = Depends(verify_api_key)
 ):
     """
-    Explicit enterprise matter purge.
+    Explicit enterprise verifiable matter purge.
     Permanently destroys the client matter, vector embeddings, attached evidence chunks,
-    and associated grounding reports from the sovereign database.
+    and associated grounding reports from the sovereign database with verifiable SHA-256 tombstones.
     """
-    case = db.query(Case).filter(Case.id == case_id).first()
-    if not case:
+    from .crypto import execute_verifiable_purge
+    receipt = execute_verifiable_purge(
+        db=db,
+        case_id=case_id,
+        actor_key=_auth,
+        client_ip=request.client.host if request.client else None
+    )
+    if not receipt:
         raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found")
 
-    db.query(MatterEvidence).filter(MatterEvidence.matter_id == case_id).delete()
-    db.query(GroundingReport).filter(GroundingReport.case_id == case_id).delete()
-    db.delete(case)
-    db.commit()
-
-    log_audit_event(
-        db, action="purge_matter", actor_key=_auth,
-        client_ip=request.client.host if request.client else None,
-        matter_id=case_id
-    )
-    return {"status": "purged", "message": f"Matter #{case_id} and all associated embeddings permanently destroyed."}
+    return receipt
 
 
 @app.get("/api/laws", response_model=List[LawItem], tags=["Laws"])
@@ -594,6 +609,7 @@ def search_laws(
     state: Optional[str] = Query(None, description="Two-letter state postal filter (e.g. CA)"),
     city: Optional[str] = Query(None, description="City or county filter (e.g. Oakland)"),
     topic: Optional[str] = Query(None, description="Subject classification filter"),
+    as_of_date: Optional[str] = Query(None, description="As-of incident/inquiry date in ISO format (e.g. '2024-08-01')"),
     expand_query: bool = Query(False, description="Enable automated issue-spotting expansion"),
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
@@ -606,6 +622,7 @@ def search_laws(
             state_filter=state,
             city_filter=city,
             topic_filter=topic,
+            as_of_date=as_of_date,
             expand_query=expand_query,
             db_session=db
         )
@@ -625,6 +642,7 @@ def search_laws_alias(
     state: Optional[str] = Query(None),
     city: Optional[str] = Query(None),
     topic: Optional[str] = Query(None),
+    as_of_date: Optional[str] = Query(None, description="As-of incident/inquiry date in ISO format"),
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
 ):
@@ -636,6 +654,7 @@ def search_laws_alias(
             state_filter=state,
             city_filter=city,
             topic_filter=topic,
+            as_of_date=as_of_date,
             db_session=db
         )
         return {"results": results}
@@ -654,7 +673,7 @@ def get_law_section(
     """Retrieve unabridged statutory text, parent/child relationships, and exception clauses."""
     clean_sec = section.strip()
     query = db.query(LawVector).filter(
-        (LawVector.section == clean_sec) | 
+        (LawVector.section == clean_sec) |
         (LawVector.section == f"Section {clean_sec}") |
         (LawVector.section.like(f"%{clean_sec}%"))
     )
@@ -740,6 +759,7 @@ def draft_brief_endpoint(
         state_filter=payload.state,
         city_filter=payload.city,
         matter_facts=payload.matter_facts,
+        as_of_date=payload.as_of_date,
         db_session=db
     )
 
@@ -973,6 +993,7 @@ def consult_matter(
     state: Optional[str] = Query(None, description="Two-letter state filter (e.g. CA)"),
     city: Optional[str] = Query(None, description="City or county filter (e.g. Oakland)"),
     topic: Optional[str] = Query(None, description="Topic filter (e.g. Housing)"),
+    as_of_date: Optional[str] = Query(None, description="Incident or inquiry date in ISO format"),
     request: Request = None,
     db: Session = Depends(get_db),
     _auth: Optional[str] = Depends(verify_api_key)
@@ -1002,6 +1023,7 @@ def consult_matter(
             state_filter=state,
             city_filter=city,
             topic_filter=topic,
+            as_of_date=as_of_date,
             db_session=db
         )
     except RetrievalError as e:
@@ -1205,6 +1227,143 @@ def export_case_docx(
 
 
 # ===========================================================================
+# HUMAN ATTORNEY CLAIM REVIEW & LOCAL FEEDBACK LOOP ENDPOINTS
+# ===========================================================================
+
+class ClaimFeedbackItem(BaseModel):
+    claim_text: str = Field(..., description="Propositional assertion text")
+    citation: Optional[str] = Field(None, description="Cited statutory provision")
+    decision: str = Field(..., description="'accepted' | 'rejected' | 'modified'")
+    correction: Optional[str] = Field(None, description="Attorney revised proposition text if modified")
+    attorney_notes: Optional[str] = Field(None, description="Attorney reasoning or review rationale")
+
+
+class MatterClaimsFeedbackRequest(BaseModel):
+    report_id: Optional[str] = Field(None, description="Associated GroundingReport ID")
+    feedbacks: List[ClaimFeedbackItem]
+
+
+@app.post("/api/cases/{case_id}/claims/feedback", tags=["Consult & Synthesis"])
+def record_claims_feedback(
+    case_id: int,
+    payload: MatterClaimsFeedbackRequest,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Record human attorney accept/reject decisions per claim proposition.
+    Stores immutable feedback signal locally to guide refinement and evaluation without external telemetry.
+    """
+    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found.")
+
+    saved_items = []
+    for item in payload.feedbacks:
+        fb = ClaimFeedback(
+            case_id=case_id,
+            report_id=payload.report_id,
+            claim_text=item.claim_text,
+            citation=item.citation,
+            decision=item.decision.lower().strip(),
+            correction=item.correction,
+            attorney_notes=item.attorney_notes
+        )
+        db.add(fb)
+        saved_items.append(fb)
+    db.commit()
+
+    return {
+        "status": "recorded",
+        "case_id": case_id,
+        "feedback_count": len(saved_items),
+        "message": "Human attorney review feedback saved to local verification signal database."
+    }
+
+
+@app.get("/api/cases/{case_id}/claims/feedback", tags=["Consult & Synthesis"])
+def get_claims_feedback(
+    case_id: int,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """Retrieve all human attorney feedback signals recorded for a matter."""
+    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found.")
+
+    feedbacks = db.query(ClaimFeedback).filter(ClaimFeedback.case_id == case_id).order_by(ClaimFeedback.created_at.desc()).all()
+    return [
+        {
+            "id": fb.id,
+            "case_id": fb.case_id,
+            "report_id": fb.report_id,
+            "claim_text": fb.claim_text,
+            "citation": fb.citation,
+            "decision": fb.decision,
+            "correction": fb.correction,
+            "attorney_notes": fb.attorney_notes,
+            "created_at": fb.created_at.isoformat() if fb.created_at else None
+        }
+        for fb in feedbacks
+    ]
+
+
+class StatutoryLetterRequest(BaseModel):
+    letter_type: str = Field(..., description="security_deposit_demand | habitability_repair_notice | defective_notice_response")
+    recipient_name: str
+    recipient_address: str
+    sender_name: Optional[str] = None
+    as_of_date: Optional[str] = None
+
+
+@app.get("/api/cases/{case_id}/defense-checklist", tags=["Tenant Defense & Forms"])
+def get_matter_defense_checklist(
+    case_id: int,
+    as_of_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Generate an actionable legal defense checklist with statutory deadlines
+    and evidentiary audits from matter facts.
+    """
+    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found.")
+
+    report = generate_defense_checklist(case, as_of_date=as_of_date, db=db)
+    return report.model_dump()
+
+
+@app.post("/api/cases/{case_id}/assemble-letter", tags=["Tenant Defense & Forms"])
+def assemble_matter_statutory_letter(
+    case_id: int,
+    req: StatutoryLetterRequest,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Assemble a formalized statutory demand letter or legal notice response
+    using mandatory statutory language, deadlines, and verified legal citations.
+    """
+    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found.")
+
+    res = assemble_statutory_letter(
+        case=case,
+        letter_type=req.letter_type,
+        recipient_name=req.recipient_name,
+        recipient_address=req.recipient_address,
+        sender_name=req.sender_name,
+        as_of_date=req.as_of_date,
+        db=db
+    )
+    return res.model_dump()
+
+
+# ===========================================================================
 # STATUTORY PRECEDENCE GRAPH & CONTROLLING AUTHORITY RESOLVER ENDPOINTS
 # ===========================================================================
 
@@ -1277,4 +1436,37 @@ def get_preemption_registry(
         "authority_ranks": AUTHORITY_RANKS,
         "statewide_preemptions": STATEWIDE_PREEMPTION_REGISTRY
     }
+
+
+@app.get("/api/resolver/explain-why-not", tags=["Statutory Precedence Graph"])
+def explain_why_not_controlling_endpoint(
+    citation: str = Query(..., description="Statutory or municipal citation to inspect"),
+    doctrine: str = Query(..., description="Legal doctrine or topic"),
+    city: Optional[str] = Query(None, description="City name"),
+    county: Optional[str] = Query(None, description="County name"),
+    as_of_date: Optional[str] = Query(None, description="Incident or inquiry date in ISO format"),
+    matter_facts_json: Optional[str] = Query(None, description="Optional JSON-encoded dictionary of fact patterns"),
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Diagnostic legal tool: Explains why a candidate statutory section is NOT controlling
+    for a given inquiry, detailing temporal invalidity, spatial mismatch, preemption, or statutory exemption.
+    """
+    facts = {}
+    if matter_facts_json:
+        try:
+            facts = json.loads(matter_facts_json)
+        except Exception:
+            pass
+    from .resolver import explain_why_not_controlling
+    return explain_why_not_controlling(
+        citation=citation,
+        doctrine_or_topic=doctrine,
+        as_of_date=as_of_date,
+        city=city,
+        county=county,
+        matter_facts=facts,
+        db=db
+    )
 

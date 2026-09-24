@@ -33,7 +33,11 @@ class Settings(BaseSettings):
     EMBED_BATCH_SIZE: int = int(os.getenv("EMBED_BATCH_SIZE", "16"))
 
     # Security & Air-Gap Boundaries
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    REQUIRE_API_KEY: bool = os.getenv("REQUIRE_API_KEY", "true").lower() in ("true", "1", "yes")
+    LOCAL_SESSION_TOKEN: str = os.getenv("LOCAL_SESSION_TOKEN", "kruschlaw-local-dev-session")
     API_KEY: Optional[str] = os.getenv("API_KEY", None)
+    EVIDENCE_ENCRYPTION_KEY: Optional[str] = os.getenv("EVIDENCE_ENCRYPTION_KEY", None)
     CORS_ORIGINS: str = os.getenv(
         "CORS_ORIGINS",
         "http://localhost:8505,http://127.0.0.1:8505,http://localhost:3000,http://127.0.0.1:3000"

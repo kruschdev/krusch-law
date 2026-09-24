@@ -52,6 +52,10 @@ TOOLS_CATALOG = [
                     "type": "string",
                     "description": "Subject matter classification (e.g., 'Housing & Rent', 'Public Nuisance')"
                 },
+                "as_of_date": {
+                    "type": "string",
+                    "description": "As-of inquiry or incident date in ISO format (e.g., '2024-08-01') to filter by active law"
+                },
                 "limit": {
                     "type": "integer",
                     "description": "Maximum number of sections to return (default: 5, max: 20)",
@@ -240,6 +244,92 @@ TOOLS_CATALOG = [
             },
             "required": ["authorities"]
         }
+    },
+    {
+        "name": "explain_why_not_controlling",
+        "description": "Diagnostic legal tool: Explains why a candidate statutory or municipal authority is NOT controlling for a given inquiry, detailing temporal invalidity, spatial mismatch, preemption, or statutory exemption.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "citation": {
+                    "type": "string",
+                    "description": "Statutory or municipal citation to inspect (e.g. 'Cal. Civ. Code § 1950.5' or 'OMC § 8.22.030')"
+                },
+                "doctrine": {
+                    "type": "string",
+                    "description": "Legal doctrine or topic (e.g. 'Security Deposits', 'Just Cause')"
+                },
+                "city": {
+                    "type": "string",
+                    "description": "City name for municipal context (e.g. 'Oakland')"
+                },
+                "county": {
+                    "type": "string",
+                    "description": "County name for unincorporated context (e.g. 'Alameda County')"
+                },
+                "as_of_date": {
+                    "type": "string",
+                    "description": "As-of inquiry or incident date in ISO format (e.g. '2024-08-01')"
+                },
+                "matter_facts": {
+                    "type": "object",
+                    "description": "Optional factual context (e.g. {'single_family': true})"
+                }
+            },
+            "required": ["citation", "doctrine"]
+        }
+    },
+    {
+        "name": "get_defense_checklist",
+        "description": "Generate an actionable legal defense checklist with explicit statutory deadlines (21-day deposit, 3-day notice, 180-day retaliation) and evidentiary audits for a client matter.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "case_id": {
+                    "type": "integer",
+                    "description": "ID of the client matter to audit"
+                },
+                "as_of_date": {
+                    "type": "string",
+                    "description": "Optional as-of inquiry or incident date in ISO format (e.g. '2024-08-01')"
+                }
+            },
+            "required": ["case_id"]
+        }
+    },
+    {
+        "name": "assemble_statutory_letter",
+        "description": "Assemble a formalized statutory demand letter or legal notice response using mandatory statutory language, deadlines, and verified legal citations.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "case_id": {
+                    "type": "integer",
+                    "description": "ID of the client matter"
+                },
+                "letter_type": {
+                    "type": "string",
+                    "description": "Type of letter: 'security_deposit_demand' | 'habitability_repair_notice' | 'defective_notice_response'"
+                },
+                "recipient_name": {
+                    "type": "string",
+                    "description": "Full name of the landlord or property manager recipient"
+                },
+                "recipient_address": {
+                    "type": "string",
+                    "description": "Mailing or service address of the recipient"
+                },
+                "sender_name": {
+                    "type": "string",
+                    "description": "Optional sender / tenant name override"
+                },
+                "as_of_date": {
+                    "type": "string",
+                    "description": "Optional date of letter in ISO format"
+                }
+            },
+            "required": ["case_id", "letter_type", "recipient_name", "recipient_address"]
+        }
     }
 ]
 
@@ -252,6 +342,7 @@ def handle_search_ordinances(args: Dict[str, Any]) -> Dict[str, Any]:
     state = args.get("state")
     city = args.get("city")
     topic = args.get("topic")
+    as_of_date = args.get("as_of_date")
     limit = min(20, max(1, int(args.get("limit", 5))))
 
     db = SessionLocal()
@@ -261,6 +352,7 @@ def handle_search_ordinances(args: Dict[str, Any]) -> Dict[str, Any]:
             state_filter=state,
             city_filter=city,
             topic_filter=topic,
+            as_of_date=as_of_date,
             limit=limit,
             db_session=db
         )
@@ -485,6 +577,8 @@ def handle_draft_brief(args: Dict[str, Any]) -> Dict[str, Any]:
                         unsupported_claims=stats.get("unsupported_claims", 0),
                         invented_citations=stats.get("invented_citations", 0),
                         stale_law_citations=stats.get("stale_law_citations", 0),
+                        abstain_claims=stats.get("abstain_claims", 0),
+                        false_support_rate=stats.get("false_support_rate", 0.0),
                         claims_json=json.dumps(claim_records)
                     )
                     db.add(report)
@@ -590,6 +684,84 @@ def handle_detect_statutory_conflicts(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def handle_explain_why_not_controlling(args: Dict[str, Any]) -> Dict[str, Any]:
+    citation = (args.get("citation") or args.get("candidate_section") or "").strip()
+    doctrine = args.get("doctrine", "").strip()
+    if not citation or not doctrine:
+        return {"error": "Both 'citation' and 'doctrine' are required parameters."}
+
+    city = args.get("city")
+    county = args.get("county")
+    as_of_date = args.get("as_of_date")
+    matter_facts = args.get("matter_facts") or {}
+
+    db = SessionLocal()
+    try:
+        from ..backend.resolver import explain_why_not_controlling
+        return explain_why_not_controlling(
+            citation=citation,
+            doctrine_or_topic=doctrine,
+            as_of_date=as_of_date,
+            city=city,
+            county=county,
+            matter_facts=matter_facts,
+            db=db
+        )
+    finally:
+        db.close()
+
+
+def handle_get_defense_checklist(args: Dict[str, Any]) -> Dict[str, Any]:
+    case_id = args.get("case_id")
+    if not case_id:
+        return {"error": "Missing required 'case_id' parameter."}
+    as_of_date = args.get("as_of_date")
+
+    db = SessionLocal()
+    try:
+        from ..backend.db import Case
+        from ..backend.checklist import generate_defense_checklist
+        case = db.query(Case).filter(Case.id == int(case_id), Case.is_deleted.is_(False)).first()
+        if not case:
+            return {"error": f"Matter #{case_id} not found."}
+        report = generate_defense_checklist(case, as_of_date=as_of_date, db=db)
+        return report.model_dump()
+    finally:
+        db.close()
+
+
+def handle_assemble_statutory_letter(args: Dict[str, Any]) -> Dict[str, Any]:
+    case_id = args.get("case_id")
+    letter_type = args.get("letter_type")
+    recipient_name = args.get("recipient_name")
+    recipient_address = args.get("recipient_address")
+    sender_name = args.get("sender_name")
+    as_of_date = args.get("as_of_date")
+
+    if not case_id or not letter_type or not recipient_name or not recipient_address:
+        return {"error": "Missing required parameters: 'case_id', 'letter_type', 'recipient_name', and 'recipient_address' are required."}
+
+    db = SessionLocal()
+    try:
+        from ..backend.db import Case
+        from ..backend.checklist import assemble_statutory_letter
+        case = db.query(Case).filter(Case.id == int(case_id), Case.is_deleted.is_(False)).first()
+        if not case:
+            return {"error": f"Matter #{case_id} not found."}
+        res = assemble_statutory_letter(
+            case=case,
+            letter_type=letter_type,
+            recipient_name=recipient_name,
+            recipient_address=recipient_address,
+            sender_name=sender_name,
+            as_of_date=as_of_date,
+            db=db
+        )
+        return res.model_dump()
+    finally:
+        db.close()
+
+
 def process_request(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     req_id = request.get("id")
     method = request.get("method")
@@ -633,7 +805,10 @@ def process_request(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "draft_brief": handle_draft_brief,
             "get_code_traceability": handle_get_code_traceability,
             "resolve_controlling_law": handle_resolve_controlling_law,
-            "detect_statutory_conflicts": handle_detect_statutory_conflicts
+            "detect_statutory_conflicts": handle_detect_statutory_conflicts,
+            "explain_why_not_controlling": handle_explain_why_not_controlling,
+            "get_defense_checklist": handle_get_defense_checklist,
+            "assemble_statutory_letter": handle_assemble_statutory_letter
         }
 
         if tool_name not in handlers:
@@ -655,7 +830,7 @@ def process_request(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                     "content": [
                         {
                             "type": "text",
-                            "text": json.dumps(res, indent=2)
+                            "text": json.dumps(res, indent=2, ensure_ascii=False)
                         }
                     ]
                 }

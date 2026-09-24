@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["OLLAMA_EMBED_HOST"] = "http://mock-ollama:11434"
 os.environ["OLLAMA_BASE_URL"] = "http://mock-ollama:11434"
+os.environ["ENVIRONMENT"] = "test"
 
 # Add project root to sys.path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -55,7 +56,10 @@ import src.backend.ingest
 import src.backend.main
 import src.mcp.server
 
-from src.backend.db import Base, Case, LawVector, IngestJob, GroundingReport, AuditLog, StatuteCodeTraceability
+from src.backend.db import (
+    Base, Case, LawVector, IngestJob, GroundingReport, AuditLog,
+    StatuteCodeTraceability, MatterEvidence, ClaimFeedback
+)
 from src.backend.main import app, get_db
 
 
@@ -85,6 +89,8 @@ class KruschLawTestCase(unittest.TestCase):
         self.db.query(Case).delete()
         self.db.query(LawVector).delete()
         self.db.query(IngestJob).delete()
+        self.db.query(MatterEvidence).delete()
+        self.db.query(ClaimFeedback).delete()
         self.db.query(StatuteCodeTraceability).delete()
         self.db.commit()
 

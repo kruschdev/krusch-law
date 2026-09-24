@@ -1,0 +1,264 @@
+[
+  {
+    "id": "gold_sup_01",
+    "category": "supported",
+    "claim": "Pursuant to OMC Section 8.22.030, landlords must provide tenants with written notice of the Rent Adjustment Program at inception of tenancy.",
+    "retrieved_laws": [
+      {
+        "id": 101,
+        "title": "Oakland Rent Adjustment Program Notice",
+        "section": "Section 8.22.030",
+        "jurisdiction": "Oakland Municipal Code",
+        "content": "Landlords must provide tenants with written notice of the Rent Adjustment Program at inception of tenancy. Failure to provide notice bars rent increases.",
+        "repealed": false,
+        "authority_class": "municipal_ordinance"
+      }
+    ],
+    "expected_status": "supported",
+    "expected_verdict": "entailed",
+    "expected_refused": false
+  },
+  {
+    "id": "gold_sup_02",
+    "category": "supported",
+    "claim": "Under California Civil Code Section 1950.5, no later than 21 calendar days after the tenant has vacated the premises, the landlord shall furnish an itemized statement.",
+    "retrieved_laws": [
+      {
+        "id": 102,
+        "title": "California Security Deposit Requirements",
+        "section": "Section 1950.5",
+        "jurisdiction": "California Civil Code",
+        "content": "No later than 21 calendar days after the tenant has vacated the premises, the landlord shall furnish the tenant with a copy of an itemized statement indicating the basis for, and amount of, any security received.",
+        "repealed": false,
+        "authority_class": "statute"
+      }
+    ],
+    "expected_status": "supported",
+    "expected_verdict": "entailed",
+    "expected_refused": false
+  },
+  {
+    "id": "gold_inv_01",
+    "category": "invented_citation",
+    "claim": "Pursuant to OMC Section 999.99, tenants are entitled to an immediate $10,000 refund for unpermitted plumbing alterations.",
+    "retrieved_laws": [
+      {
+        "id": 101,
+        "title": "Oakland Rent Adjustment Program Notice",
+        "section": "Section 8.22.030",
+        "jurisdiction": "Oakland Municipal Code",
+        "content": "Landlords must provide tenants with written notice of the Rent Adjustment Program at inception of tenancy.",
+        "repealed": false,
+        "authority_class": "municipal_ordinance"
+      }
+    ],
+    "expected_status": "invented_citation",
+    "expected_verdict": "not_in_corpus",
+    "expected_refused": true
+  },
+  {
+    "id": "gold_inv_02",
+    "category": "invented_citation",
+    "claim": "Under Cal. Civ. Code Section 1999.5, all residential leases expire automatically upon transfer of property ownership.",
+    "retrieved_laws": [
+      {
+        "id": 102,
+        "title": "California Security Deposit Requirements",
+        "section": "Section 1950.5",
+        "jurisdiction": "California Civil Code",
+        "content": "No later than 21 calendar days after the tenant has vacated the premises, the landlord shall furnish an itemized statement.",
+        "repealed": false,
+        "authority_class": "statute"
+      }
+    ],
+    "expected_status": "invented_citation",
+    "expected_verdict": "not_in_corpus",
+    "expected_refused": true
+  },
+  {
+    "id": "gold_stale_01",
+    "category": "stale_law",
+    "claim": "Under California Civil Code Section 1947.10, the landlord is entirely exempt from rent control restrictions.",
+    "retrieved_laws": [
+      {
+        "id": 103,
+        "title": "Repealed Costa-Hawkins Exemption Rule",
+        "section": "Section 1947.10",
+        "jurisdiction": "California Civil Code",
+        "content": "Old residential rules governing rent increase exemptions.",
+        "repealed": true,
+        "preempted_by": "Tenant Protection Act of 2019",
+        "authority_class": "statute"
+      }
+    ],
+    "expected_status": "stale_law",
+    "expected_verdict": "stale_law",
+    "expected_refused": true
+  },
+  {
+    "id": "gold_stale_02",
+    "category": "stale_law",
+    "claim": "Pursuant to OMC Section 8.22.010, landlords may collect arbitrary application processing fees without accounting.",
+    "retrieved_laws": [
+      {
+        "id": 104,
+        "title": "Repealed Fee Authorization",
+        "section": "Section 8.22.010",
+        "jurisdiction": "Oakland Municipal Code",
+        "content": "Historical repealed provisions regarding administrative fees.",
+        "status": "repealed",
+        "authority_class": "municipal_ordinance"
+      }
+    ],
+    "expected_status": "stale_law",
+    "expected_verdict": "stale_law",
+    "expected_refused": true
+  },
+  {
+    "id": "gold_wrong_num_01",
+    "category": "wrong_proposition",
+    "claim": "Under California Civil Code Section 1950.5, the landlord has 60 calendar days after the tenant vacates to return the deposit.",
+    "retrieved_laws": [
+      {
+        "id": 102,
+        "title": "California Security Deposit Requirements",
+        "section": "Section 1950.5",
+        "jurisdiction": "California Civil Code",
+        "content": "No later than 21 calendar days after the tenant has vacated the premises, the landlord shall furnish an itemized statement and return remaining deposit.",
+        "repealed": false,
+        "authority_class": "statute"
+      }
+    ],
+    "expected_status": "wrong_proposition",
+    "expected_verdict": "contradicted",
+    "expected_refused": true
+  },
+  {
+    "id": "gold_wrong_duty_01",
+    "category": "wrong_proposition",
+    "claim": "Under California Civil Code Section 1954, landlords may enter leased rental premises at any hour without advance notice.",
+    "retrieved_laws": [
+      {
+        "id": 105,
+        "title": "Landlord Right of Entry",
+        "section": "Section 1954",
+        "jurisdiction": "California Civil Code",
+        "content": "The landlord may enter the dwelling unit only during normal business hours after giving the tenant 24 hours written notice.",
+        "repealed": false,
+        "authority_class": "statute"
+      }
+    ],
+    "expected_status": "wrong_proposition",
+    "expected_verdict": "contradicted",
+    "expected_refused": true
+  },
+  {
+    "id": "gold_wrong_insuf_01",
+    "category": "wrong_proposition",
+    "claim": "Under Section 8.22.030, a landlord cannot evict without proving substantial damage to the property.",
+    "retrieved_laws": [
+      {
+        "id": 101,
+        "title": "Oakland Rent Adjustment Program Notice",
+        "section": "Section 8.22.030",
+        "jurisdiction": "Oakland Municipal Code",
+        "content": "Landlords must provide tenants with written notice of the Rent Adjustment Program at inception of tenancy.",
+        "repealed": false,
+        "authority_class": "municipal_ordinance"
+      }
+    ],
+    "expected_status": "wrong_proposition",
+    "expected_verdict": "insufficient_context",
+    "expected_refused": true
+  },
+  {
+    "id": "gold_wrong_exc_01",
+    "category": "wrong_proposition",
+    "claim": "Under California Civil Code Section 1946.2, the landlord is prohibited from terminating the tenancy without just cause.",
+    "retrieved_laws": [
+      {
+        "id": 106,
+        "title": "Tenant Protection Act Just Cause",
+        "section": "Section 1946.2",
+        "jurisdiction": "California Civil Code",
+        "content": "After a tenant has continuously occupied a residential real property for 12 months, the owner shall not terminate the tenancy without just cause.",
+        "repealed": false,
+        "authority_class": "statute"
+      },
+      {
+        "id": 107,
+        "title": "Owner-Occupied Exemption",
+        "section": "Section 1946.2(e)",
+        "jurisdiction": "California Civil Code",
+        "content": "This section shall not apply to an owner-occupied duplex or single-family residence where the owner retains residency.",
+        "repealed": false,
+        "hierarchy_level": "exceptions",
+        "authority_class": "statute"
+      }
+    ],
+    "matter_facts": {
+      "single_family": true,
+      "owner_occupied_duplex": true
+    },
+    "expected_status": "wrong_proposition",
+    "expected_verdict": "exception_applies",
+    "expected_refused": true
+  },
+  {
+    "id": "gold_abstain_01",
+    "category": "abstain",
+    "claim": "Under Section 8.22.030, the municipal program facilitates harmonious rental community dynamics and general housing satisfaction across the city.",
+    "retrieved_laws": [
+      {
+        "id": 101,
+        "title": "Oakland Rent Adjustment Program Notice",
+        "section": "Section 8.22.030",
+        "jurisdiction": "Oakland Municipal Code",
+        "content": "Landlords must provide tenants with written notice of the Rent Adjustment Program at inception of tenancy. The program provides informational assistance and community support.",
+        "repealed": false,
+        "authority_class": "municipal_ordinance"
+      }
+    ],
+    "expected_status": "abstain",
+    "expected_verdict": "abstain",
+    "expected_refused": true
+  },
+  {
+    "id": "gold_abstain_commentary_01",
+    "category": "abstain",
+    "claim": "Pursuant to Section 19.4, tenant repair deductions are routinely favored in commercial lease disputes.",
+    "retrieved_laws": [
+      {
+        "id": 108,
+        "title": "Miller & Starr Real Estate Treatise",
+        "section": "Section 19.4",
+        "jurisdiction": "California Practice Guide",
+        "content": "Miller and Starr California Real Estate Commentary: Tenant repair and deduct remedies under common law principles.",
+        "repealed": false,
+        "authority_class": "secondary_commentary"
+      }
+    ],
+    "expected_status": "abstain",
+    "expected_verdict": "abstain",
+    "expected_refused": true
+  },
+  {
+    "id": "gold_adv_stripped_01",
+    "category": "invented_citation",
+    "claim": "Pursuant to [UNAUTHORIZED CITATION STRIPPED: OMC Section 999.99], tenant is entitled to statutory treble damages.",
+    "retrieved_laws": [
+      {
+        "id": 101,
+        "title": "Oakland Rent Adjustment Program Notice",
+        "section": "Section 8.22.030",
+        "jurisdiction": "Oakland Municipal Code",
+        "content": "Landlords must provide tenants with written notice of the Rent Adjustment Program at inception of tenancy.",
+        "repealed": false,
+        "authority_class": "municipal_ordinance"
+      }
+    ],
+    "expected_status": "invented_citation",
+    "expected_verdict": "not_in_corpus",
+    "expected_refused": true
+  }
+]
