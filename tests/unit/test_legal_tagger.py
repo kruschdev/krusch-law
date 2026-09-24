@@ -39,6 +39,25 @@ class TestLegalChunkTagger(unittest.TestCase):
         self.assertEqual(result["doctrine"], "Rent Control")
         self.assertIn("rent-control", result["tags"])
 
+    def test_tag_legal_chunk_ensemble_merges_heuristic_and_llm(self):
+        from unittest.mock import MagicMock, patch
+        text = "Landlord withheld entire $2,500 security deposit without itemization under Civil Code 1950.5."
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "response": '{"summary": "Landlord bad faith retention of deposit.", "tags": ["bad-faith", "statutory-damages"], "doctrine": "Security Deposits"}'
+        }
+
+        with patch("httpx.Client.post", return_value=mock_resp):
+            result = tag_legal_chunk(text, filename="Deposit_Complaint.pdf", use_llm=True)
+            self.assertEqual(result["doctrine"], "Security Deposits")
+            self.assertEqual(result["summary"], "Landlord bad faith retention of deposit.")
+            # Verify BOTH statutory/heuristic tags AND LLM semantic tags are present
+            self.assertIn("security-deposit", result["tags"])
+            self.assertIn("sec-19505", result["tags"])
+            self.assertIn("bad-faith", result["tags"])
+            self.assertIn("statutory-damages", result["tags"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -97,7 +97,7 @@ def heuristic_tag_chunk(
         matched_tags.append(doc_type.lower().replace("_", "-"))
 
     # Extract any statutory citation mentions
-    sec_match = re.findall(r'(?:§+|Section)\s*([0-9A-Za-z\.\-]+)', content, re.IGNORECASE)
+    sec_match = re.findall(r'(?:§+|Section|Civ(?:il)?\.?\s*Code|CC)\s*([0-9A-Za-z\.\-]+)', content, re.IGNORECASE)
     for s in sec_match[:2]:
         matched_tags.append(f"sec-{s.lower()}")
 
@@ -206,8 +206,16 @@ def tag_legal_chunk(
 ) -> Dict[str, Any]:
     """
     Primary interface for legal chunk tagging.
-    Attempts LLM tagging via local Ollama and falls back to deterministic heuristic tagging.
+    Combines deterministic statutory regex and doctrine heuristics with
+    LLM semantic understanding for true ensemble tagging.
     """
+    heuristic = heuristic_tag_chunk(
+        content=content,
+        filename=filename,
+        locator=locator,
+        doc_type=doc_type
+    )
+
     if use_llm:
         res = tag_chunk_with_llm(
             content=content,
@@ -216,11 +224,37 @@ def tag_legal_chunk(
             doc_type=doc_type
         )
         if res is not None and res.get("tags"):
-            return res
+            # Ensemble merge: combine statutory/heuristic tags + LLM tags
+            seen = set()
+            merged_tags: List[str] = []
 
-    return heuristic_tag_chunk(
-        content=content,
-        filename=filename,
-        locator=locator,
-        doc_type=doc_type
-    )
+            # 1. Prioritize statutory citation tags (sec-...) and doctrine anchors from heuristic
+            for t in heuristic.get("tags", []):
+                clean_t = re.sub(r'[^a-z0-9\-]', '', str(t).lower().strip())
+                if clean_t and clean_t not in seen:
+                    seen.add(clean_t)
+                    merged_tags.append(clean_t)
+
+            # 2. Add LLM semantic tags
+            for t in res.get("tags", []):
+                clean_t = re.sub(r'[^a-z0-9\-]', '', str(t).lower().strip())
+                if clean_t and clean_t not in seen:
+                    seen.add(clean_t)
+                    merged_tags.append(clean_t)
+                    if len(merged_tags) >= 7:
+                        break
+
+            doctrine_name = res.get("doctrine")
+            if not doctrine_name or doctrine_name == "General Matter Facts":
+                doctrine_name = heuristic.get("doctrine", "General Matter Facts")
+
+            summary_text = res.get("summary") or heuristic.get("summary")
+
+            return {
+                "summary": summary_text,
+                "tags": merged_tags[:7],
+                "doctrine": doctrine_name
+            }
+
+    return heuristic
+
