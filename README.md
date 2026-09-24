@@ -4,12 +4,13 @@
 > *Private municipal code retrieval, assertion-level grounding verification, and audit-logged issue analysis using on-premise open-weight models.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Version: 0.3.0](https://img.shields.io/badge/Version-0.3.0-green.svg)](https://github.com/kruschdev/krusch-law)
+[![Version: 0.3.1](https://img.shields.io/badge/Version-0.3.1-green.svg)](https://github.com/kruschdev/krusch-law)
 [![Python 3.11 | 3.12](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.31+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![pgvector](https://img.shields.io/badge/PostgreSQL-pgvector%2016-336791.svg?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-Local%20Inference-black.svg)](https://ollama.com)
+[![Tests: 80 Passing](https://img.shields.io/badge/Tests-80%20Passing-brightgreen.svg)](tests/)
 [![Eval Gate: Passing](https://img.shields.io/badge/Golden%20Eval-100%25%20Recall%405-brightgreen.svg)](data/eval/golden_legal_eval.json)
 
 ---
@@ -48,11 +49,72 @@ Law firms, legal aid organizations, and corporate counsel face a critical dilemm
 * 📁 **Dedicated Client Discovery & Evidence Isolation**: Complete database partition between public statutory codes (`laws_vectors`) and confidential client discovery exhibits (`matter_evidence` via `GET /api/cases/{case_id}/evidence`), strictly preventing cross-matter fact contamination.
 * 📄 **Professional Legal Export (.docx & .md)**: Single-click export of formal legal memorandums featuring law office caption blocks, mandatory UPL disclaimers, 4-part legal brief structure, Appendix A (Assertion-Level Grounding Audit Table), and Appendix B (Table of Authorities Retrieved).
 * 🔄 **Persistent Crash-Resilient Ingestion Worker**: Dedicated worker process (`src.backend.worker`) utilizing PostgreSQL `SKIP LOCKED` (and atomic SQLite transaction locks), byte-level SHA-256 deduplication, and resumable offsets.
+* 🏷️ **Ensemble Legal Chunk Tagging & Micro-Digests**: Ingestion pipeline (`src.backend.tagger`) performs an ensemble merge combining deterministic regex statutory citations (`sec-1950.5`, matching `Civil Code`, `Civ. Code`, `CC`, `§`, `Section`) and doctrinal keyword anchors with local Ollama (`qwen2.5-coder:7b`) extracting 3–5 lowercase semantic tags (`habitability-defense`, `unlawful-detainer`) and 1-sentence micro-digests. Includes deterministic fallback so statutory anchors are never lost on timeout.
+* 🔍 **Dual-Path Semantic Recall & Traceability Registry**: Combines exact statutory section lookup with hybrid BM25 lexical (`tsvector` / `ts_rank_cd`) and dense vector similarity (`bge-large` 1024-dim, RRF $k=60$). Matches receive a +20% exact tag boost with canonical doctrine filtering. Features a persistent Code-to-Statute Traceability Registry (Tab 4 & MCP tool `get_code_traceability`) linking municipal enforcement provisions directly to controlling state codes.
 * 📄 **KruschNexus Sovereign Ingestion Spine**: Integrated parser supporting PDF (with OCR fallback), DOCX, EML, Markdown, and TXT with page-true and section-true citations.
 * 🗑️ **Enterprise Hard Purge & Audit Trail**: Immutable local audit logging (`AuditLog`) for all searches, consults, ingests, and matter mutations, plus cryptographic matter hard purge (`DELETE /api/cases/{case_id}/purge`).
-* 🔌 **Hardened Model Context Protocol (MCP)**: Native stdio JSON-RPC server with 6 tools (`search_ordinances`, `get_section`, `log_matter`, `draft_brief`, `list_matters`, `get_grounding_report`), refusing to draft briefs unless valid governing authorities exist in the corpus.
+* 🔌 **Hardened Model Context Protocol (MCP)**: Native stdio JSON-RPC server with 7 tools (`search_ordinances`, `get_section`, `log_matter`, `draft_brief`, `list_matters`, `get_grounding_report`, `get_code_traceability`), refusing to draft briefs unless valid governing authorities exist in the corpus.
 * ⚡ **LRU Embedding Cache**: Thread-safe in-memory cache keyed by `model:sha256(text)` eliminating redundant embedding calls across search, consult, and deduplication.
-* 🧪 **CI Gate & Golden Legal Benchmark**: Automated GitHub Actions CI pipeline running Ruff linting, 58 unit/integration tests, and a 25-case golden legal evaluation harness.
+* 🧪 **CI Gate & Golden Legal Benchmark**: Automated GitHub Actions CI pipeline running Ruff linting, 80 unit/integration tests, and a 25-case golden legal evaluation harness.
+
+---
+
+## 🏷️ Ensemble Legal Chunk Tagging & Dual-Path Semantic Recall
+
+KruschLaw decouples raw ingestion parsing (handled by the lightweight [KruschNexus](https://github.com/kruschdev/krusch-nexus) spine) from **domain-specific legal semantic tagging and hybrid recall**.
+
+```
+                           Raw Document Chunk
+                                   │
+                   ┌───────────────┴───────────────┐
+                   ▼                               ▼
+      Deterministic Regex & Anchors      Local LLM Semantic Tagger
+     (Civ Code, CC, §, Section, Words)   (Ollama qwen2.5-coder:7b @ 15s)
+                   │                               │
+         Exact Citation Tags              Semantic Concepts &
+      (e.g., `sec-1950.5`, `sec-1942.5`)   1-Sentence Micro-Digest
+                   │                               │
+                   └───────────────┬───────────────┘
+                                   ▼
+                         Ensemble Tag Union
+                   (Deduplicated, Normalized, Grounded)
+                                   │
+                                   ▼
+                   PostgreSQL 16 + pgvector Storage
+             (MatterEvidence & LawVector Schema Enrichment)
+                                   │
+                                   ▼
+                      Dual-Path Retrieval Pipeline
+    (Exact Citation Match + BM25 Lexical + Vector Cosine + 20% Tag Boost)
+```
+
+### 1. The Ensemble Tagging Architecture
+Standard LLM-only chunk taggers suffer from a classic failure mode: an LLM captures broad abstract doctrines (e.g., `landlord-tenant-dispute`) but frequently drops or misidentifies precise statutory section anchors.
+
+KruschLaw resolves this via **Ensemble Tagging** (`src/backend/tagger.py`):
+1. **Deterministic Citation Extraction**: Uses compiled regex patterns recognizing `Civil Code § 1950.5`, `Civ. Code 1950.5`, `CC 1950.5`, and section numbers, automatically creating normalized anchor tags (e.g. `sec-1950.5`, `sec-1942.5`, `omc-8.22.030`).
+2. **Deterministic Doctrine Anchors**: Analyzes high-signal statutory keywords (`deposit`, `habitability`, `retaliation`, `sublease`, `rent board`) to map chunks into canonical legal doctrines.
+3. **Local LLM Semantic Tagging**: Invokes local Ollama `qwen2.5-coder:7b` to extract 3–5 lowercase semantic tags and a concise 1-sentence micro-digest.
+4. **Ensemble Merge**: Deduplicates and unions the deterministic citation/doctrine tags with the LLM semantic tags.
+5. **Deterministic Fallback**: If the local LLM times out or is under heavy GPU load, the pipeline automatically falls back to extractive digests and deterministic anchors—ensuring statutory citation anchors are **never dropped** and zero data ever leaks to external clouds.
+
+### 2. Schema Enrichment
+Both statutory vectors and confidential client exhibits are enriched with semantic metadata:
+* **`MatterEvidence`** (`matter_evidence`): Added `tags` (JSON array), `summary` (1-sentence digest), and `doctrine` (primary legal category).
+* **`LawVector`** (`laws_vectors`): Enriched with `tags`, `summary`, and `doctrine`.
+
+### 3. Dual-Path Retrieval & Exact Tag Boosting
+When querying legal authorities or client discovery (`src/backend/rag.py`):
+* **Exact Section Matching**: Direct SQL index lookup for cited section numbers (e.g., `1950.5` or `8.22.030`).
+* **Hybrid Lexical & Dense RRF**: Combines PostgreSQL cover-density full-text search (`tsvector` / `ts_rank_cd`) with `pgvector` HNSW cosine similarity fused via Reciprocal Rank Fusion ($k=60$).
+* **Exact Tag Boost**: Chunks containing tags matching the inquiry's legal issues receive a **+20% score boost** (`score * 1.20`), prioritizing sections with explicit statutory or doctrinal relevance over loose semantic neighbors.
+* **Doctrinal Filtering**: Supports strict filtering by legal doctrine (`topic` or `doctrine`), enabling targeted issue-spotting and conflict checking.
+
+### 4. Statute-to-Code Traceability Registry
+KruschLaw maintains an immutable relational traceability registry (`src/backend/db.py` → `StatuteCodeTraceability`) mapping state statutes to municipal enforcement codes and codebase symbols:
+* **Streamlit Tab 4**: Interactive Statutory Traceability Explorer displaying cross-referenced state statutes, municipal enforcement provisions, statutory summaries, and attorney audit status.
+* **REST API**: `GET /api/compliance/traceability` with optional `?doctrine=` filtering.
+* **MCP Tool**: `get_code_traceability` allowing autonomous coding agents to inspect verified legal mappings directly.
 
 ---
 
@@ -210,6 +272,7 @@ KruschLaw provides a native stdio JSON-RPC MCP server (`src/mcp/server.py`) expo
 | `list_matters` | `limit` | Enumerate active client matters and matter numbers |
 | `draft_brief` | `case_id`, `facts`, `title`, `city`, `limit` | Stage 4-part legal brief with assertion grounding; **refuses if authorities absent** |
 | `get_grounding_report` | `case_id` | Retrieve stored assertion grounding audit for a specific matter |
+| `get_code_traceability` | `doctrine` | Inspect curated statute-to-code traceability invariants and verified mappings |
 
 ### Guardrails for Agents
 1. **Refusal on Missing Authorities**: If the air-gapped corpus does not contain relevant governing authorities, `draft_brief` rejects the request with `CANNOT_DRAFT_WITHOUT_AUTHORITIES` rather than hallucinating plausible statutes.
@@ -241,11 +304,14 @@ KruschLaw is engineered around the ethical constraints of legal practice (ABA Mo
 ## 🧪 Automated Testing & CI Gates
 
 ```bash
-# Run full unit, integration, and eval test suite (58 tests)
-python -m unittest discover tests
+# Run full unit, integration, and eval test suite (80 tests)
+pytest tests
 
 # Run golden retrieval and assertion-level grounding CI gate
-python -m unittest tests/eval/test_golden_eval_gate.py
+pytest tests/eval/test_golden_eval_gate.py
+
+# Run legal tagger unit tests
+pytest tests/unit/test_legal_tagger.py
 
 # Run ruff code quality and lint gate
 ruff check .

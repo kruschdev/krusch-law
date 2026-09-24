@@ -97,14 +97,20 @@ KruschLaw exposes its own stdio JSON-RPC MCP server (`src/mcp/server.py`) for ID
 - `list_matters`: Active matter tracking with docket codes and client references.
 - `get_grounding_report`: Proposition-level grounding audit table with 4-class failure taxonomy.
 - `draft_brief`: Staged 4-part legal memorandum generation for human attorney review (refuses to draft without governing authorities).
+- `get_code_traceability`: Curated statute-to-code traceability invariants, verified files, and attorney audit statuses.
 
 ---
 
 ## 5. Testing & Verification
 
-Run the full pytest suite (72 tests, in-memory SQLite + mock Ollama, 0 external network dependencies):
+Run the full pytest suite (80 tests, in-memory SQLite + mock Ollama, 0 external network dependencies):
 ```bash
 .venv/bin/pytest tests
+```
+
+Run legal chunk tagger unit tests:
+```bash
+.venv/bin/pytest tests/unit/test_legal_tagger.py
 ```
 
 Run the 4-gate empirical retrieval & proposition grounding evaluation harness:
@@ -116,3 +122,13 @@ Run cross-repo integration tests with KruschNexus:
 ```bash
 .venv/bin/pytest tests/test_nexus_integration.py
 ```
+
+---
+
+## 6. Ensemble Legal Tagging & Semantic Recall Invariants
+
+1. **Ensemble Merge Rule**: When processing chunks in `src/backend/tagger.py`, deterministic statutory regex citations (`sec-...`) and doctrine anchors MUST be merged with LLM semantic tags. Deterministic anchors must NEVER be dropped or overwritten by model hallucinations.
+2. **Citation Regex Breadth**: Statutory citation regex must detect `Civil Code`, `Civ. Code`, `CC`, `Section`, and `§` formats into canonical normalized identifiers (e.g. `sec-1950.5`).
+3. **Dual-Path Boosting**: Semantic retrieval queries (`retrieve_laws`, `retrieve_matter_evidence`) apply an exact tag boost of +20% (`score * 1.20`) when candidate chunks match issue tags, alongside lexical BM25 cover-density and dense cosine similarity.
+4. **Air-Gapped Local Model**: Chunk tagging uses local Ollama `qwen2.5-coder:7b` with a 15.0s timeout and immediate deterministic fallback. Zero cloud network calls are permitted.
+5. **Pydantic Serialization**: SQLite/Postgres text columns storing JSON tags must utilize `@field_validator("tags", mode="before")` to transparently deserialize raw JSON strings into typed string lists.
