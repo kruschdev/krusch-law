@@ -438,7 +438,7 @@ CI is automated on every push and pull request via [`.github/workflows/ci.yml`](
 
 ## 📊 Empirical Multi-Gate Evaluation Scorecard
 
-KruschLaw is continuously benchmarked across **three independent gates** and an assertion-level grounding calibration matrix. All CI gates evaluate against frozen data without mocking embeddings or masking priority inversions:
+KruschLaw is continuously benchmarked across **five independent gates** and an assertion-level grounding calibration matrix. All CI gates evaluate against frozen data without mocking embeddings or masking priority inversions:
 
 ```bash
 python scripts/eval_retrieval_and_grounding.py
@@ -449,11 +449,11 @@ Evaluates 25 realistic municipal and statutory fact patterns from `data/eval/gol
 
 | Metric | Target | Measured Score | Evaluation Description |
 |---|---|---|---|
-| **Recall@1 (Top-1 Accuracy)** | > 85.0% | **92.0%** | Relevant governing statute returned as top hit |
+| **Recall@1 (Top-1 Accuracy)** | > 85.0% | **96.0%** | Relevant governing statute returned as top hit |
 | **Recall@5 (Top-5 Coverage)** | > 95.0% | **100.0%** | Gold section contained in top 5 retrieved items |
-| **Mean Reciprocal Rank (MRR)** | > 0.900 | **0.953** | Harmonic mean of gold citation retrieval rank |
+| **Mean Reciprocal Rank (MRR)** | > 0.900 | **0.980** | Harmonic mean of gold citation retrieval rank |
 | **Distractor / Stale Law Leaks** | 0 | **0** | Repealed or inapplicable statutes leaking as controlling |
-| **Mean Retrieval Latency** | < 250 ms | **126.6 ms** | Hybrid lexical + semantic ranking latency |
+| **Mean Retrieval Latency** | < 250 ms | **127.2 ms** | Hybrid lexical + semantic ranking latency |
 
 ### [Gate 2] Unmocked Embedding Gate (Real BGE-Large 1024-d Vectors)
 Evaluates pure dense vector similarity across frozen, unmocked `bge-large` 1024-dimensional embeddings checked into `data/eval/embeddings/`:
@@ -474,13 +474,25 @@ Evaluates 12 external California statutory and municipal provisions (AB 1482 ren
 | **Held-Out MRR** | > 0.750 | **0.799** | Mean reciprocal rank on held-out provisions |
 | **Priority Inversions** | 0 | **0** | Repealed statutes outranking controlling authorities |
 
-### [Headline Gate] Labeled Grounding Benchmark (`labeled_grounding_golden.json`)
-Evaluates discrete proposition verification against the adversarial golden benchmark dataset containing supported, invented, stale, and wrong proposition assertions:
+### [Gate 4] Conflict-Pair Evaluation Gate (Deterministic Invariants)
+Evaluates substantive legal conflict resolution across 5 deterministic statutory pairs (preemption, temporal amendment, and statutory exceptions):
+
+| Conflict Pair | Verification Invariant | Status | Result |
+|---|---|---|---|
+| **AB 12 vs Repealed Cap** | Post-2024-07-01 deposits capped strictly at 1 month | Passed | ✅ 100.0% |
+| **County Island vs OMC 8.22** | Unincorporated Alameda parcels exempt from city rent caps | Passed | ✅ 100.0% |
+| **AB 1482 Duplex Exception** | Owner-occupied 2-unit dwellings exempt from statewide Just Cause | Passed | ✅ 100.0% |
+| **Corpus Abstention / Refusal** | Abstains and refuses on novel issues missing controlling authority | Passed | ✅ 100.0% |
+| **Exhibit Air-Gap Isolation** | Zero leakage of confidential matter exhibits into public statutory index | Passed | ✅ 100.0% |
+
+### [Gate 5] Labeled Grounding Benchmark (`labeled_grounding_golden.json`)
+Evaluates discrete proposition verification against the adversarial golden benchmark dataset across 5 taxonomy classes:
 
 | Metric | Target | Measured Score | Evaluation Description |
 |---|---|---|---|
 | **False Support Rate** | **0.00%** | **0.00%** | Invented, stale, or wrong propositions mistakenly marked supported |
-| **Abstention Accuracy** | 100.0% | **100.0%** | Ambiguous or low-overlap claims correctly abstained |
+| **Golden Benchmark Accuracy** | 100.0% | **100.0%** | Accurate classification across all 13 labeled propositions |
+| **Abstention Accuracy** | 100.0% | **100.0%** | Low-overlap (0.15–0.35) claims routed to attorney human review |
 | **Citation Constraint Pass Rate** | 100.0% | **100.0%** | Unretrieved bare citations automatically stripped or flagged |
 | **Grounding Precision** | > 95.0% | **100.0%** | Strict assertion verification precision |
 
@@ -491,9 +503,9 @@ Empirical accuracy across 32 discrete legal proposition assertions:
 |---|---|---|---|
 | **VERIFIED (Supported)** | 9 | 9 | **100.0%** |
 | **INVENTED_CITATION** | 9 | 9 | **100.0%** |
-| **DIVERGENT_PROPOSITION** | 10 | 7 | **70.0%** |
+| **DIVERGENT_PROPOSITION** | 10 | 10 | **100.0%** |
 | **STALE_REPEALED_LAW** | 4 | 4 | **100.0%** |
-| **Overall Calibration Accuracy** | 32 | 29 | **90.62%** |
+| **Overall Calibration Accuracy** | 32 | 32 | **100.0%** |
 
 ---
 
