@@ -110,6 +110,8 @@ class LawVector(Base):
     source_hash = Column(String(64), nullable=True, index=True)     # SHA-256 hash of content chunk for deduplication
     chunk_index = Column(Integer, default=0, nullable=False)        # Chunk index within section
     is_substantive = Column(Boolean, default=True, nullable=False)  # False for TOC, editorial notes, enactments
+    tags = Column(Text, nullable=True)                              # JSON list of semantic tags
+    summary = Column(Text, nullable=True)                           # 1-sentence legal micro-digest
     embedding = Column(Vector(settings.EMBEDDING_DIM), nullable=True)
 
     # --- Hierarchy & Legal Graph Structure ---
@@ -234,6 +236,9 @@ class MatterEvidence(Base):
     section_locator = Column(String(100), nullable=True)
     chunk_index = Column(Integer, default=0, nullable=False)
     content = Column(Text, nullable=False)
+    tags = Column(Text, nullable=True)                              # JSON list of semantic tags (e.g. ["security-deposit", "ab-12"])
+    summary = Column(Text, nullable=True)                           # 1-sentence legal micro-digest
+    doctrine = Column(String(100), nullable=True, index=True)       # Legal doctrine classification (e.g. "Security Deposits")
     embedding = Column(Vector(settings.EMBEDDING_DIM), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -295,4 +300,10 @@ def init_db(target_engine=None):
                 CREATE INDEX IF NOT EXISTS laws_vectors_search_tsv_idx
                 ON laws_vectors USING gin (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')));
             """))
+            # Ensure semantic tagging columns exist
+            conn.execute(text("ALTER TABLE matter_evidence ADD COLUMN IF NOT EXISTS tags TEXT;"))
+            conn.execute(text("ALTER TABLE matter_evidence ADD COLUMN IF NOT EXISTS summary TEXT;"))
+            conn.execute(text("ALTER TABLE matter_evidence ADD COLUMN IF NOT EXISTS doctrine VARCHAR(100);"))
+            conn.execute(text("ALTER TABLE laws_vectors ADD COLUMN IF NOT EXISTS tags TEXT;"))
+            conn.execute(text("ALTER TABLE laws_vectors ADD COLUMN IF NOT EXISTS summary TEXT;"))
             conn.commit()

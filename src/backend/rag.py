@@ -1688,12 +1688,15 @@ Draft the legal analysis following the required headings. Conclude with an ethic
 def retrieve_matter_evidence(
     matter_id: int,
     text_query: Optional[str] = None,
+    tag: Optional[str] = None,
+    doctrine: Optional[str] = None,
     limit: int = 5,
     doc_type: Optional[str] = None,
     db_session: Optional[Session] = None
 ) -> List[Dict[str, Any]]:
     """
     Search client discovery documents and case exhibits strictly within a single matter.
+    Combines dense embeddings, lexical matching, and legal semantic tags.
     Guarantees sovereign client data isolation.
     """
     close_session = False
@@ -1706,27 +1709,41 @@ def retrieve_matter_evidence(
         query = db.query(MatterEvidence).filter(MatterEvidence.matter_id == matter_id)
         if doc_type:
             query = query.filter(MatterEvidence.doc_type == doc_type)
+        if doctrine:
+            query = query.filter(MatterEvidence.doctrine.ilike(f"%{doctrine}%"))
+        if tag:
+            clean_tag = tag.lower().strip()
+            query = query.filter(MatterEvidence.tags.ilike(f"%{clean_tag}%"))
 
         rows = query.all()
         if not rows:
             return []
 
+        def _format_record(r, score_val=1.0) -> Dict[str, Any]:
+            tags_list = []
+            if r.tags:
+                try:
+                    tags_list = json.loads(r.tags) if isinstance(r.tags, str) else list(r.tags)
+                except Exception:
+                    tags_list = [t.strip() for t in str(r.tags).split(",") if t.strip()]
+            return {
+                "id": r.id,
+                "matter_id": r.matter_id,
+                "filename": r.filename,
+                "doc_type": r.doc_type,
+                "page_number": r.page_number,
+                "section_locator": r.section_locator,
+                "chunk_index": r.chunk_index,
+                "content": r.content,
+                "tags": tags_list,
+                "summary": r.summary,
+                "doctrine": r.doctrine,
+                "similarity": round(float(score_val), 4),
+                "created_at": r.created_at.isoformat() if r.created_at else None
+            }
+
         if not text_query:
-            return [
-                {
-                    "id": r.id,
-                    "matter_id": r.matter_id,
-                    "filename": r.filename,
-                    "doc_type": r.doc_type,
-                    "page_number": r.page_number,
-                    "section_locator": r.section_locator,
-                    "chunk_index": r.chunk_index,
-                    "content": r.content,
-                    "similarity": 1.0,
-                    "created_at": r.created_at.isoformat() if r.created_at else None
-                }
-                for r in rows[:limit]
-            ]
+            return [_format_record(r, 1.0) for r in rows[:limit]]
 
         # Score matching
         q_vec = get_embedding(text_query)
@@ -1747,24 +1764,21 @@ def retrieve_matter_evidence(
                     cos_sim = 0.0
 
             lex_score = 0.0
+            tag_boost = 0.0
             if q_tokens:
-                doc_text = f"{r.filename} {r.section_locator or ''} {r.content}".lower()
+                tags_str = r.tags or ""
+                summary_str = r.summary or ""
+                doc_text = f"{r.filename} {r.section_locator or ''} {summary_str} {tags_str} {r.content}".lower()
                 matches = sum(1 for t in q_tokens if t in doc_text)
                 lex_score = min(1.0, matches / max(1, len(q_tokens)))
 
-            score = (0.7 * cos_sim) + (0.3 * lex_score)
-            scored_results.append({
-                "id": r.id,
-                "matter_id": r.matter_id,
-                "filename": r.filename,
-                "doc_type": r.doc_type,
-                "page_number": r.page_number,
-                "section_locator": r.section_locator,
-                "chunk_index": r.chunk_index,
-                "content": r.content,
-                "similarity": round(float(score), 4),
-                "created_at": r.created_at.isoformat() if r.created_at else None
-            })
+                # Exact tag match boost
+                for t in q_tokens:
+                    if t in tags_str.lower():
+                        tag_boost = max(tag_boost, 0.2)
+
+            score = (0.6 * cos_sim) + (0.25 * lex_score) + (0.15 * tag_boost)
+            scored_results.append(_format_record(r, score))
 
         scored_results.sort(key=lambda x: x["similarity"], reverse=True)
         return scored_results[:limit]

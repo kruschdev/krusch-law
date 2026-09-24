@@ -20,11 +20,13 @@ class Settings(BaseSettings):
     # Models
     OLLAMA_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "bge-large")
     OLLAMA_LLM_MODEL: str = os.getenv("OLLAMA_LLM_MODEL", "qwen2.5:14b")
+    TAGGER_MODEL: str = os.getenv("TAGGER_MODEL", "qwen2.5-coder:7b")
     EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "1024"))
 
     # Timeouts & Limits
     EMBED_TIMEOUT: float = float(os.getenv("EMBED_TIMEOUT", "30.0"))
     LLM_TIMEOUT: float = float(os.getenv("LLM_TIMEOUT", "120.0"))
+    TAGGER_TIMEOUT: float = float(os.getenv("TAGGER_TIMEOUT", "15.0"))
     DEFAULT_RETRIEVAL_LIMIT: int = int(os.getenv("DEFAULT_RETRIEVAL_LIMIT", "5"))
 
     # Batching & Performance

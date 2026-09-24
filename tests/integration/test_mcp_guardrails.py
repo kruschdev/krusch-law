@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import patch
 from tests.base import KruschLawTestCase
-from src.backend.db import Case, LawVector
+from src.backend.db import Case, LawVector, StatuteCodeTraceability
 from src.backend.ingest import ingest_mock_data
 from src.mcp.server import process_request
 
@@ -27,7 +27,8 @@ class TestMcpGuardrailsIntegration(KruschLawTestCase):
             "log_matter",
             "draft_brief",
             "list_matters",
-            "get_grounding_report"
+            "get_grounding_report",
+            "get_code_traceability"
         ]
         for tool in expected_tools:
             self.assertIn(tool, tool_names)
@@ -157,6 +158,41 @@ class TestMcpGuardrailsIntegration(KruschLawTestCase):
         self.assertTrue(report_content["found"])
         self.assertEqual(report_content["case_id"], matter.id)
         self.assertIn("claims", report_content)
+
+    def test_mcp_get_code_traceability(self):
+        trace = StatuteCodeTraceability(
+            statute_id="Cal. Civ. Code § 1950.5(c)",
+            symbol_id="deposit_validator.validate_deposit_cap",
+            repository="krusch-law",
+            file_path="src/backend/rag.py",
+            doctrine="Security Deposits",
+            status="manually_verified",
+            reviewed_by="attorney:krusch",
+            statutory_digest="Strict 1-month cap.",
+            notes="Verified against Stats. 2023, ch. 290."
+        )
+        self.db.add(trace)
+        self.db.commit()
+
+        req = {
+            "jsonrpc": "2.0",
+            "id": 40,
+            "method": "tools/call",
+            "params": {
+                "name": "get_code_traceability",
+                "arguments": {
+                    "doctrine": "Security Deposits"
+                }
+            }
+        }
+        resp = process_request(req)
+        self.assertEqual(resp["id"], 40)
+        content = json.loads(resp["result"]["content"][0]["text"])
+        self.assertGreaterEqual(content["total"], 1)
+        item = content["mappings"][0]
+        self.assertEqual(item["statute_id"], "Cal. Civ. Code § 1950.5(c)")
+        self.assertEqual(item["doctrine"], "Security Deposits")
+        self.assertEqual(item["status"], "manually_verified")
 
 
 if __name__ == "__main__":

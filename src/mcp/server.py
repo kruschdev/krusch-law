@@ -11,7 +11,7 @@ import uuid
 import logging
 from typing import Dict, Any, Optional
 
-from ..backend.db import SessionLocal, LawVector, Case, GroundingReport
+from ..backend.db import SessionLocal, LawVector, Case, GroundingReport, StatuteCodeTraceability
 from ..backend.rag import (
     get_embedding,
     retrieve_laws,
@@ -167,6 +167,23 @@ TOOLS_CATALOG = [
                     "type": "integer",
                     "description": "Maximum authority sections to retrieve (default: 5)",
                     "default": 5
+                }
+            }
+        }
+    },
+    {
+        "name": "get_code_traceability",
+        "description": "Inspect curated statute-to-code traceability invariants mapping California Civil Code sections to verified code symbols, repository files, and attorney review attestations.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "doctrine": {
+                    "type": "string",
+                    "description": "Optional doctrine filter (e.g. 'Security Deposits', 'Just Cause', 'Habitability')"
+                },
+                "status": {
+                    "type": "string",
+                    "description": "Optional verification status filter (e.g. 'manually_verified')"
                 }
             }
         }
@@ -447,6 +464,40 @@ def handle_draft_brief(args: Dict[str, Any]) -> Dict[str, Any]:
         db.close()
 
 
+def handle_get_code_traceability(args: Dict[str, Any]) -> Dict[str, Any]:
+    doctrine = args.get("doctrine")
+    status = args.get("status")
+    db = SessionLocal()
+    try:
+        q = db.query(StatuteCodeTraceability)
+        if doctrine:
+            q = q.filter(StatuteCodeTraceability.doctrine == doctrine)
+        if status:
+            q = q.filter(StatuteCodeTraceability.status == status)
+        rows = q.order_by(StatuteCodeTraceability.id.asc()).all()
+        return {
+            "total": len(rows),
+            "mappings": [
+                {
+                    "id": r.id,
+                    "statute_id": r.statute_id,
+                    "symbol_id": r.symbol_id,
+                    "repository": r.repository,
+                    "file_path": r.file_path,
+                    "doctrine": r.doctrine,
+                    "status": r.status,
+                    "reviewed_by": r.reviewed_by,
+                    "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
+                    "statutory_digest": r.statutory_digest,
+                    "notes": r.notes
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        db.close()
+
+
 def process_request(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     req_id = request.get("id")
     method = request.get("method")
@@ -487,7 +538,8 @@ def process_request(request: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             "log_matter": handle_log_matter,
             "list_matters": handle_list_matters,
             "get_grounding_report": handle_get_grounding_report,
-            "draft_brief": handle_draft_brief
+            "draft_brief": handle_draft_brief,
+            "get_code_traceability": handle_get_code_traceability
         }
 
         if tool_name not in handlers:

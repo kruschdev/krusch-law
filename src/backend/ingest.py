@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .db import SessionLocal, LawVector, IngestJob, MatterEvidence, StatuteCodeTraceability
 from .rag import get_embeddings_batch
+from .tagger import tag_legal_chunk
 
 logger = logging.getLogger("kruschlaw.ingest")
 
@@ -1038,6 +1039,16 @@ def ingest_matter_document(
                     if ch.page_number is not None
                     else f"[{filename}] {header_display}"
                 )
+                tag_info = tag_legal_chunk(
+                    content=ch.text,
+                    filename=filename,
+                    locator=sec_str,
+                    doc_type=doc_type
+                )
+                tags_json = json.dumps(tag_info.get("tags", []))
+                summary_text = tag_info.get("summary")
+                doctrine_name = tag_info.get("doctrine", "General Matter Facts")
+
                 batch_chunks.append({
                     "jurisdiction": "Matter Corpus",
                     "state": "Local",
@@ -1052,6 +1063,9 @@ def ingest_matter_document(
                     "source_hash": ch.source_hash,
                     "chunk_index": ch.chunk_index,
                     "page_number": ch.page_number,
+                    "tags": tags_json,
+                    "summary": summary_text,
+                    "doctrine": doctrine_name,
                     "is_substantive": True,
                     "authority_class": "secondary_commentary",
                     "hierarchy_level": "section"
@@ -1063,9 +1077,12 @@ def ingest_matter_document(
             for item_dict, emb in zip(batch_chunks, embeddings):
                 item_dict["embedding"] = emb
                 page_num = item_dict.pop("page_number", None)
+                doctrine_val = item_dict.pop("doctrine", None)
+                tags_val = item_dict.get("tags")
+                summary_val = item_dict.get("summary")
                 db.add(LawVector(**item_dict))
                 if matter_id:
-                    # Also populate isolated MatterEvidence table
+                    # Also populate isolated MatterEvidence table with legal semantic understanding
                     db.add(MatterEvidence(
                         matter_id=matter_id,
                         filename=filename,
@@ -1074,6 +1091,9 @@ def ingest_matter_document(
                         section_locator=item_dict.get("section"),
                         chunk_index=item_dict["chunk_index"],
                         content=item_dict["content"],
+                        tags=tags_val,
+                        summary=summary_val,
+                        doctrine=doctrine_val,
                         embedding=emb
                     ))
                 inserted += 1

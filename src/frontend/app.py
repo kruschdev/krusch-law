@@ -394,10 +394,11 @@ with st.sidebar:
 
 
 # --- Main Dashboard Tabs ---
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "📁 Matter Portfolio",
     "⚖️ Precedent Consultation & Brief",
-    "🔍 Statutory & Ordinance Explorer"
+    "🔍 Statutory & Evidence Explorer",
+    "📜 Statutory Traceability & Audit Registry"
 ])
 
 
@@ -816,22 +817,44 @@ with tab3:
             sel_m_label = st.selectbox("Select Client Matter to Search", list(m_options.keys()))
             sel_m_id = m_options[sel_m_label]
 
+            # Fetch existing legal tags and doctrines for this matter
+            avail_tags = []
+            avail_doctrines = []
+            try:
+                tm_resp = httpx.get(f"{BACKEND_URL}/api/cases/{sel_m_id}/evidence/tags", headers=get_auth_headers(), timeout=5.0)
+                if tm_resp.status_code == 200:
+                    t_data = tm_resp.json()
+                    avail_tags = t_data.get("tags", [])
+                    avail_doctrines = t_data.get("doctrines", [])
+            except Exception:
+                pass
+
             ev_q_col, ev_type_col = st.columns([3, 1])
             with ev_q_col:
                 ev_query = st.text_input("Discovery Search Query (optional)", placeholder="e.g., rent increase notice text or security deposit clause")
             with ev_type_col:
                 ev_doc_type = st.selectbox("Doc Classification", ["All", "matter_facts", "evidence", "lease", "notice", "work_product"])
 
-            ev_limit = st.slider("Max Evidence Chunks", min_value=1, max_value=20, value=8)
+            ev_filt1, ev_filt2, ev_filt3 = st.columns([1, 1, 1])
+            with ev_filt1:
+                ev_doctrine_choice = st.selectbox("Doctrine Filter", ["All"] + avail_doctrines)
+            with ev_filt2:
+                ev_tag_choice = st.selectbox("Semantic Tag Filter", ["All"] + avail_tags)
+            with ev_filt3:
+                ev_limit = st.slider("Max Evidence Chunks", min_value=1, max_value=20, value=8)
 
             if st.button("Search Matter Discovery", use_container_width=True):
-                with st.spinner("Searching isolated client matter evidence table..."):
+                with st.spinner("Searching isolated client matter evidence table with semantic understanding..."):
                     try:
                         ev_params = {"limit": ev_limit}
                         if ev_query.strip():
                             ev_params["q"] = ev_query.strip()
                         if ev_doc_type != "All":
                             ev_params["doc_type"] = ev_doc_type
+                        if ev_doctrine_choice != "All":
+                            ev_params["doctrine"] = ev_doctrine_choice
+                        if ev_tag_choice != "All":
+                            ev_params["tag"] = ev_tag_choice
 
                         resp = httpx.get(
                             f"{BACKEND_URL}/api/cases/{sel_m_id}/evidence",
@@ -849,13 +872,23 @@ with tab3:
                                     sim_pct = round(er["similarity"] * 100, 1)
                                     page_info = f" (p. {er['page_number']})" if er.get("page_number") else ""
                                     sec_info = f" • {er['section_locator']}" if er.get("section_locator") else ""
+                                    tags_list = er.get("tags") or []
+                                    tags_badge_html = " ".join([f'<span class="authority-tag" style="background: rgba(14, 165, 233, 0.15); color: #38bdf8;">🏷️ #{t}</span>' for t in tags_list])
+                                    doctrine_badge = f'<span class="authority-tag" style="background: rgba(99, 102, 241, 0.2); color: #a5b4fc;">⚖️ {er["doctrine"]}</span>' if er.get("doctrine") else ""
+                                    summary_html = f"<div style='font-size: 0.86rem; color: #93c5fd; margin-bottom: 0.55rem; padding: 0.35rem 0.65rem; background: rgba(15, 23, 42, 0.5); border-radius: 6px; border-left: 3px solid #38bdf8;'>💡 <strong>Legal Micro-Digest:</strong> {er['summary']}</div>" if er.get("summary") else ""
+
                                     st.markdown(f"""
                                         <div class="law-card">
                                             <div class="law-card-header">📄 {er['filename']}{page_info}{sec_info}</div>
+                                            <div style="margin-bottom: 0.45rem;">
+                                                {doctrine_badge}
+                                                {tags_badge_html}
+                                            </div>
                                             <div class="law-card-meta">
                                                 <span>Classification: <code>{er['doc_type']}</code></span>
                                                 <span class="sim-badge" style="float: right;">{sim_pct}% Relevance</span>
                                             </div>
+                                            {summary_html}
                                             <div class="law-card-body">{er['content']}</div>
                                         </div>
                                     """, unsafe_allow_html=True)
@@ -863,3 +896,73 @@ with tab3:
                             st.error(f"Evidence search failed ({resp.status_code}): {resp.text}")
                     except Exception as e:
                         st.error(f"Evidence search failure: {e}")
+
+
+# --- Tab 4: Statutory Traceability & Audit Registry ---
+with tab4:
+    st.markdown("### 📜 Statutory Traceability & Audit Registry")
+    st.write(
+        "Deterministic, versioned statute-to-code binding invariants mapping California Civil Code and housing doctrine "
+        "directly to verified code symbols and attorney attestations under CCP § 128.7."
+    )
+
+    t_col1, t_col2 = st.columns([1, 1])
+    with t_col1:
+        trace_doctrine = st.selectbox(
+            "Filter by Doctrine",
+            ["All", "Security Deposits", "Just Cause", "Habitability"]
+        )
+    with t_col2:
+        trace_status = st.selectbox(
+            "Filter by Verification Status",
+            ["All", "manually_verified", "suggested_candidate", "deprecated"]
+        )
+
+    trace_params = {}
+    if trace_doctrine != "All":
+        trace_params["doctrine"] = trace_doctrine
+    if trace_status != "All":
+        trace_params["status"] = trace_status
+
+    try:
+        t_resp = httpx.get(
+            f"{BACKEND_URL}/api/compliance/traceability",
+            params=trace_params,
+            headers=get_auth_headers(),
+            timeout=15.0
+        )
+        if t_resp.status_code == 200:
+            trace_items = t_resp.json()
+            if not trace_items:
+                st.info("No traceability mappings found matching the selected filters.")
+            else:
+                st.markdown(f"**Showing {len(trace_items)} verified statutory binding records:**")
+                for item in trace_items:
+                    status_badge = (
+                        '<span class="badge-supported">✅ MANUALLY VERIFIED</span>'
+                        if item.get("status") == "manually_verified"
+                        else f'<span class="badge-wrong-prop">{item.get("status", "").upper()}</span>'
+                    )
+                    rev_info = f" • Reviewed by: <code>{item.get('reviewed_by')}</code> ({item.get('reviewed_at', '')[:10]})" if item.get("reviewed_by") else ""
+                    st.markdown(f"""
+                        <div class="law-card" style="border-left-color: #6366f1;">
+                            <div class="law-card-header">{item['statute_id']} ➔ <code>{item['symbol_id']}</code></div>
+                            <div style="margin-bottom: 0.45rem;">
+                                <span class="authority-tag">{item['doctrine']}</span>
+                                {status_badge}
+                            </div>
+                            <div class="law-card-meta">
+                                <span>File: <code>{item['file_path']}</code> (Repo: {item['repository']}){rev_info}</span>
+                            </div>
+                            <div style="font-size: 0.88rem; color: #e2e8f0; margin-bottom: 0.4rem;">
+                                <strong>Digest:</strong> {item.get('statutory_digest') or 'No digest provided.'}
+                            </div>
+                            <div style="font-size: 0.82rem; color: #94a3b8;">
+                                <strong>Attestation Notes:</strong> {item.get('notes') or 'N/A'}
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+        else:
+            st.error(f"Failed to fetch traceability records ({t_resp.status_code}): {t_resp.text}")
+    except Exception as e:
+        st.error(f"Traceability service error: {e}")

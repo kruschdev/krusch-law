@@ -274,6 +274,9 @@ class MatterEvidenceItem(BaseModel):
     section_locator: Optional[str] = None
     chunk_index: int
     content: str
+    tags: List[str] = Field(default_factory=list)
+    summary: Optional[str] = None
+    doctrine: Optional[str] = None
     similarity: float
     created_at: Optional[str] = None
 
@@ -1049,6 +1052,8 @@ def consult_matter(
 def get_matter_evidence(
     case_id: int,
     q: Optional[str] = Query(None, description="Semantic or keyword query within matter discovery"),
+    tag: Optional[str] = Query(None, description="Filter by legal semantic tag (e.g. 'security-deposit', 'ab-12')"),
+    doctrine: Optional[str] = Query(None, description="Filter by legal doctrine (e.g. 'Security Deposits', 'Just Cause')"),
     limit: int = Query(10, ge=1, le=100, description="Max discovery chunks to retrieve"),
     doc_type: Optional[str] = Query(None, description="Optional doc_type filter (e.g. lease, notice, evidence)"),
     db: Session = Depends(get_db),
@@ -1056,6 +1061,7 @@ def get_matter_evidence(
 ):
     """
     Search client discovery documents, exhibits, and uploaded records strictly within the designated matter.
+    Enriched with legal semantic tags, 1-sentence micro-digests, and doctrinal filtering.
     Prevents cross-matter data contamination.
     """
     case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
@@ -1066,6 +1072,8 @@ def get_matter_evidence(
         results = retrieve_matter_evidence(
             matter_id=case_id,
             text_query=q,
+            tag=tag,
+            doctrine=doctrine,
             limit=limit,
             doc_type=doc_type,
             db_session=db
@@ -1074,6 +1082,46 @@ def get_matter_evidence(
     except Exception as e:
         logger.error(f"Error querying matter evidence: {e}")
         raise HTTPException(status_code=500, detail=f"Evidence retrieval error: {str(e)}")
+
+
+@app.get("/api/cases/{case_id}/evidence/tags", tags=["Discovery & Evidence"])
+@app.get("/api/matters/{case_id}/evidence/tags", tags=["Discovery & Evidence"])
+def get_matter_evidence_tags(
+    case_id: int,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Return distinct legal semantic tags and doctrinal categories present in a matter's evidence corpus
+    for faceted filtering and exploratory navigation.
+    """
+    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found.")
+
+    rows = db.query(MatterEvidence.tags, MatterEvidence.doctrine).filter(MatterEvidence.matter_id == case_id).all()
+    unique_tags = set()
+    unique_doctrines = set()
+
+    for tags_val, doc_val in rows:
+        if doc_val:
+            unique_doctrines.add(doc_val)
+        if tags_val:
+            try:
+                parsed = json.loads(tags_val) if isinstance(tags_val, str) else list(tags_val)
+                for t in parsed:
+                    unique_tags.add(t)
+            except Exception:
+                for t in str(tags_val).split(","):
+                    if t.strip():
+                        unique_tags.add(t.strip())
+
+    return {
+        "matter_id": case_id,
+        "total_tags": len(unique_tags),
+        "tags": sorted(list(unique_tags)),
+        "doctrines": sorted(list(unique_doctrines))
+    }
 
 
 @app.post("/api/consult/export/docx", tags=["Consult & Synthesis"])
