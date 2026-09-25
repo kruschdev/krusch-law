@@ -51,6 +51,8 @@ Modern legal practice requires trustworthy software, not sovereign marketing:
 * ✉️ **Statutory Form & Demand Letter Assembly**: `POST /api/cases/{case_id}/assemble-letter` assembles rigid demand letters and notice objections using mandatory statutory language and verified legal citations rather than unconstrained creative prose.
 * 📄 **Refusal-First Word (.docx) & Markdown Export**: Memoranda export with formal law office caption blocks, Table of Authorities, Assertion Grounding Audit, and prominent `STATUTORY COVERAGE GAP` callout blocks for ungrounded or refused propositions.
 * 🔌 **Model Context Protocol (MCP)**: Native stdio JSON-RPC server with 12 tools (`search_ordinances`, `get_section`, `log_matter`, `draft_brief`, `list_matters`, `get_grounding_report`, `get_code_traceability`, `resolve_controlling_law`, `detect_statutory_conflicts`, `explain_why_not_controlling`, `get_defense_checklist`, `assemble_statutory_letter`).
+* 📋 **One-Page Orchestrator Specification**: Governed by [`docs/ORCHESTRATOR_SPEC.md`](docs/ORCHESTRATOR_SPEC.md): formalizes the `matter_ref` ↔ `deal_ref` cross-platform entity mapping table, shared `as_of_date` query contracts, and 5 non-negotiable DO-NOT invariants (no vector table unions, mandatory `as_of_date`, confirmed edges only, draft isolation, deterministic typed evaluation over LLMs).
+* ⚖️ **The Join & Sovereign Gateway MCP Router**: Powers cross-domain statutory compliance checks in conjunction with KruschBiz via `POST /conflicts/contract-vs-statute` and the 5-verb Gateway MCP router (`ask_law`, `ask_biz`, `check_compliance`, `ingest`, `purge`) strictly constrained to <450 prompt tokens for local 7B/14B inference.
 
 
 ---
