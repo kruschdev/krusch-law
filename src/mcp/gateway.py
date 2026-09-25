@@ -90,7 +90,8 @@ GATEWAY_TOOLS_CATALOG = [
                 "counterparty": {"type": "string"},
                 "jurisdiction": {"type": "string"},
                 "as_of_date": {"type": "string"},
-                "topics": {"type": "array", "items": {"type": "string"}}
+                "topics": {"type": "array", "items": {"type": "string"}},
+                "property_type": {"type": "string"}
             },
             "required": ["as_of_date"]
         }
@@ -277,20 +278,62 @@ def handle_check_compliance(arguments: Dict[str, Any]) -> Dict[str, Any]:
     as_of_date = arguments.get("as_of_date")
     jurisdiction = arguments.get("jurisdiction", "CA:Oakland")
     topics = arguments.get("topics") or ["SECURITY_DEPOSIT", "ENTRY_NOTICE"]
+    deal_id = arguments.get("deal_id")
+    counterparty = arguments.get("counterparty")
+    property_type = arguments.get("property_type", "residential")
+
+    # If deal_id or counterparty is present, attempt full KruschBiz Join engine
+    if deal_id or counterparty:
+        try:
+            from src.backend.compliance import ContractVsStatuteRequest, evaluate_contract_vs_statute
+            import src.backend.db as biz_db_mod
+
+            db_biz = biz_db_mod.SessionLocal()
+            try:
+                req = ContractVsStatuteRequest(
+                    deal_id=deal_id,
+                    counterparty=counterparty,
+                    jurisdiction=jurisdiction,
+                    as_of_date=as_of_date or "",
+                    topics=topics,
+                    property_type=property_type
+                )
+                res = evaluate_contract_vs_statute(db_biz=db_biz, request=req)
+                return {
+                    "status": "success",
+                    "domain": "join",
+                    **res.model_dump()
+                }
+            finally:
+                db_biz.close()
+        except Exception as e:
+            logger.debug(f"Direct KruschBiz join delegation skipped: {e}. Executing native statutory baseline.")
 
     findings = []
     db = db_mod.SessionLocal()
     try:
         for topic in topics:
+            topic_clean = topic.strip().upper()
             law_res = resolve_controlling_law(
-                doctrine_or_topic=topic,
+                doctrine_or_topic=topic_clean,
                 jurisdiction=jurisdiction,
                 as_of_date=as_of_date,
                 db=db
             )
             statutory_slots = law_res.statutory_slots or {}
 
-            if "deposit" in topic.lower():
+            if "commercial" in topic_clean.lower() or property_type == "commercial":
+                findings.append({
+                    "topic": topic_clean,
+                    "alignment": "aligned",
+                    "enforceability": "ENFORCEABLE",
+                    "controlling_statute": {
+                        "citation": "Cal. Civ. Code § 1950.7(f)",
+                        "mandate_type": "STATUTORY_PERMISSIVE_WAIVER",
+                        "normalized_slot": {"freedom_of_contract": True}
+                    }
+                })
+            elif "deposit" in topic_clean.lower() and "return" not in topic_clean.lower():
                 cap = statutory_slots.get("deposit_cap_months", 1.0)
                 findings.append({
                     "topic": "SECURITY_DEPOSIT",
@@ -302,16 +345,67 @@ def handle_check_compliance(arguments: Dict[str, Any]) -> Dict[str, Any]:
                         "normalized_slot": {"max_months": cap}
                     }
                 })
-            elif "entry" in topic.lower() or "notice" in topic.lower():
+            elif "return" in topic_clean.lower():
+                findings.append({
+                    "topic": "DEPOSIT_RETURN",
+                    "alignment": "aligned",
+                    "enforceability": "ENFORCEABLE",
+                    "controlling_statute": {
+                        "citation": "Cal. Civ. Code § 1950.5(g)(1)",
+                        "mandate_type": "STATUTORY_CEILING",
+                        "normalized_slot": {"max_days": 21.0}
+                    }
+                })
+            elif "entry" in topic_clean.lower() or "notice" in topic_clean.lower():
                 findings.append({
                     "topic": "ENTRY_NOTICE",
                     "alignment": "aligned",
-                    "enforceability": "ENFORCEABLE",
+                    "enforceability": "ENFORCEABLE_AS_FLOOR",
                     "controlling_statute": {
                         "citation": law_res.governing_citation or "Cal. Civ. Code § 1954(a)",
                         "mandate_type": "STATUTORY_FLOOR",
                         "normalized_slot": {"min_notice_hours": 24.0}
                     }
+                })
+            elif "habitab" in topic_clean.lower() or "repair" in topic_clean.lower():
+                findings.append({
+                    "topic": "HABITABILITY_WAIVER",
+                    "alignment": "contract_less_than_mandatory",
+                    "enforceability": "VOID_AS_AGAINST_PUBLIC_POLICY",
+                    "controlling_statute": {
+                        "citation": "Cal. Civ. Code § 1942.1",
+                        "mandate_type": "STATUTORY_PROHIBITION",
+                        "normalized_slot": {"waiver_prohibited": True}
+                    }
+                })
+            elif "retaliat" in topic_clean.lower():
+                findings.append({
+                    "topic": "RETALIATION_WAIVER",
+                    "alignment": "contract_less_than_mandatory",
+                    "enforceability": "VOID_AS_AGAINST_PUBLIC_POLICY",
+                    "controlling_statute": {
+                        "citation": "Cal. Civ. Code § 1942.5(h)",
+                        "mandate_type": "STATUTORY_PROHIBITION",
+                        "normalized_slot": {"waiver_prohibited": True}
+                    }
+                })
+            elif "late" in topic_clean.lower() or "fee" in topic_clean.lower():
+                findings.append({
+                    "topic": "LATE_FEE",
+                    "alignment": "aligned",
+                    "enforceability": "ENFORCEABLE",
+                    "controlling_statute": {
+                        "citation": "Cal. Civ. Code § 1671(d)",
+                        "mandate_type": "STATUTORY_CEILING",
+                        "normalized_slot": {"max_penalty_pct": 5.0}
+                    }
+                })
+            else:
+                findings.append({
+                    "topic": topic_clean,
+                    "alignment": "coverage_gap",
+                    "enforceability": "UNSPECIFIED",
+                    "controlling_statute": None
                 })
 
         return {

@@ -308,6 +308,71 @@ class TestConflictPairsEvaluation(KruschLawTestCase):
         self.assertIsNotNone(old_node)
         self.assertIsNotNone(old_node.superseded_by_id)
 
+    def test_07_habitability_waiver_void_conflict(self):
+        """
+        Conflict Pair 7: Cal. Civ. Code § 1942.1 vs purported lease habitability waiver.
+        If matter facts include waives_habitability or as_is_lease, detect_legal_conflicts
+        must flag a CRITICAL statutory_term_violation citing Section 1942.1.
+        """
+        from src.backend.resolver import detect_legal_conflicts
+        authorities = [
+            {
+                "section": "Cal. Civ. Code § 1942.1",
+                "content": "Any agreement by a tenant by which he waives or modifies his rights under Section 1941 or 1942 shall be void as contrary to public policy."
+            }
+        ]
+        matter_facts = {"waives_habitability": True, "tenant_reported_violations": True}
+        conflicts = detect_legal_conflicts(authorities, matter_facts=matter_facts, as_of_date="2025-01-15")
+
+        self.assertEqual(len(conflicts), 1)
+        c = conflicts[0]
+        self.assertEqual(c["conflict_type"], "statutory_term_violation")
+        self.assertEqual(c["severity"], "CRITICAL")
+        self.assertIn("1942.1", c["section"])
+        self.assertIn("void as contrary to public policy", c["operative_rule"])
+
+    def test_08_deposit_return_timeline_extended_conflict(self):
+        """
+        Conflict Pair 8: Cal. Civ. Code § 1950.5(g)(1) vs 30-day lease deposit return.
+        If matter facts indicate lease gives >21 days, conflict detector must flag violation.
+        """
+        from src.backend.resolver import detect_legal_conflicts
+        authorities = [
+            {
+                "section": "Cal. Civ. Code § 1950.5(g)(1)",
+                "content": "No later than 21 calendar days after the tenant has vacated the premises, the landlord shall furnish itemized accounting and remaining deposit."
+            }
+        ]
+        matter_facts = {"deposit_return_days": 30.0}
+        conflicts = detect_legal_conflicts(authorities, matter_facts=matter_facts, as_of_date="2025-01-15")
+
+        self.assertEqual(len(conflicts), 1)
+        c = conflicts[0]
+        self.assertEqual(c["conflict_type"], "statutory_term_violation")
+        self.assertEqual(c["severity"], "HIGH")
+        self.assertIn("1950.5", c["section"])
+        self.assertIn("30 days", c["violating_term"])
+
+    def test_09_retaliation_defense_waiver_conflict(self):
+        """
+        Conflict Pair 9: Cal. Civ. Code § 1942.5(h) vs waiver of retaliation defense.
+        """
+        from src.backend.resolver import detect_legal_conflicts
+        authorities = [
+            {
+                "section": "Cal. Civ. Code § 1942.5(h)",
+                "content": "Any waiver by a tenant of rights under this section shall be void as contrary to public policy."
+            }
+        ]
+        matter_facts = {"waives_retaliation": True}
+        conflicts = detect_legal_conflicts(authorities, matter_facts=matter_facts, as_of_date="2025-01-15")
+
+        self.assertEqual(len(conflicts), 1)
+        c = conflicts[0]
+        self.assertEqual(c["conflict_type"], "statutory_term_violation")
+        self.assertEqual(c["severity"], "CRITICAL")
+        self.assertIn("1942.5", c["section"])
+
 
 if __name__ == "__main__":
     unittest.main()

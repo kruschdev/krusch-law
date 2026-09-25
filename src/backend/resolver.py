@@ -936,6 +936,7 @@ def extract_statutory_slots(text_content: str) -> Dict[str, Any]:
         slots["statutory_notice_days"] = days_list
         if 21 in days_list and ("security deposit" in content_lower or "1950.5" in text_content):
             slots["deposit_accounting_days"] = 21
+            slots["deposit_return_days"] = 21
         if 3 in days_list and ("pay or quit" in content_lower or "cure" in content_lower):
             slots["cure_notice_days"] = 3
         if 14 in days_list and ("inspection" in content_lower):
@@ -977,6 +978,18 @@ def extract_statutory_slots(text_content: str) -> Dict[str, Any]:
     if "one month of the tenant's rent" in content_lower or "one month's rent" in content_lower:
         if "relocation" in content_lower:
             slots["relocation_assistance_months"] = 1.0
+
+    # 7. Habitability & Repair-and-Deduct Waiver Prohibition (§ 1942.1)
+    if "1942.1" in text_content or ("waive" in content_lower and ("1941" in text_content or "1942" in text_content or "habitability" in content_lower)):
+        slots["habitability_waiver_prohibited"] = True
+
+    # 8. Retaliation Waiver Prohibition (§ 1942.5(h))
+    if "1942.5" in text_content and ("waiver" in content_lower or "void" in content_lower):
+        slots["retaliation_waiver_prohibited"] = True
+
+    # 9. Commercial Security Deposit Permissive Waiver (§ 1950.7(f))
+    if "1950.7" in text_content:
+        slots["commercial_deposit_waiver_permitted"] = True
 
     return slots
 
@@ -1080,5 +1093,54 @@ def detect_legal_conflicts(
                                 f"Under § 1950.5(l), bad faith retention subjects landlord to statutory damages of up to twice the deposit amount."
                             )
                         })
+
+        # Conflict 5: Habitability / Repair-and-Deduct Waiver Conflict (§ 1942.1)
+        if "1942.1" in sec or "1941" in sec or "habitability" in content.lower():
+            if matter_facts.get("waives_habitability") or matter_facts.get("waives_repair_deduct") or matter_facts.get("as_is_lease"):
+                conflicts.append({
+                    "conflict_type": "statutory_term_violation",
+                    "severity": "CRITICAL",
+                    "section": "Cal. Civ. Code § 1942.1",
+                    "operative_rule": "Any agreement by a tenant by which he waives or modifies his rights under Section 1941 or 1942 shall be void as contrary to public policy.",
+                    "violating_term": "Lease purports to waive tenant habitability rights or repair-and-deduct remedies.",
+                    "issue": "Tenant rights under Civ. Code §§ 1941 and 1942 are non-waivable as a matter of law.",
+                    "attorney_advisory": (
+                        "Advise client that the purported waiver is void as against public policy under § 1942.1. "
+                        "Tenant remains fully protected by the implied warranty of habitability."
+                    )
+                })
+
+        # Conflict 6: Deposit Return Timeline Conflict (Civ. Code § 1950.5(g)(1))
+        if "1950.5" in sec or "security deposit" in content.lower():
+            claimed_return_days = matter_facts.get("deposit_return_days")
+            if claimed_return_days and float(claimed_return_days) > 21.0:
+                conflicts.append({
+                    "conflict_type": "statutory_term_violation",
+                    "severity": "HIGH",
+                    "section": "Cal. Civ. Code § 1950.5(g)(1)",
+                    "operative_rule": "Landlord must furnish itemized accounting and remaining deposit within 21 calendar days.",
+                    "violating_term": f"Lease provides {float(claimed_return_days):.0f} days to return deposit.",
+                    "issue": "Lease term attempts to extend deposit accounting beyond the mandatory 21-day statutory ceiling.",
+                    "attorney_advisory": (
+                        f"Lease clause allowing {float(claimed_return_days):.0f} days is void under § 1950.5(n). "
+                        "Landlord must account for deposit within 21 calendar days of tenant surrender."
+                    )
+                })
+
+        # Conflict 7: Retaliation Rights Waiver Conflict (Civ. Code § 1942.5(h))
+        if "1942.5" in sec or "retaliat" in content.lower():
+            if matter_facts.get("waives_retaliation") or matter_facts.get("waives_retaliation_defense"):
+                conflicts.append({
+                    "conflict_type": "statutory_term_violation",
+                    "severity": "CRITICAL",
+                    "section": "Cal. Civ. Code § 1942.5(h)",
+                    "operative_rule": "Any waiver by a tenant of rights under Section 1942.5 shall be void as contrary to public policy.",
+                    "violating_term": "Lease purports to waive statutory retaliation defenses.",
+                    "issue": "Waiver of retaliatory eviction defense is void under California law.",
+                    "attorney_advisory": (
+                        "Waiver is void as contrary to public policy under § 1942.5(h). "
+                        "Retaliatory eviction defense remains fully available in any unlawful detainer."
+                    )
+                })
 
     return conflicts
