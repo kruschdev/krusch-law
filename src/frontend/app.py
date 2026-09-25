@@ -596,6 +596,8 @@ with tab2:
 
                         with b_col:
                             st.markdown("### 📋 AI Legal Analysis Brief")
+                            if "CONTROLLING STATUTE UNCERTAIN" in data.get("analysis", ""):
+                                st.warning("⚠️ **CONTROLLING STATUTE UNCERTAIN**: Proposed statutory preemption or amendment links are pending human attorney review in Tab 5. Unconfirmed links do not dictate binding precedent.")
                             st.markdown(data["analysis"])
 
                             # Brief Export (Markdown + Word .docx)
@@ -1180,69 +1182,233 @@ with tab4:
 
 # --- Tab 5: Statutory Traceability & Audit Registry ---
 with tab5:
-    st.markdown("### 📜 Statutory Traceability & Audit Registry")
-    st.write(
-        "Deterministic, versioned statute-to-code binding invariants mapping California Civil Code and housing doctrine "
-        "directly to verified code symbols and attorney attestations under CCP § 128.7."
-    )
+    t5_sub1, t5_sub2 = st.tabs([
+        "🔗 Preemption & Amendment Review Queue",
+        "📜 Statute-to-Code Traceability"
+    ])
 
-    t_col1, t_col2 = st.columns([1, 1])
-    with t_col1:
-        trace_doctrine = st.selectbox(
-            "Filter by Doctrine",
-            ["All", "Security Deposits", "Just Cause", "Habitability"]
-        )
-    with t_col2:
-        trace_status = st.selectbox(
-            "Filter by Verification Status",
-            ["All", "manually_verified", "suggested_candidate", "deprecated"]
+    with t5_sub1:
+        st.markdown("### 🔗 Statutory Preemption & Legislative Amendment Review Queue")
+        st.write(
+            "Human-in-the-loop review queue for statutory preemption (e.g., Costa-Hawkins, AB 12, AB 1482) "
+            "and legislative amendment relations. **Only confirmed edges dictate binding controlling precedence**; "
+            "proposed edges trigger advisories across briefs and consultations."
         )
 
-    trace_params = {}
-    if trace_doctrine != "All":
-        trace_params["doctrine"] = trace_doctrine
-    if trace_status != "All":
-        trace_params["status"] = trace_status
+        # Propose new relation expander
+        with st.expander("➕ Propose New Preemption or Amendment Relation Edge", expanded=False):
+            with st.form("propose_statute_relation_form", clear_on_submit=True):
+                p_c1, p_c2 = st.columns(2)
+                with p_c1:
+                    src_stat = st.text_input("Source Statute (Higher Authority / Amending Act)", placeholder="e.g., Cal. Civ. Code § 1954.50 or Stats. 2023, ch. 290 (AB 12)")
+                    rel_type = st.selectbox("Relation Type", ["PREEMPTS", "AMENDS", "SUPERSEDES", "CARVES_OUT", "EXEMPTS_FROM", "IMPLEMENTS"])
+                with p_c2:
+                    tgt_stat = st.text_input("Target Statute (Subordinate / Historical Section)", placeholder="e.g., Oakland OMC 8.22.030 or Cal. Civ. Code § 1950.5(c)")
+                    scope_top = st.text_input("Scope Doctrine / Topic", placeholder="e.g., Rent Control, Security Deposits, Just Cause")
 
-    try:
-        t_resp = httpx.get(
-            f"{BACKEND_URL}/api/compliance/traceability",
-            params=trace_params,
-            headers=get_auth_headers(),
-            timeout=15.0
-        )
-        if t_resp.status_code == 200:
-            trace_items = t_resp.json()
-            if not trace_items:
-                st.info("No traceability mappings found matching the selected filters.")
+                trig_sp = st.text_area("Triggering Statutory Span", placeholder="Exact statutory language establishing preemption or amendment...")
+                legal_rat = st.text_area("Legal Rationale & Analysis", placeholder="Explanation of preemption scope or legislative intent...")
+
+                if st.form_submit_button("Propose Relation Edge", use_container_width=True):
+                    if src_stat and tgt_stat:
+                        try:
+                            prop_resp = httpx.post(
+                                f"{BACKEND_URL}/api/resolver/relations",
+                                json={
+                                    "source_statute": src_stat.strip(),
+                                    "target_statute": tgt_stat.strip(),
+                                    "relation_type": rel_type,
+                                    "scope_topic": scope_top.strip() if scope_top else None,
+                                    "trigger_span": trig_sp.strip() if trig_sp else None,
+                                    "rationale": legal_rat.strip() if legal_rat else None,
+                                    "status": "proposed"
+                                },
+                                headers=get_auth_headers(),
+                                timeout=10.0
+                            )
+                            if prop_resp.status_code == 201:
+                                st.success(f"Proposed {rel_type} relation successfully logged.")
+                                st.rerun()
+                            else:
+                                st.error(f"Failed to propose relation: {prop_resp.text}")
+                        except Exception as pe:
+                            st.error(f"Error proposing relation: {pe}")
+                    else:
+                        st.warning("Source and Target statutes are required.")
+
+        # Filter relations
+        f_c1, f_c2 = st.columns([1, 1])
+        with f_c1:
+            rel_status_filt = st.selectbox("Filter Preemption Status", ["All", "proposed", "confirmed", "rejected"])
+        with f_c2:
+            rel_top_filt = st.text_input("Filter by Doctrine/Topic (optional)", placeholder="e.g., Security Deposits")
+
+        rel_params = {}
+        if rel_status_filt != "All":
+            rel_params["status"] = rel_status_filt
+        if rel_top_filt.strip():
+            rel_params["topic"] = rel_top_filt.strip()
+
+        try:
+            r_resp = httpx.get(
+                f"{BACKEND_URL}/api/resolver/relations",
+                params=rel_params,
+                headers=get_auth_headers(),
+                timeout=15.0
+            )
+            if r_resp.status_code == 200:
+                relations = r_resp.json()
+                if not relations:
+                    st.info("No statutory preemption or amendment relations found matching filters.")
+                else:
+                    st.markdown(f"**Found {len(relations)} relation edge(s):**")
+                    for rel in relations:
+                        r_id = rel["id"]
+                        status = rel["status"]
+                        if status == "confirmed":
+                            s_badge = '<span class="badge-supported">✅ CONFIRMED</span>'
+                        elif status == "rejected":
+                            s_badge = '<span class="badge-wrong-prop">❌ REJECTED</span>'
+                        else:
+                            s_badge = '<span class="badge-prototype">⏳ PROPOSED (Awaiting Attorney Review)</span>'
+
+                        st.markdown(f"""
+                            <div class="law-card" style="border-left-color: {'#22c55e' if status == 'confirmed' else '#f59e0b' if status == 'proposed' else '#64748b'};">
+                                <div class="law-card-header">
+                                    <code>{rel['source_statute']}</code> ➔ <strong>{rel['relation_type']}</strong> ➔ <code>{rel['target_statute']}</code>
+                                </div>
+                                <div style="margin-bottom: 0.45rem;">
+                                    <span class="authority-tag">{rel.get('scope_topic') or 'General'}</span>
+                                    {s_badge}
+                                </div>
+                                <div style="font-size: 0.86rem; color: #cbd5e1; margin-bottom: 0.35rem;">
+                                    <strong>Triggering Statutory Span:</strong> <em>"{rel.get('trigger_span') or 'N/A'}"</em>
+                                </div>
+                                <div style="font-size: 0.82rem; color: #94a3b8;">
+                                    <strong>Legal Rationale:</strong> {rel.get('rationale') or 'N/A'}
+                                </div>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+                        btn_c1, btn_c2, btn_c3 = st.columns([1, 1, 3])
+                        with btn_c1:
+                            if status != "confirmed" and st.button("✅ Confirm", key=f"conf_rel_{r_id}"):
+                                try:
+                                    patch_res = httpx.patch(
+                                        f"{BACKEND_URL}/api/resolver/relations/{r_id}",
+                                        json={"status": "confirmed", "reviewed_by": "attorney:krusch"},
+                                        headers=get_auth_headers(),
+                                        timeout=10.0
+                                    )
+                                    if patch_res.status_code == 200:
+                                        st.success("Confirmed!")
+                                        st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
+                        with btn_c2:
+                            if status != "rejected" and st.button("❌ Reject", key=f"rej_rel_{r_id}"):
+                                try:
+                                    patch_res = httpx.patch(
+                                        f"{BACKEND_URL}/api/resolver/relations/{r_id}",
+                                        json={"status": "rejected", "reviewed_by": "attorney:krusch"},
+                                        headers=get_auth_headers(),
+                                        timeout=10.0
+                                    )
+                                    if patch_res.status_code == 200:
+                                        st.warning("Rejected!")
+                                        st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error: {e}")
+                        with btn_c3:
+                            with st.popover("✏️ Edit Scope/Type"):
+                                opts = ["PREEMPTS", "AMENDS", "SUPERSEDES", "CARVES_OUT", "EXEMPTS_FROM", "IMPLEMENTS"]
+                                def_idx = opts.index(rel["relation_type"]) if rel["relation_type"] in opts else 0
+                                new_type = st.selectbox("Relation Type", opts, index=def_idx, key=f"et_{r_id}")
+                                new_top = st.text_input("Scope Doctrine", value=rel.get("scope_topic") or "", key=f"etop_{r_id}")
+                                new_rat = st.text_area("Rationale", value=rel.get("rationale") or "", key=f"erat_{r_id}")
+                                if st.button("Save Changes", key=f"save_rel_{r_id}"):
+                                    try:
+                                        patch_res = httpx.patch(
+                                            f"{BACKEND_URL}/api/resolver/relations/{r_id}",
+                                            json={"relation_type": new_type, "scope_topic": new_top, "rationale": new_rat},
+                                            headers=get_auth_headers(),
+                                            timeout=10.0
+                                        )
+                                        if patch_res.status_code == 200:
+                                            st.success("Updated!")
+                                            st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Error: {e}")
             else:
-                st.markdown(f"**Showing {len(trace_items)} verified statutory binding records:**")
-                for item in trace_items:
-                    status_badge = (
-                        '<span class="badge-supported">✅ MANUALLY VERIFIED</span>'
-                        if item.get("status") == "manually_verified"
-                        else f'<span class="badge-wrong-prop">{item.get("status", "").upper()}</span>'
-                    )
-                    rev_info = f" • Reviewed by: <code>{item.get('reviewed_by')}</code> ({item.get('reviewed_at', '')[:10]})" if item.get("reviewed_by") else ""
-                    st.markdown(f"""
-                        <div class="law-card" style="border-left-color: #6366f1;">
-                            <div class="law-card-header">{item['statute_id']} ➔ <code>{item['symbol_id']}</code></div>
-                            <div style="margin-bottom: 0.45rem;">
-                                <span class="authority-tag">{item['doctrine']}</span>
-                                {status_badge}
+                st.error(f"Failed to fetch relations: {r_resp.text}")
+        except Exception as e:
+            st.error(f"Relation fetch error: {e}")
+
+    with t5_sub2:
+        st.markdown("### 📜 Statutory Traceability & Audit Registry")
+        st.write(
+            "Deterministic, versioned statute-to-code binding invariants mapping California Civil Code and housing doctrine "
+            "directly to verified code symbols and attorney attestations under CCP § 128.7."
+        )
+
+        t_col1, t_col2 = st.columns([1, 1])
+        with t_col1:
+            trace_doctrine = st.selectbox(
+                "Filter by Doctrine",
+                ["All", "Security Deposits", "Just Cause", "Habitability"]
+            )
+        with t_col2:
+            trace_status = st.selectbox(
+                "Filter by Verification Status",
+                ["All", "manually_verified", "suggested_candidate", "deprecated"]
+            )
+
+        trace_params = {}
+        if trace_doctrine != "All":
+            trace_params["doctrine"] = trace_doctrine
+        if trace_status != "All":
+            trace_params["status"] = trace_status
+
+        try:
+            t_resp = httpx.get(
+                f"{BACKEND_URL}/api/compliance/traceability",
+                params=trace_params,
+                headers=get_auth_headers(),
+                timeout=15.0
+            )
+            if t_resp.status_code == 200:
+                trace_items = t_resp.json()
+                if not trace_items:
+                    st.info("No traceability mappings found matching the selected filters.")
+                else:
+                    st.markdown(f"**Showing {len(trace_items)} verified statutory binding records:**")
+                    for item in trace_items:
+                        status_badge = (
+                            '<span class="badge-supported">✅ MANUALLY VERIFIED</span>'
+                            if item.get("status") == "manually_verified"
+                            else f'<span class="badge-wrong-prop">{item.get("status", "").upper()}</span>'
+                        )
+                        rev_info = f" • Reviewed by: <code>{item.get('reviewed_by')}</code> ({item.get('reviewed_at', '')[:10]})" if item.get("reviewed_by") else ""
+                        st.markdown(f"""
+                            <div class="law-card" style="border-left-color: #6366f1;">
+                                <div class="law-card-header">{item['statute_id']} ➔ <code>{item['symbol_id']}</code></div>
+                                <div style="margin-bottom: 0.45rem;">
+                                    <span class="authority-tag">{item['doctrine']}</span>
+                                    {status_badge}
+                                </div>
+                                <div class="law-card-meta">
+                                    <span>File: <code>{item['file_path']}</code> (Repo: {item['repository']}){rev_info}</span>
+                                </div>
+                                <div style="font-size: 0.88rem; color: #e2e8f0; margin-bottom: 0.4rem;">
+                                    <strong>Digest:</strong> {item.get('statutory_digest') or 'No digest provided.'}
+                                </div>
+                                <div style="font-size: 0.82rem; color: #94a3b8;">
+                                    <strong>Attestation Notes:</strong> {item.get('notes') or 'N/A'}
+                                </div>
                             </div>
-                            <div class="law-card-meta">
-                                <span>File: <code>{item['file_path']}</code> (Repo: {item['repository']}){rev_info}</span>
-                            </div>
-                            <div style="font-size: 0.88rem; color: #e2e8f0; margin-bottom: 0.4rem;">
-                                <strong>Digest:</strong> {item.get('statutory_digest') or 'No digest provided.'}
-                            </div>
-                            <div style="font-size: 0.82rem; color: #94a3b8;">
-                                <strong>Attestation Notes:</strong> {item.get('notes') or 'N/A'}
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
-        else:
-            st.error(f"Failed to fetch traceability records ({t_resp.status_code}): {t_resp.text}")
-    except Exception as e:
-        st.error(f"Traceability service error: {e}")
+                        """, unsafe_allow_html=True)
+            else:
+                st.error(f"Failed to fetch traceability records ({t_resp.status_code}): {t_resp.text}")
+        except Exception as e:
+            st.error(f"Traceability service error: {e}")
+

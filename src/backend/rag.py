@@ -1827,7 +1827,24 @@ Draft the legal analysis following the required headings. Conclude with an ethic
                 if own_session:
                     db.close()
 
-            full_response = f"{analysis_text}{grounding_notice}\n\n---\n\n> ⚖️ **Ethical & Regulatory Notice**:\n> {UPL_DISCLAIMER}"
+            proposed_count = 0
+            try:
+                from .db import StatuteRelation
+                check_db = db_session or SessionLocal()
+                close_check_db = db_session is None
+                try:
+                    proposed_count = check_db.query(StatuteRelation).filter(StatuteRelation.status == "proposed").count()
+                finally:
+                    if close_check_db:
+                        check_db.close()
+            except Exception:
+                pass
+
+            uncertainty_prefix = ""
+            if proposed_count > 0:
+                uncertainty_prefix = f"> ⚠️ **CONTROLLING STATUTE UNCERTAIN; {proposed_count} proposed preemption/amendment link(s) pending human attorney review.**\n\n"
+
+            full_response = f"{uncertainty_prefix}{analysis_text}{grounding_notice}\n\n---\n\n> ⚖️ **Ethical & Regulatory Notice**:\n> {UPL_DISCLAIMER}"
             return full_response, stats, claim_records
 
     except httpx.ConnectError as e:

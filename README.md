@@ -10,7 +10,7 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.31+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![pgvector](https://img.shields.io/badge/PostgreSQL-pgvector%2016-336791.svg?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-Local%20Inference-black.svg)](https://ollama.com)
-[![Tests: 110 Passing](https://img.shields.io/badge/Tests-110%20Passing-brightgreen.svg)](tests/)
+[![Tests: 122 Passing](https://img.shields.io/badge/Tests-122%20Passing-brightgreen.svg)](tests/)
 [![Grounding: 0.00% False Support](https://img.shields.io/badge/Grounding-0.00%25%20False%20Support-brightgreen.svg)](data/eval/labeled_grounding_golden.json)
 
 ---
@@ -42,6 +42,8 @@ Modern legal practice requires trustworthy software, not sovereign marketing:
 * 📦 **Modular Jurisdiction Packs (Pack Zero: Oakland / CA)**: Structured declarative packs (`data/packs/ca_oakland.yaml`) defining municipal codes, state codes, parsers, and test fixture statutes.
 * ⏳ **First-Class As-Of Date Traversal**: All search, consult, resolver, MCP, and export endpoints require an explicit `as_of_date` query parameter (defaulting to matter date), eliminating silent temporal citation errors.
 * 🌲 **Typed Precedence Graph & Resolution Traces**: Resolves governing law across municipal and state boundaries (`resolve_controlling_law`), recording full resolution paths (`ResolutionHop`, `ResolutionTrace`), kept/discarded rationale, and explicit coverage gaps (`CoverageHole`).
+* 🏎️ **1-Command Benchmark Reproduction Demo**: `scripts/demo_statutory_walk_vs_cosine.py` reproduces the California Security Deposit Blindspot (Pre-2024 Cal. Civ. Code § 1950.5 vs. AB 12 Stats. 2023, ch. 290) in <10ms, demonstrating why naive cosine/BM25 selects the stale statute due to length bias and boilerplate lexical repetition, while KruschLaw's confirmed-edge DAG walk deterministically resolves the operative 1-month cap.
+* 🔗 **Preemption & Amendment Review Queue**: Persistent relational review queue (`StatuteRelation`) backing Tab 5 in the UI and `/api/resolver/relations`. Enforces the confirmed-edge invariant: auto-extracted relations remain `proposed` and emit uncertainty advisories until reviewed and approved by admitted counsel under CCP § 128.7.
 * 🔎 **Authoritative Diagnostic Tooling (`explain_why_not_controlling`)**: Programmatically explains why a specific statutory section is non-controlling for a given jurisdiction, doctrine, and as-of date (preemption, legislative amendment, or territorial boundary).
 * 🛡️ **Two-Pass Assertion Grounding (0.00% False Support Rate)**: Decomposes legal drafts into discrete claims, evaluates lexical and entailment overlap against source spans, supports an explicit `abstain` classification, and enforces hard citation constraints that strip unretrieved bare sections.
 * 📁 **Complete Privilege Partitioning**: Total isolation between public statutory codes (`laws_vectors`) and confidential client exhibits (`matter_evidence`), preventing cross-matter fact leakage.
@@ -54,6 +56,64 @@ Modern legal practice requires trustworthy software, not sovereign marketing:
 * 📋 **One-Page Orchestrator Specification**: Governed by [`docs/ORCHESTRATOR_SPEC.md`](docs/ORCHESTRATOR_SPEC.md): formalizes the `matter_ref` ↔ `deal_ref` cross-platform entity mapping table, shared `as_of_date` query contracts, and 5 non-negotiable DO-NOT invariants (no vector table unions, mandatory `as_of_date`, confirmed edges only, draft isolation, deterministic typed evaluation over LLMs).
 * ⚖️ **The Join & Sovereign Gateway MCP Router**: Powers cross-domain statutory compliance checks in conjunction with KruschBiz via `POST /conflicts/contract-vs-statute` and the 5-verb Gateway MCP router (`ask_law`, `ask_biz`, `check_compliance`, `ingest`, `purge`) strictly constrained to <450 prompt tokens for local 7B/14B inference.
 
+---
+
+## 🏎️ 1-Command Benchmark: Preemption & Amendment Blindspot Demo
+
+Run the zero-dependency in-memory reproduction benchmark directly (<10ms runtime):
+```bash
+python scripts/demo_statutory_walk_vs_cosine.py
+```
+
+### The California Security Deposit Blindspot
+This benchmark models a real-world scenario facing California tenant defense and legal aid clinics:
+* **The Legal Fact**: Prior to July 1, 2024, California Civil Code § 1950.5 permitted residential security deposits up to **two (2) months' rent** for unfurnished units. In 2023, the California Legislature enacted Assembly Bill 12 (Stats. 2023, ch. 290, effective July 1, 2024), amending § 1950.5(c)(1) to cap security deposits strictly at **one (1) month's rent** statewide.
+* **Why Naive Vector & BM25 RAG Fails**:
+  1. **Length Bias**: The historical § 1950.5 statute contains 1,940 characters of dense boilerplate repeating words like *deposit*, *security*, *landlord*, *tenant*, *unfurnished*, and *rent* across 8 subdivisions.
+  2. **Lexical Repetition**: AB 12 is a surgical 1-sentence amending act (*"Section 1950.5 of the Civil Code is amended to read: ... not in excess of an amount equal to one month's rent"*).
+  3. **The Result**: Naive cosine similarity and BM25 rank the stale historical statute #1 (Hybrid Score: 1.1774 vs. 1.1133) and assert a 2-month deposit is lawful for an August 2024 lease—giving attorneys dangerously outdated advice.
+* **Why KruschLaw's DAG Walk Succeeds**:
+  KruschLaw queries the confirmed `AMENDS` relation edge from AB 12 to § 1950.5. Because the inquiry date (`2024-08-15`) postdates July 1, 2024, the temporal resolver prunes the superseded 2-month allowance and elevates the operative 1-month statutory cap, preserving complete provenance in the resolution audit trail.
+
+---
+
+## 🔗 Preemption & Amendment Review Queue (Confirmed-Edge Invariant)
+
+Under California Code of Civil Procedure § 128.7 and legal ethics rules, an automated AI agent cannot assume statutory preemption or amendment based solely on vector similarity.
+
+### The Confirmed-Edge Invariant
+1. **Isolated Proposed State**: All machine-extracted or newly proposed relations are recorded with `status = "proposed"` in `src/backend/db.py` (`StatuteRelation`).
+2. **Zero Silent Control**: Proposed relations are excluded from controlling authority resolution; they **never silently alter the statutory graph walk**.
+3. **High-Visibility Uncertainty Warning**: When proposed relations exist for an inquiry topic or doctrine, KruschLaw emits an amber advisory banner in consultation briefs and API responses:
+   ```markdown
+   > ⚠️ **CONTROLLING STATUTE UNCERTAIN; N proposed preemption/amendment link(s) pending human attorney review.**
+   ```
+4. **Admitted Counsel Review (Streamlit Tab 5 & REST API)**:
+   In Tab 5 (*"🔗 Preemption & Amendment Review Queue"*), attorneys inspect proposed edges, trigger spans, and confidence scores, and can **Accept / Confirm**, **Reject**, or **Edit** relationships:
+   * `GET /api/resolver/relations`: Enumerate proposed/confirmed relations with doctrine filtering.
+   * `POST /api/resolver/relations`: Stage newly extracted relations.
+   * `PATCH /api/resolver/relations/{id}`: Confirm (`status='confirmed'`, recording `reviewed_by` and `reviewed_at`) or reject (`status='rejected'`).
+   * `DELETE /api/resolver/relations/{id}`: Delete relations.
+
+---
+
+## 🌐 5-Verb Sovereign Gateway MCP Router (<450 Prompt Tokens)
+
+In multi-agent homelab and enterprise swarms, standard MCP servers consume thousands of prompt tokens listing verbose tool definitions, triggering context degradation in local 7B/14B models.
+
+KruschLaw provides a hyper-compact, cross-repo Gateway MCP router (`src/mcp/gateway.py`) adhering strictly to [`docs/ORCHESTRATOR_SPEC.md`](docs/ORCHESTRATOR_SPEC.md):
+
+* **Exact 5 Verbs**:
+  1. `ask_law`: Sovereign California statutory search, multi-hop precedence resolution, and tenant defense checklists.
+  2. `ask_biz`: Sovereign corporate contract intelligence, deal graph walk, and clause retrieval (delegated to KruschBiz).
+  3. `check_compliance`: Direct conflict analysis ("The Join") evaluating contract slots against statutory floors/ceilings (e.g. AB 12 deposit cap).
+  4. `ingest`: Sovereign document ingestion with MIME validation and page-true citations.
+  5. `purge`: Verifiable cryptographic deletion with SHA-256 tombstone audit receipts.
+* **Token Budget**: Strictly constrained to **<450 prompt tokens** (~1,715 characters dense JSON) across all 5 verb definitions.
+* **Launch Command**:
+  ```bash
+  python -m src.mcp.gateway
+  ```
 
 ---
 
@@ -421,8 +481,17 @@ KruschLaw is engineered around the ethical constraints of legal practice (ABA Mo
 ## 🧪 Automated Testing & CI Gates
 
 ```bash
-# Run full unit, integration, and eval test suite (110 tests)
+# Run full unit, integration, and eval test suite (122 tests)
 pytest
+
+# Run 1-command precedence benchmark (DAG walk vs Naive Cosine RAG)
+python scripts/demo_statutory_walk_vs_cosine.py
+
+# Run 5-verb Sovereign Gateway MCP test suite
+pytest tests/test_gateway_mcp.py -v
+
+# Run statutory relations & preemption review queue test suite
+pytest tests/test_statute_relations.py -v
 
 # Run labeled grounding golden eval gate (0.00% False Support Rate target)
 pytest tests/eval/test_labeled_grounding_eval.py -v

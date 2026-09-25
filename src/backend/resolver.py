@@ -216,7 +216,9 @@ class LegalResolution:
         notes: Optional[str] = None,
         trace: Optional[ResolutionTrace] = None,
         coverage_hole: Optional[CoverageHole] = None,
-        discarded_nodes: Optional[List[Union[Dict[str, Any], DiscardedCandidate]]] = None
+        discarded_nodes: Optional[List[Union[Dict[str, Any], DiscardedCandidate]]] = None,
+        unconfirmed_proposals: Optional[List[Dict[str, Any]]] = None,
+        uncertainty_warning: Optional[str] = None
     ):
         if isinstance(controlling_node, LawNode):
             self.controlling_node = controlling_node.model_dump()
@@ -236,6 +238,8 @@ class LegalResolution:
         self.trace = trace
         self.coverage_hole = coverage_hole
         self.discarded_nodes = discarded_nodes or []
+        self.unconfirmed_proposals = unconfirmed_proposals or []
+        self.uncertainty_warning = uncertainty_warning
 
     @property
     def is_coverage_hole(self) -> bool:
@@ -256,6 +260,8 @@ class LegalResolution:
             "notes": self.notes,
             "trace": self.trace.model_dump() if self.trace else None,
             "coverage_hole": self.coverage_hole.model_dump() if self.coverage_hole else None,
+            "unconfirmed_proposals": self.unconfirmed_proposals,
+            "uncertainty_warning": self.uncertainty_warning,
             "discarded_nodes": [
                 d.model_dump() if isinstance(d, BaseModel) else d
                 for d in self.discarded_nodes
@@ -332,6 +338,39 @@ def resolve_controlling_law(
         hops: List[ResolutionHop] = []
         discarded_candidates: List[DiscardedCandidate] = []
 
+        # Check for unconfirmed proposed relations for this topic/doctrine
+        unconfirmed_proposals = []
+        try:
+            from .db import StatuteRelation
+            proposed_rels = db.query(StatuteRelation).filter(
+                StatuteRelation.status == "proposed",
+                or_(
+                    StatuteRelation.scope_topic.ilike(f"%{doctrine_or_topic}%"),
+                    StatuteRelation.source_statute.ilike(f"%{doctrine_or_topic}%"),
+                    StatuteRelation.target_statute.ilike(f"%{doctrine_or_topic}%")
+                )
+            ).all()
+            for rel in proposed_rels:
+                unconfirmed_proposals.append({
+                    "id": rel.id,
+                    "source_statute": rel.source_statute,
+                    "target_statute": rel.target_statute,
+                    "relation_type": rel.relation_type,
+                    "scope_topic": rel.scope_topic,
+                    "confidence": rel.confidence,
+                    "trigger_span": rel.trigger_span,
+                    "rationale": rel.rationale
+                })
+        except Exception:
+            pass
+
+        uncertainty_warning = None
+        if unconfirmed_proposals:
+            uncertainty_warning = (
+                f"> ⚠️ **CONTROLLING STATUTE UNCERTAIN; "
+                f"{len(unconfirmed_proposals)} proposed preemption/amendment link(s) pending human attorney review.**"
+            )
+
         if not candidates:
             cov_hole = CoverageHole(
                 topic=doctrine_or_topic,
@@ -379,7 +418,9 @@ def resolve_controlling_law(
                 notes="Zero candidate nodes found for doctrine/jurisdiction in local law store.",
                 trace=trace,
                 coverage_hole=cov_hole,
-                discarded_nodes=discarded_candidates
+                discarded_nodes=discarded_candidates,
+                unconfirmed_proposals=unconfirmed_proposals,
+                uncertainty_warning=uncertainty_warning
             )
 
         # Step 2: Filter spatial applicability (unincorporated vs incorporated)
@@ -761,7 +802,9 @@ def resolve_controlling_law(
             notes=f"Resolved via {len(precedence_chain)} graph steps as of {target_date.isoformat()}.",
             trace=trace,
             coverage_hole=None,
-            discarded_nodes=discarded_candidates
+            discarded_nodes=discarded_candidates,
+            unconfirmed_proposals=unconfirmed_proposals,
+            uncertainty_warning=uncertainty_warning
         )
 
     except Exception as e:

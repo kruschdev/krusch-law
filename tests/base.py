@@ -58,7 +58,7 @@ import src.mcp.server
 
 from src.backend.db import (
     Base, Case, LawVector, IngestJob, GroundingReport, AuditLog,
-    StatuteCodeTraceability, MatterEvidence, ClaimFeedback
+    StatuteCodeTraceability, MatterEvidence, ClaimFeedback, StatuteRelation
 )
 from src.backend.main import app, get_db
 
@@ -92,6 +92,7 @@ class KruschLawTestCase(unittest.TestCase):
         self.db.query(MatterEvidence).delete()
         self.db.query(ClaimFeedback).delete()
         self.db.query(StatuteCodeTraceability).delete()
+        self.db.query(StatuteRelation).delete()
         self.db.commit()
 
         # Global mock for embedding generation (1024-dim vector)

@@ -357,6 +357,42 @@ class TraceabilityItem(BaseModel):
     notes: Optional[str] = None
 
 
+class StatuteRelationCreate(BaseModel):
+    source_statute: str
+    target_statute: str
+    relation_type: str = "PREEMPTS"
+    scope_topic: Optional[str] = None
+    confidence: float = 1.0
+    status: str = "proposed"
+    trigger_span: Optional[str] = None
+    rationale: Optional[str] = None
+
+
+class StatuteRelationUpdate(BaseModel):
+    relation_type: Optional[str] = None
+    scope_topic: Optional[str] = None
+    confidence: Optional[float] = None
+    status: Optional[str] = None
+    trigger_span: Optional[str] = None
+    rationale: Optional[str] = None
+    reviewed_by: Optional[str] = None
+
+
+class StatuteRelationResponse(BaseModel):
+    id: int
+    source_statute: str
+    target_statute: str
+    relation_type: str
+    scope_topic: Optional[str] = None
+    confidence: float
+    status: str
+    trigger_span: Optional[str] = None
+    rationale: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+
 # --- API Endpoints ---
 
 @app.get("/health", tags=["System"])
@@ -1469,4 +1505,141 @@ def explain_why_not_controlling_endpoint(
         matter_facts=facts,
         db=db
     )
+
+
+# --- Statutory Relation Endpoints ---
+
+@app.get("/api/resolver/relations", response_model=List[StatuteRelationResponse], tags=["Statutory Precedence Graph"])
+def list_statute_relations(
+    status: Optional[str] = Query(None, description="Filter by status: proposed, confirmed, rejected"),
+    topic: Optional[str] = Query(None, description="Filter by legal doctrine/topic"),
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """List statutory and preemption relations with optional status and doctrine filtering."""
+    from .db import StatuteRelation
+    q = db.query(StatuteRelation)
+    if status:
+        q = q.filter(StatuteRelation.status == status)
+    if topic:
+        q = q.filter(StatuteRelation.scope_topic.ilike(f"%{topic}%"))
+    rels = q.order_by(StatuteRelation.id.desc()).all()
+    return [
+        StatuteRelationResponse(
+            id=r.id,
+            source_statute=r.source_statute,
+            target_statute=r.target_statute,
+            relation_type=r.relation_type,
+            scope_topic=r.scope_topic,
+            confidence=r.confidence,
+            status=r.status,
+            trigger_span=r.trigger_span,
+            rationale=r.rationale,
+            reviewed_by=r.reviewed_by,
+            reviewed_at=r.reviewed_at.isoformat() if r.reviewed_at else None,
+            created_at=r.created_at.isoformat() if r.created_at else None
+        )
+        for r in rels
+    ]
+
+
+@app.post("/api/resolver/relations", response_model=StatuteRelationResponse, status_code=201, tags=["Statutory Precedence Graph"])
+def create_statute_relation(
+    req: StatuteRelationCreate,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """Propose or assert a statutory preemption or amendment relation edge."""
+    from .db import StatuteRelation
+    rel = StatuteRelation(
+        source_statute=req.source_statute,
+        target_statute=req.target_statute,
+        relation_type=req.relation_type,
+        scope_topic=req.scope_topic,
+        confidence=req.confidence,
+        status=req.status,
+        trigger_span=req.trigger_span,
+        rationale=req.rationale
+    )
+    db.add(rel)
+    db.commit()
+    db.refresh(rel)
+    return StatuteRelationResponse(
+        id=rel.id,
+        source_statute=rel.source_statute,
+        target_statute=rel.target_statute,
+        relation_type=rel.relation_type,
+        scope_topic=rel.scope_topic,
+        confidence=rel.confidence,
+        status=rel.status,
+        trigger_span=rel.trigger_span,
+        rationale=rel.rationale,
+        reviewed_by=rel.reviewed_by,
+        reviewed_at=rel.reviewed_at.isoformat() if rel.reviewed_at else None,
+        created_at=rel.created_at.isoformat() if rel.created_at else None
+    )
+
+
+@app.patch("/api/resolver/relations/{relation_id}", response_model=StatuteRelationResponse, tags=["Statutory Precedence Graph"])
+def update_statute_relation(
+    relation_id: int,
+    req: StatuteRelationUpdate,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """Review and confirm, reject, or edit a proposed statutory preemption/amendment edge."""
+    from .db import StatuteRelation
+    from datetime import datetime, timezone
+    rel = db.query(StatuteRelation).filter(StatuteRelation.id == relation_id).first()
+    if not rel:
+        raise HTTPException(status_code=404, detail=f"Statute relation #{relation_id} not found")
+
+    if req.relation_type is not None:
+        rel.relation_type = req.relation_type
+    if req.scope_topic is not None:
+        rel.scope_topic = req.scope_topic
+    if req.confidence is not None:
+        rel.confidence = req.confidence
+    if req.status is not None:
+        rel.status = req.status
+        rel.reviewed_at = datetime.now(timezone.utc)
+        rel.reviewed_by = req.reviewed_by or "attorney:reviewer"
+    if req.trigger_span is not None:
+        rel.trigger_span = req.trigger_span
+    if req.rationale is not None:
+        rel.rationale = req.rationale
+
+    db.commit()
+    db.refresh(rel)
+    return StatuteRelationResponse(
+        id=rel.id,
+        source_statute=rel.source_statute,
+        target_statute=rel.target_statute,
+        relation_type=rel.relation_type,
+        scope_topic=rel.scope_topic,
+        confidence=rel.confidence,
+        status=rel.status,
+        trigger_span=rel.trigger_span,
+        rationale=rel.rationale,
+        reviewed_by=rel.reviewed_by,
+        reviewed_at=rel.reviewed_at.isoformat() if rel.reviewed_at else None,
+        created_at=rel.created_at.isoformat() if rel.created_at else None
+    )
+
+
+@app.delete("/api/resolver/relations/{relation_id}", tags=["Statutory Precedence Graph"])
+def delete_statute_relation(
+    relation_id: int,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """Delete a statutory relation edge."""
+    from .db import StatuteRelation
+    rel = db.query(StatuteRelation).filter(StatuteRelation.id == relation_id).first()
+    if not rel:
+        raise HTTPException(status_code=404, detail=f"Statute relation #{relation_id} not found")
+    db.delete(rel)
+    db.commit()
+    return {"status": "deleted", "relation_id": relation_id}
+
 

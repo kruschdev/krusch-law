@@ -326,6 +326,28 @@ class ClaimFeedback(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
+class StatuteRelation(Base):
+    """
+    Explicit statutory, legislative amendment, and municipal preemption relation edge.
+    Tracks PREEMPTS, AMENDS, SUPERSEDES, EXEMPTS_FROM, IMPLEMENTS, CARVES_OUT.
+    Human-confirmed edges only govern authoritative precedence; proposed edges trigger review advisories.
+    """
+    __tablename__ = "statute_relations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_statute = Column(String(100), nullable=False, index=True)  # e.g., "Cal. Civ. Code § 1954.50" or "Stats. 2023, ch. 290 (AB 12)"
+    target_statute = Column(String(100), nullable=False, index=True)  # e.g., "Oakland OMC 8.22.030" or "Cal. Civ. Code § 1950.5(c)"
+    relation_type = Column(String(50), nullable=False, index=True)    # PREEMPTS, AMENDS, SUPERSEDES, EXEMPTS_FROM, IMPLEMENTS, CARVES_OUT
+    scope_topic = Column(String(100), nullable=True, index=True)      # e.g., "Security Deposits", "Rent Control", "Just Cause"
+    confidence = Column(Float, default=1.0, nullable=False)
+    status = Column(String(50), default="proposed", nullable=False, index=True)  # "proposed", "confirmed", "rejected"
+    trigger_span = Column(Text, nullable=True)                        # Text span triggering the relation
+    rationale = Column(Text, nullable=True)                           # Legal rationale or commentary
+    reviewed_by = Column(String(100), nullable=True)                  # Attorney identifier
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 def init_db(target_engine=None):
     """Initialize database tables, pgvector extension, HNSW vector indexes, and GIN full-text index."""
     eng = target_engine or engine
