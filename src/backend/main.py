@@ -46,10 +46,13 @@ async def lifespan(app: FastAPI):
     """Initialize database schemas, extensions, and HNSW indexes on service boot."""
     logger.info("Initializing KruschLaw database schemas and HNSW indexes...")
     try:
+        from .config import validate_security_invariants
+        validate_security_invariants(settings)
         init_db()
         logger.info("Database schemas and indexes initialized successfully.")
     except Exception as e:
         logger.error(f"Error during database startup initialization: {e}")
+        raise
     yield
 
 
@@ -589,6 +592,11 @@ def update_case(
         raise HTTPException(status_code=500, detail=f"Failed to update matter: {str(e)}")
 
 
+class LegalHoldRequest(BaseModel):
+    legal_hold: bool = True
+    reason: Optional[str] = None
+
+
 @app.delete("/api/cases/{case_id}", tags=["Cases"])
 def delete_case(
     case_id: int,
@@ -600,6 +608,12 @@ def delete_case(
     case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
     if not case:
         raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found")
+
+    if getattr(case, "legal_hold", False):
+        raise HTTPException(
+            status_code=423,
+            detail=f"Matter #{case_id} is under active legal hold and cannot be modified or deleted."
+        )
 
     case.is_deleted = True
     db.commit()
@@ -624,17 +638,76 @@ def purge_case(
     Permanently destroys the client matter, vector embeddings, attached evidence chunks,
     and associated grounding reports from the sovereign database with verifiable SHA-256 tombstones.
     """
+    case = db.query(Case).filter(Case.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found")
+
+    if getattr(case, "legal_hold", False):
+        raise HTTPException(
+            status_code=423,
+            detail=f"Matter #{case_id} is under active legal hold and cannot be deleted or purged."
+        )
+
     from .crypto import execute_verifiable_purge
-    receipt = execute_verifiable_purge(
-        db=db,
-        case_id=case_id,
-        actor_key=_auth,
-        client_ip=request.client.host if request.client else None
-    )
+    try:
+        receipt = execute_verifiable_purge(
+            db=db,
+            case_id=case_id,
+            actor_key=_auth,
+            client_ip=request.client.host if request.client else None
+        )
+    except PermissionError as pe:
+        raise HTTPException(status_code=423, detail=str(pe))
+
     if not receipt:
         raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found")
 
     return receipt
+
+
+@app.post("/api/cases/{case_id}/legal-hold", tags=["Cases"])
+def set_legal_hold(
+    case_id: int,
+    req: LegalHoldRequest,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """Place or release a litigation legal hold on a client matter."""
+    case = db.query(Case).filter(Case.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found")
+    case.legal_hold = req.legal_hold
+    db.commit()
+    return {
+        "case_id": case_id,
+        "legal_hold": case.legal_hold,
+        "status": "active" if case.legal_hold else "released"
+    }
+
+
+@app.get("/api/cases/{case_id}/export-bundle", tags=["Cases"])
+def export_matter_bundle(
+    case_id: int,
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """Generate a tamper-evident SHA-256 legal hold evidence bundle manifest."""
+    case = db.query(Case).filter(Case.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found")
+    evidence_items = db.query(MatterEvidence).filter(MatterEvidence.matter_id == case_id).all()
+    reports = db.query(GroundingReport).filter(GroundingReport.case_id == case_id).all()
+    from .crypto import compute_matter_tombstone_hash
+    bundle_hash = compute_matter_tombstone_hash(case, evidence_items, reports)
+    return {
+        "case_id": case_id,
+        "title": case.title,
+        "legal_hold": getattr(case, "legal_hold", False),
+        "evidence_count": len(evidence_items),
+        "reports_count": len(reports),
+        "bundle_sha256": bundle_hash,
+        "exported_at": time.time()
+    }
 
 
 @app.get("/api/laws", response_model=List[LawItem], tags=["Laws"])

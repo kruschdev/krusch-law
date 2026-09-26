@@ -113,6 +113,8 @@ def execute_verifiable_purge(
     case = db.query(Case).filter(Case.id == case_id).first()
     if not case:
         return None
+    if getattr(case, "legal_hold", False):
+        raise PermissionError(f"CANNOT_PURGE_LEGAL_HOLD_ACTIVE: Matter #{case_id} is under active legal hold and cannot be deleted or purged.")
 
     # Gather artifacts for tombstone hashing
     evidence_items = db.query(MatterEvidence).filter(MatterEvidence.matter_id == case_id).all()
