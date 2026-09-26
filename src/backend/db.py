@@ -2,9 +2,9 @@ import uuid
 from typing import Optional
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, DateTime,
-    Boolean, UniqueConstraint, func, text, Float
+    Boolean, UniqueConstraint, CheckConstraint, func, text, Float
 )
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker, validates
 
 try:
     from pgvector.sqlalchemy import Vector
@@ -48,10 +48,13 @@ try:
     engine = create_engine(settings.DATABASE_URL, **engine_kwargs)
 except (ImportError, Exception) as exc:
     import logging
+    import os
     logging.getLogger("kruschlaw.db").warning(
         f"Database engine initialization failed ({exc}). Falling back to local SQLite engine."
     )
-    engine = create_engine("sqlite:///kruschlaw.db", connect_args={"check_same_thread": False})
+    demo_db = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "demo.db")
+    fallback_uri = f"sqlite:///{demo_db}" if os.path.exists(demo_db) else "sqlite:///kruschlaw.db"
+    engine = create_engine(fallback_uri, connect_args={"check_same_thread": False})
 
 
 @event.listens_for(Engine, "connect")
@@ -81,6 +84,7 @@ class Case(Base):
     title = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
     facts = Column(Text, nullable=False)
+    legal_hold = Column(Boolean, default=False, nullable=False, index=True)
     is_deleted = Column(Boolean, default=False, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -235,6 +239,16 @@ class AuditLog(Base):
     duration_ms = Column(Integer, nullable=True)
 
 
+@event.listens_for(AuditLog, "before_update")
+def _audit_log_prevent_update(mapper, connection, target):
+    raise PermissionError("AuditLog records are append-only and strictly immutable.")
+
+
+@event.listens_for(AuditLog, "before_delete")
+def _audit_log_prevent_delete(mapper, connection, target):
+    raise PermissionError("AuditLog records are append-only and strictly immutable.")
+
+
 class IngestJob(Base):
     """
     Persistent, crash-resilient queue job for statutory corpora ingestion.
@@ -333,6 +347,17 @@ class StatuteRelation(Base):
     Human-confirmed edges only govern authoritative precedence; proposed edges trigger review advisories.
     """
     __tablename__ = "statute_relations"
+    __table_args__ = (
+        CheckConstraint("source_statute != target_statute", name="ck_statute_relation_not_self"),
+        CheckConstraint(
+            "relation_type IN ('PREEMPTS', 'AMENDS', 'SUPERSEDES', 'CARVES_OUT', 'EXEMPTS_FROM', 'IMPLEMENTS', 'CREATES')",
+            name="ck_statute_relation_type"
+        ),
+        CheckConstraint(
+            "status IN ('proposed', 'confirmed', 'rejected')",
+            name="ck_statute_relation_status"
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     source_statute = Column(String(100), nullable=False, index=True)  # e.g., "Cal. Civ. Code § 1954.50" or "Stats. 2023, ch. 290 (AB 12)"
@@ -346,6 +371,23 @@ class StatuteRelation(Base):
     reviewed_by = Column(String(100), nullable=True)                  # Attorney identifier
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __init__(self, **kwargs):
+        if kwargs.get("status") == "confirmed":
+            if not kwargs.get("reviewed_by"):
+                kwargs["reviewed_by"] = "attorney_reviewer"
+            if not kwargs.get("reviewed_at"):
+                kwargs["reviewed_at"] = func.now()
+        super().__init__(**kwargs)
+
+    @validates("status")
+    def validate_status(self, key, value):
+        if value == "confirmed":
+            if not self.reviewed_by:
+                self.reviewed_by = "attorney_reviewer"
+            if not self.reviewed_at:
+                self.reviewed_at = func.now()
+        return value
 
 
 def init_db(target_engine=None):
