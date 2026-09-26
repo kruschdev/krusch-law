@@ -985,10 +985,10 @@ def ingest_matter_document(
     except ImportError:
         candidate_paths = [
             os.getenv("KRUSCH_NEXUS_PATH"),
-            "/nexus/src",
-            "/home/krusch/homelab/projects/krusch-nexus/src",
             os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "krusch-nexus", "src"),
             os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "krusch-nexus", "src"),
+            "/nexus/src",
+            os.path.expanduser("~/homelab/projects/krusch-nexus/src"),
         ]
         for p in candidate_paths:
             if p and os.path.isdir(p) and p not in sys.path:
