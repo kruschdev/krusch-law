@@ -12,9 +12,19 @@ env/
 
 # Database & Volume persistence
 *.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
 *.db
+!data/demo.db
+*.db-journal
+*.db-wal
+*.db-shm
 pgdata/
 data/*.parquet
+data/uploads/
+data/exports/
+data/tmp/
 
 # Testing & Logs
 .pytest_cache/

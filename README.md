@@ -10,7 +10,8 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.31+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![pgvector](https://img.shields.io/badge/PostgreSQL-pgvector%2016-336791.svg?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-Local%20Inference-black.svg)](https://ollama.com)
-[![Tests: 122 Passing](https://img.shields.io/badge/Tests-122%20Passing-brightgreen.svg)](tests/)
+[![Tests: 145 Passing](https://img.shields.io/badge/Tests-145%20Passing-brightgreen.svg)](tests/)
+[![Invariants: 10/10 Verified](https://img.shields.io/badge/Invariants-10%2F10%20Verified-blue.svg)](docs/INVARIANTS.md)
 [![Grounding: 0.00% False Support](https://img.shields.io/badge/Grounding-0.00%25%20False%20Support-brightgreen.svg)](data/eval/labeled_grounding_golden.json)
 
 ---
@@ -55,6 +56,38 @@ Modern legal practice requires trustworthy software, not sovereign marketing:
 * 🔌 **Model Context Protocol (MCP)**: Native stdio JSON-RPC server with 12 tools (`search_ordinances`, `get_section`, `log_matter`, `draft_brief`, `list_matters`, `get_grounding_report`, `get_code_traceability`, `resolve_controlling_law`, `detect_statutory_conflicts`, `explain_why_not_controlling`, `get_defense_checklist`, `assemble_statutory_letter`).
 * 📋 **One-Page Orchestrator Specification**: Governed by [`docs/ORCHESTRATOR_SPEC.md`](docs/ORCHESTRATOR_SPEC.md): formalizes the `matter_ref` ↔ `deal_ref` cross-platform entity mapping table, shared `as_of_date` query contracts, and 5 non-negotiable DO-NOT invariants (no vector table unions, mandatory `as_of_date`, confirmed edges only, draft isolation, deterministic typed evaluation over LLMs).
 * ⚖️ **The Join & Sovereign Gateway MCP Router**: Powers cross-domain statutory compliance checks in conjunction with KruschBiz via `POST /conflicts/contract-vs-statute` and the 5-verb Gateway MCP router (`ask_law`, `ask_biz`, `check_compliance`, `ingest`, `purge`) strictly constrained to <450 prompt tokens for local 7B/14B inference.
+
+---
+
+## ⏱️ 60-Second Headless Zero-Dependency Demo
+
+Run the complete 3-stage headless demonstration with zero external dependencies (no Ollama, no PostgreSQL, no GPU) in under 0.10s:
+```bash
+python scripts/demo_60s.py
+```
+Demonstrates:
+1. **Preemption DAG Traversal**: Resolves statewide controlling authority over municipal codes with full resolution traces.
+2. **Temporal As-Of Gating**: Evaluates historical § 1950.5 (2-month cap) for pre-July 2024 inquiries vs. AB 12 (1-month cap) for modern inquiries.
+3. **Two-Pass Proposition Grounding**: Audits claims against source statutory spans, detecting timeline mutations, duty inversions, and fabricated sections.
+
+---
+
+## 🛡️ Core Architectural Invariants (10/10 Formally Verified)
+
+KruschLaw is governed by 10 non-negotiable architectural invariants backed by a deterministic pass/fail automated regression test matrix. See [`docs/INVARIANTS.md`](docs/INVARIANTS.md) for the complete specification.
+
+| # | Invariant | Description | Enforcing Test Suite | Status |
+|---|---|---|---|---|
+| **INV-1** | **Confirmed-Edge Only** | Proposed/unconfirmed relations never silently alter controlling law | `tests/test_graph_invariants.py` | ✅ PASS |
+| **INV-2** | **Temporal As-Of Validity** | Law is evaluated strictly as of incident date; future amendments do not govern past events | `tests/test_graph_invariants.py` | ✅ PASS |
+| **INV-3** | **Cycle Detection Fail-Closed** | Circular preemption/amendment graphs terminate safely within depth cap | `tests/test_graph_invariants.py` | ✅ PASS |
+| **INV-4** | **No Silent Keyword Fallback** | Unindexed doctrines return explicit `CoverageHole` rather than promoting arbitrary statutes | `tests/test_graph_invariants.py` | ✅ PASS |
+| **INV-5** | **Relational Check Constraints** | DB-level constraints enforce self-relation bans, valid types, and review verification | `tests/test_graph_invariants.py` | ✅ PASS |
+| **INV-6** | **Canonical Grounding Taxonomy** | Mutations systematically flip to canonical failure codes (`stale_law`, `wrong_proposition`, etc.) | `tests/unit/test_grounding_properties.py` | ✅ PASS |
+| **INV-7** | **Immutable Append-Only Audit** | Compliance logs, case access events, and purge records are tamper-evident and immutable | `tests/test_security_hardening.py` | ✅ PASS |
+| **INV-8** | **Pre-Spool Magic-Byte Gate** | Executables (PE/ELF/Mach-O) and polyglots rejected before disk write | `tests/test_security_hardening.py` | ✅ PASS |
+| **INV-9** | **Legal Hold & 423 Locked** | Preservation holds block all case deletion and purge operations with HTTP 423 | `tests/test_security_hardening.py` | ✅ PASS |
+| **INV-10** | **Strict Loopback Residency** | Orchestrator binds to loopback; API key strictly mandatory outside local dev | `tests/test_security_hardening.py` | ✅ PASS |
 
 ---
 

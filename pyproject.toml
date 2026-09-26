@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "krusch-law"
-version = "0.3.0"
+version = "0.5.0"
 description = "Air-Gapped, Privacy-First Legal RAG & Ordinance Intelligence Engine (Research Prototype)"
 readme = "README.md"
 license = { text = "MIT" }
