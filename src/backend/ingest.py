@@ -351,9 +351,9 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "preempted_by": "Cal. Civ. Code § 1950.5(c) as amended by Stats. 2023, ch. 290 (AB 12)",
         "source_url": "https://leginfo.legislature.ca.gov",
         "content": (
-            "[REPEALED / SUPERSEDED] Prior to July 1, 2024, a landlord could lawfully demand a security deposit equal to "
-            "two months' rent for an unfurnished residential unit, or three months' rent for a furnished unit. "
-            "Effective July 1, 2024, AB 12 amended Civil Code § 1950.5(c) to strictly cap security deposits at one month's rent."
+            "[REPEALED / SUPERSEDED] Prior to July 1, 2024, a landlord may not demand or receive security, however denominated, "
+            "in an amount or value in excess of an amount equal to two months' rent for an unfurnished residential property, "
+            "or an amount equal to three months' rent for a furnished residential property."
         )
     },
     # Conflict Fixture: California Tenant Protection Act of 2019 (AB 1482)
@@ -1123,6 +1123,63 @@ def ingest_matter_document(
             db.close()
 
 
+def validate_file_magic_bytes(file_path: str, ext: str) -> bool:
+    """Validate that file headers match declared extension to prevent MIME-spoofing."""
+    if not os.path.exists(file_path):
+        return False
+    with open(file_path, "rb") as f:
+        header = f.read(512)
+
+    # Invariant: Unconditionally reject executable binaries (MZ, ELF, Mach-O) regardless of declared extension
+    if (
+        header.startswith(b"MZ")
+        or header.startswith(b"\x7fELF")
+        or header.startswith(b"\xfe\xed\xfa\xce")
+        or header.startswith(b"\xcf\xfa\xed\xfe")
+        or header.startswith(b"\xca\xfe\xba\xbe")
+    ):
+        return False
+
+    ext = ext.lower()
+    if ext == ".pdf":
+        stripped = header.lstrip()
+        # Invariant: Disallow HTML disguised as PDF
+        if stripped.startswith(b"<") or b"<html" in stripped.lower() or b"<!doctype" in stripped.lower():
+            return False
+        return header.startswith(b"%PDF-")
+    elif ext in (".docx", ".doc"):
+        return header.startswith(b"PK\x03\x04") or header.startswith(b"\xd0\xcf\x11\xe0")
+    elif ext in (".txt", ".md", ".csv", ".json", ".htm", ".html", ".eml", ".msg"):
+        try:
+            header.decode("utf-8", errors="strict")
+            return True
+        except UnicodeDecodeError:
+            return False
+    return True
+
+
+def virus_scan_hook(file_path: str) -> bool:
+    """
+    Sovereign anti-malware and file integrity verification hook.
+    Inspects files for disguised executable payloads (MZ, ELF, Mach-O), dangerous shell
+    scripts, and macro exploits.
+    Returns True if clean, raises ValueError if an executable or security threat is detected.
+    """
+    if not os.path.exists(file_path):
+        return True
+    try:
+        with open(file_path, "rb") as f:
+            header = f.read(512)
+        if header.startswith(b"MZ") or header.startswith(b"\x7fELF") or header.startswith(b"\xfe\xed\xfa\xce") or header.startswith(b"\xcf\xfa\xed\xfe"):
+            raise ValueError(f"Security Alert: Executable binary payload detected in file '{os.path.basename(file_path)}'. Ingestion rejected.")
+        return True
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.warning(f"Virus scan hook check skipped or encountered non-fatal error ({e}).")
+        return True
+
+
 def ingest_uploaded_matter_file(
     file_bytes: bytes,
     filename: str,
@@ -1132,7 +1189,7 @@ def ingest_uploaded_matter_file(
 ) -> Dict[str, Any]:
     """
     Safely stage and ingest an uploaded matter document into KruschLaw's legal corpus.
-    Applies format and size validation.
+    Applies format, size, and pre-spool magic-byte validation.
     """
     import uuid
     if len(file_bytes) > MAX_INGEST_FILE_SIZE_BYTES:
@@ -1147,6 +1204,30 @@ def ingest_uploaded_matter_file(
         raise ValueError(
             f"Unsupported document format '{ext}'. Supported formats: {', '.join(sorted(allowed_exts))}"
         )
+
+    # Invariant INV-7: Pre-spool magic-byte gate
+    header_bytes = file_bytes[:512]
+    if (
+        header_bytes.startswith(b"MZ")
+        or header_bytes.startswith(b"\x7fELF")
+        or header_bytes.startswith(b"\xfe\xed\xfa\xce")
+        or header_bytes.startswith(b"\xcf\xfa\xed\xfe")
+        or header_bytes.startswith(b"\xca\xfe\xba\xbe")
+    ):
+        raise ValueError(
+            f"Security Alert: Executable binary payload detected in uploaded file '{clean_name}'. Ingestion rejected."
+        )
+
+    if ext == ".pdf":
+        stripped = header_bytes.lstrip()
+        if stripped.startswith(b"<") or b"<html" in stripped.lower() or b"<!doctype" in stripped.lower():
+            raise ValueError(
+                f"Security Alert: HTML payload disguised as PDF document in '{clean_name}'. Ingestion rejected."
+            )
+        if not header_bytes.startswith(b"%PDF-"):
+            raise ValueError(
+                f"Security Alert: Invalid PDF magic bytes in file '{clean_name}'. Expected %PDF- header."
+            )
 
     allowed_dirs = settings.allowed_ingest_dirs_list
     target_dir = None

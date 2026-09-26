@@ -644,8 +644,20 @@ def verify_proposition_pass_b(
     primary_sec = matched_law.get("section", "") if matched_law else ""
     claim_digits = set(re.findall(r'\b\d+(?:\.\d+)?%?\b', claim))
     sec_digits = set(re.findall(r'\b\d+(?:\.\d+)?%?\b', primary_sec))
-    substantive_claim_digits = claim_digits - sec_digits
     source_digits = set(re.findall(r'\b\d+(?:\.\d+)?%?\b', target_content))
+
+    WORD_TO_DIGIT = {
+        "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+        "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
+        "twenty-one": "21", "twenty-four": "24", "thirty": "30"
+    }
+    for word, digit in WORD_TO_DIGIT.items():
+        if re.search(rf'\b{word}\s+(?:months?|days?|hours?|years?)\b', claim, re.IGNORECASE):
+            claim_digits.add(digit)
+        if re.search(rf'\b{word}\s+(?:months?|days?|hours?|years?)\b', target_content, re.IGNORECASE):
+            source_digits.add(digit)
+
+    substantive_claim_digits = claim_digits - sec_digits
 
     has_numeric_contradiction = False
     if substantive_claim_digits and not (substantive_claim_digits & source_digits):
@@ -663,7 +675,7 @@ def verify_proposition_pass_b(
 
     # 2. Negation, Polar Inversion, and Duty Elimination Contradiction
     duty_negations = [
-        (r'\bwithout\s+(?:advance\s+)?notice\b', r'24\s+hours|twenty-four|written\s+notice|notice\s+in\s+writing|reasonable\s+notice', "requires advance written notice"),
+        (r'\bwithout\s+(?:any\s+)?(?:advance\s+|prior\s+)?notice\b', r'24\s+hours|twenty-four|written\s+notice|notice\s+in\s+writing|reasonable\s+notice', "requires advance written notice"),
         (r'\bat\s+any\s+hour\b', r'normal\s+business\s+hours|only\s+in\s+the\s+following|reasonable\s+notice', "restricted to normal business hours or statutory notice"),
         (r'\bwithout\s+stating\s+(?:any\s+)?cause\b', r'enumerated\s+Just\s+Cause|without\s+just\s+cause', "requires specific enumerated statutory just cause"),
         (r'\b(?:without\s+itemization|itemized\s+statements?\s+(?:are|is)\s+optional)\b', r'itemized\s+statement', "mandates itemized disposition within 21 days"),

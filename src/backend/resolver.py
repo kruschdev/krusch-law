@@ -297,13 +297,13 @@ def resolve_controlling_law(
         close_db = True
 
     try:
-        # Step 1: Query initial candidate nodes from database
+        # Step 1: Query initial candidate nodes from database (Topic/Title/Tags/Section)
         query = db.query(LawVector).filter(
             or_(
                 LawVector.topic.ilike(f"%{doctrine_or_topic}%"),
                 LawVector.title.ilike(f"%{doctrine_or_topic}%"),
                 LawVector.tags.ilike(f"%{doctrine_or_topic}%"),
-                LawVector.content.ilike(f"%{doctrine_or_topic}%")
+                LawVector.section.ilike(f"%{doctrine_or_topic}%")
             )
         )
 
@@ -327,11 +327,13 @@ def resolve_controlling_law(
 
         candidates = query.all()
         if not candidates:
-            # Fallback search across California state statutes
+            # Fallback search across California state statutes strictly by topic/title/tags/section (INV-4)
             candidates = db.query(LawVector).filter(
                 or_(
                     LawVector.topic.ilike(f"%{doctrine_or_topic}%"),
-                    LawVector.content.ilike(f"%{doctrine_or_topic}%")
+                    LawVector.title.ilike(f"%{doctrine_or_topic}%"),
+                    LawVector.tags.ilike(f"%{doctrine_or_topic}%"),
+                    LawVector.section.ilike(f"%{doctrine_or_topic}%")
                 )
             ).limit(10).all()
 
@@ -507,28 +509,6 @@ def resolve_controlling_law(
             # Check 4A: Preemption Edge (State law preempts Municipal Ordinance)
             preempted_by = current_node.preempted_by
             if preempted_by:
-                chain_step["action"] = "FOLLOW_PREEMPTION"
-                chain_step["preempted_by"] = preempted_by
-                precedence_chain.append(chain_step)
-
-                discarded_candidates.append(DiscardedCandidate(
-                    node_id=current_node.id,
-                    citation=current_node.section or "Unknown",
-                    title=current_node.title,
-                    reason=f"Municipal ordinance preempted by statewide statute {preempted_by}",
-                    category="PREEMPTED"
-                ))
-                hops.append(ResolutionHop(
-                    step=steps,
-                    hop_type="PREEMPTION",
-                    from_node=current_node.section,
-                    to_node=preempted_by,
-                    action="FOLLOW_PREEMPTION",
-                    decision="PREEMPTED",
-                    reason=f"{current_node.section} is preempted by statewide statute {preempted_by}",
-                    as_of_date=target_date.isoformat()
-                ))
-
                 # Find the preempting state statute in DB
                 clean_target = re.sub(r'[^0-9\.]', '', preempted_by)
                 preempting_node = None
@@ -551,12 +531,50 @@ def resolve_controlling_law(
                             ).first()
                             break
 
-                if preempting_node and preempting_node.id not in visited:
-                    current_node = preempting_node
-                    continue
-                else:
-                    # If preempting node not found as explicit entity, record in chain and break
-                    break
+                # If preempting node found, verify it is effective as of target_date!
+                if preempting_node:
+                    p_eff = to_utc_date(preempting_node.effective_from or preempting_node.effective_date)
+                    if p_eff > target_date:
+                        hops.append(ResolutionHop(
+                            step=steps,
+                            hop_type="PREEMPTION",
+                            from_node=current_node.section,
+                            to_node=preempted_by,
+                            action="FUTURE_PREEMPTION_NOT_YET_IN_FORCE",
+                            decision="KEPT",
+                            reason=f"Preempting statute {preempted_by} effective {p_eff.isoformat()} is after inquiry date {target_date.isoformat()}; retaining current authority",
+                            as_of_date=target_date.isoformat()
+                        ))
+                        preempting_node = None
+
+                if preempting_node:
+                    chain_step["action"] = "FOLLOW_PREEMPTION"
+                    chain_step["preempted_by"] = preempted_by
+                    precedence_chain.append(chain_step)
+
+                    discarded_candidates.append(DiscardedCandidate(
+                        node_id=current_node.id,
+                        citation=current_node.section or "Unknown",
+                        title=current_node.title,
+                        reason=f"Municipal ordinance or prior statute preempted by statewide statute {preempted_by}",
+                        category="PREEMPTED"
+                    ))
+                    hops.append(ResolutionHop(
+                        step=steps,
+                        hop_type="PREEMPTION",
+                        from_node=current_node.section,
+                        to_node=preempted_by,
+                        action="FOLLOW_PREEMPTION",
+                        decision="PREEMPTED",
+                        reason=f"{current_node.section} is preempted by statewide statute {preempted_by}",
+                        as_of_date=target_date.isoformat()
+                    ))
+
+                    if preempting_node.id not in visited:
+                        current_node = preempting_node
+                        continue
+                    else:
+                        break
 
             # Check 4B: Amendment Edge (Older node -> Newer enacted amendment)
             next_amendment = None
@@ -611,11 +629,27 @@ def resolve_controlling_law(
             # we need the prior historical version for this incident date!
             node_eff = to_utc_date(current_node.effective_from or current_node.effective_date)
             if node_eff > target_date:
-                prior_node = db.query(LawVector).filter(
+                clean_sec = re.sub(r'[\(\[\{].*?[\)\]\}]', '', current_node.section or '').strip()
+                prior_candidates = db.query(LawVector).filter(
                     LawVector.jurisdiction == current_node.jurisdiction,
-                    LawVector.section == current_node.section,
+                    or_(
+                        LawVector.section == current_node.section,
+                        LawVector.section.ilike(f"{clean_sec}%"),
+                        LawVector.preempted_by.ilike(f"%{clean_sec}%")
+                    ),
                     LawVector.id != current_node.id
-                ).first()
+                ).order_by(LawVector.effective_date.desc()).all()
+
+                prior_node = None
+                for cand in prior_candidates:
+                    cand_eff = to_utc_date(cand.effective_from or cand.effective_date)
+                    cand_to = to_utc_date(cand.effective_to) if cand.effective_to else None
+                    if cand_eff <= target_date:
+                        if cand_to is None or cand_to >= target_date:
+                            prior_node = cand
+                            break
+                if not prior_node and prior_candidates:
+                    prior_node = prior_candidates[-1]
                 if prior_node and prior_node.id not in visited:
                     chain_step["action"] = "HISTORICAL_LOOKBACK"
                     chain_step["prior_node_id"] = prior_node.id
