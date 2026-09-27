@@ -980,7 +980,7 @@ def ingest_matter_document(
 
     # Bridge to KruschNexus parser and chunking engine
     try:
-        from krusch_nexus.parsers import parse_document
+        import krusch_nexus
         from krusch_nexus.chunking import chunk_document_pages
     except ImportError:
         candidate_paths = [
@@ -994,10 +994,10 @@ def ingest_matter_document(
             if p and os.path.isdir(p) and p not in sys.path:
                 sys.path.insert(0, p)
                 break
-        from krusch_nexus.parsers import parse_document
+        import krusch_nexus
         from krusch_nexus.chunking import chunk_document_pages
 
-    parsed_doc = parse_document(abs_path, filename)
+    parsed_doc = krusch_nexus.parse_file(abs_path)
     if not parsed_doc or not parsed_doc.pages:
         raise ValueError(f"No text extracted from document '{filename}'")
 
