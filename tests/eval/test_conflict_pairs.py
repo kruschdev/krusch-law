@@ -373,6 +373,87 @@ class TestConflictPairsEvaluation(KruschLawTestCase):
         self.assertEqual(c["severity"], "CRITICAL")
         self.assertIn("1942.5", c["section"])
 
+    def test_10_floor_vs_ceiling_preemption_oakland_rap_vs_ab1482(self):
+        """
+        Conflict Pair 10: Floor vs. Ceiling Preemption Doctrine.
+        AB 1482 (Cal. Civ. Code § 1946.2 / § 1947.12) sets a regulatory floor statewide,
+        so more protective local municipal ordinances (e.g. Oakland RAP OMC § 8.22)
+        survive preemption under the HARMONIZED_FLOOR_RULE.
+        Conversely, Costa-Hawkins (Cal. Civ. Code § 1954.52) operates as a statewide ceiling,
+        preempting local rent caps on single-family homes.
+        """
+        from src.backend.resolver import resolve_controlling_law
+
+        oakland_node = LawVector(
+            section="OMC § 8.22.070",
+            title="Oakland Rent Adjustment Program Annual Cap",
+            jurisdiction="Oakland Municipal Code",
+            city="Oakland",
+            authority_class="municipal_ordinance",
+            preempted_by="Cal. Civ. Code § 1947.12 (AB 1482)",
+            topic="Rent Cap",
+            content="Under OMC § 8.22.070, annual rent increases are capped at the lower of 60% of CPI or 3% maximum."
+        )
+        ab1482_node = LawVector(
+            section="Cal. Civ. Code § 1947.12",
+            title="Tenant Protection Act of 2019 Statewide Rent Cap (AB 1482)",
+            jurisdiction="California Civil Code",
+            authority_class="controlling_statute",
+            topic="Rent Cap",
+            content="Statewide annual rent increase cap of 5% plus regional CPI up to 10% maximum."
+        )
+        self.db.add(oakland_node)
+        self.db.add(ab1482_node)
+        self.db.commit()
+
+        resolution = resolve_controlling_law(
+            doctrine_or_topic="Rent Cap",
+            city="Oakland",
+            as_of_date="2025-01-15",
+            db=self.db
+        )
+        self.assertIsNotNone(resolution.controlling_node)
+        # Because AB 1482 is a floor doctrine, the municipal ordinance survives
+        floor_hops = [h for h in resolution.hops if h.action == "HARMONIZED_FLOOR_RULE"]
+        self.assertGreaterEqual(len(floor_hops), 1)
+        self.assertEqual(floor_hops[0].decision, "KEPT")
+        self.assertIn("regulatory floor", floor_hops[0].reason)
+
+    def test_11_statutory_word_numeral_extraction_and_notice_conflicts(self):
+        """
+        Conflict Pair 11: Word-to-digit normalization in statutory slots and contract conflict detection.
+        Ensures word numerals ('twenty-one', 'twenty-four', 'three court days', 'two months')
+        are correctly normalized into numeric values and audited against legal requirements.
+        """
+        from src.backend.resolver import extract_statutory_slots, detect_legal_conflicts
+
+        text = (
+            "Tenant was provided twenty-one calendar days to vacate. "
+            "Landlord must provide at least twenty-four hours written notice of entry. "
+            "Delinquent rent must be cured within three court days. "
+            "Security deposit is capped at two months rent."
+        )
+        slots = extract_statutory_slots(text)
+
+        self.assertIn(21, slots.get("statutory_notice_days", []))
+        self.assertEqual(slots.get("entry_notice_hours"), 24)
+        self.assertEqual(slots.get("cure_notice_court_days"), 3)
+        self.assertEqual(slots.get("deposit_cap_months"), 2.0)
+
+        # Conflict test: Lease granting 30 days for deposit return against Cal. Civ. Code § 1950.5(g)(1)
+        authorities = [
+            {
+                "section": "Cal. Civ. Code § 1950.5(g)(1)",
+                "content": "No later than twenty-one calendar days after the tenant has vacated the premises, the landlord shall furnish an itemized statement."
+            }
+        ]
+        matter_facts = {"deposit_return_days": 30.0}
+        conflicts = detect_legal_conflicts(authorities, matter_facts=matter_facts, as_of_date="2025-01-15")
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(conflicts[0]["conflict_type"], "statutory_term_violation")
+        self.assertIn("1950.5", conflicts[0]["section"])
+
 
 if __name__ == "__main__":
     unittest.main()
+

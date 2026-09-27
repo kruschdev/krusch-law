@@ -211,6 +211,97 @@ class TestDefenseChecklistAndLetterIntegration(KruschLawTestCase):
         self.assertIn("Cal. Civ. Code § 1950.5(g)", txt_let)
         self.assertIn("Granberry v. Islay Investments", txt_let)
 
+    def test_07_landlord_entry_objection_letter_and_checklist(self):
+        case = Case(
+            title="Unlawful Landlord Entry Dispute",
+            matter_number="MAT-ENTRY-001",
+            client_name="Sarah Chen",
+            facts="Landlord entered apartment unannounced on Saturday evening without notice, inspecting private belongings and threatening eviction."
+        )
+        self.db.add(case)
+        self.db.commit()
+        self.db.refresh(case)
+
+        report = generate_defense_checklist(case, as_of_date="2025-02-01", db=self.db)
+        issues = [d.issue for d in report.defenses]
+        self.assertTrue(any("Unlawful Landlord Entry" in iss for iss in issues))
+
+        entry_defense = next(d for d in report.defenses if "Unlawful Landlord Entry" in d.issue)
+        self.assertIn("Cal. Civ. Code § 1954", entry_defense.controlling_citation)
+        self.assertIn("Cal. Civ. Code § 1940.2", entry_defense.controlling_citation)
+        self.assertIn("$2,000", entry_defense.statutory_remedy)
+
+        # Verify pinpoint citations on all elements
+        for el in entry_defense.elements:
+            self.assertIsNotNone(el.pinpoint_citation)
+            self.assertTrue(
+                "1954" in el.pinpoint_citation or "1940.2" in el.pinpoint_citation,
+                f"Element pinpoint citation must cite relevant statute: {el.pinpoint_citation}"
+            )
+
+        # Assemble statutory objection letter
+        res = assemble_statutory_letter(
+            case=case,
+            letter_type="landlord_entry_objection",
+            recipient_name="Skyline Management",
+            recipient_address="500 Broadway, Oakland, CA 94607",
+            sender_name="Sarah Chen",
+            as_of_date="2025-02-01",
+            db=self.db
+        )
+        self.assertEqual(res.letter_type, "landlord_entry_objection")
+        self.assertIn("Cal. Civ. Code § 1954", res.mandatory_citations)
+        self.assertIn("Cal. Civ. Code § 1940.2", res.mandatory_citations)
+        self.assertIn("formally object to your recent attempt or notice to enter", res.letter_body.lower())
+        self.assertIn("twenty-four (24) hours", res.letter_body.lower())
+        self.assertIn("normal business hours", res.letter_body.lower())
+        self.assertIn("$2,000", res.letter_body)
+
+    def test_08_encrypted_evidence_defense_spotting_and_letter(self):
+        from src.backend.crypto import EvidenceEncryptor
+        case = Case(
+            title="Encrypted Lockout Matter",
+            matter_number="MAT-ENC-001",
+            client_name="David Kim",
+            facts="General dispute regarding residential tenancy."
+        )
+        self.db.add(case)
+        self.db.commit()
+        self.db.refresh(case)
+
+        # Encrypt evidence containing decisive lockout and utility shutoff facts
+        raw_evidence = "Landlord illegally shut off all power, gas, and running water on Friday night, then locked me out."
+        enc_content = EvidenceEncryptor.encrypt_text(raw_evidence)
+        enc_summary = EvidenceEncryptor.encrypt_text("Severe lockout and utility cutoff incident")
+
+        evidence = MatterEvidence(
+            matter_id=case.id,
+            filename="incident_log.txt",
+            doc_type="evidence",
+            content=enc_content,
+            summary=enc_summary,
+            page_number=1,
+            printed_page="Page 1",
+            bbox=json.dumps({"x0": 50, "y0": 100, "x1": 550, "y1": 250}),
+            char_start=0,
+            char_end=len(raw_evidence)
+        )
+        self.db.add(evidence)
+        self.db.commit()
+
+        # Generate checklist: must decrypt evidence and spot lockout defense!
+        report = generate_defense_checklist(case, as_of_date="2025-02-01", db=self.db)
+        issues = [d.issue for d in report.defenses]
+        self.assertTrue(
+            any("Self-Help" in iss or "Lockout" in iss for iss in issues),
+            f"Decrypted evidence must trigger lockout defense spotting, got issues: {issues}"
+        )
+
+        lockout_defense = next(d for d in report.defenses if "Self-Help" in d.issue or "Lockout" in d.issue)
+        self.assertIn("789.3", lockout_defense.controlling_citation)
+        self.assertTrue(any(el.verified for el in lockout_defense.elements))
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -1049,6 +1049,12 @@ def ingest_matter_document(
                 summary_text = tag_info.get("summary")
                 doctrine_name = tag_info.get("doctrine", "General Matter Facts")
 
+                bbox_json = json.dumps(ch.bbox) if getattr(ch, "bbox", None) else None
+                extra_json = json.dumps(ch.extra) if getattr(ch, "extra", None) else None
+                printed_page_val = getattr(ch, "printed_page", None)
+                char_start_val = getattr(ch, "char_start", None)
+                char_end_val = getattr(ch, "char_end", None)
+
                 batch_chunks.append({
                     "jurisdiction": "Matter Corpus",
                     "state": "Local",
@@ -1063,6 +1069,11 @@ def ingest_matter_document(
                     "source_hash": ch.source_hash,
                     "chunk_index": ch.chunk_index,
                     "page_number": ch.page_number,
+                    "printed_page": printed_page_val,
+                    "bbox": bbox_json,
+                    "char_start": char_start_val,
+                    "char_end": char_end_val,
+                    "extra_metadata": extra_json,
                     "tags": tags_json,
                     "summary": summary_text,
                     "doctrine": doctrine_name,
@@ -1076,7 +1087,7 @@ def ingest_matter_document(
             embeddings = get_embeddings_batch(texts)
             for item_dict, emb in zip(batch_chunks, embeddings):
                 item_dict["embedding"] = emb
-                page_num = item_dict.pop("page_number", None)
+                page_num = item_dict.get("page_number")
                 doctrine_val = item_dict.pop("doctrine", None)
                 tags_val = item_dict.get("tags")
                 summary_val = item_dict.get("summary")
@@ -1085,18 +1096,23 @@ def ingest_matter_document(
                     from .crypto import EvidenceEncryptor
                     enc_content = EvidenceEncryptor.encrypt_text(item_dict["content"])
                     enc_summary = EvidenceEncryptor.encrypt_text(summary_val) if summary_val else None
-                    # Also populate isolated MatterEvidence table with legal semantic understanding
+                    # Also populate isolated MatterEvidence table with physical citation spine
                     db.add(MatterEvidence(
                         matter_id=matter_id,
                         filename=filename,
                         doc_type=doc_type,
                         page_number=page_num,
+                        printed_page=item_dict.get("printed_page"),
                         section_locator=item_dict.get("section"),
                         chunk_index=item_dict["chunk_index"],
                         content=enc_content,
                         tags=tags_val,
                         summary=enc_summary,
                         doctrine=doctrine_val,
+                        bbox=item_dict.get("bbox"),
+                        char_start=item_dict.get("char_start"),
+                        char_end=item_dict.get("char_end"),
+                        extra_metadata=item_dict.get("extra_metadata"),
                         embedding=emb
                     ))
                 inserted += 1

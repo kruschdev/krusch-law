@@ -156,6 +156,14 @@ class LawVector(Base):
     summary = Column(Text, nullable=True)                           # 1-sentence legal micro-digest
     embedding = Column(Vector(settings.EMBEDDING_DIM), nullable=True)
 
+    # --- Physical Citation Spine & Layout Fidelity ---
+    page_number = Column(Integer, nullable=True, index=True)        # Physical PDF/document page number (1-indexed)
+    printed_page = Column(String(50), nullable=True)                # Printed folio string (e.g., "Page 4", "Exhibit B")
+    bbox = Column(Text, nullable=True)                              # JSON list [left, top, width, height] in 72-DPI points
+    char_start = Column(Integer, nullable=True)                     # Exact byte/char start offset in source document
+    char_end = Column(Integer, nullable=True)                       # Exact byte/char end offset in source document
+    extra_metadata = Column(Text, nullable=True)                    # JSON dictionary for structured layout data (table cells, redlines, etc.)
+
     # --- Hierarchy & Legal Graph Structure ---
     parent_id = Column(Integer, nullable=True, index=True)          # Foreign key or self-referential ID
     parent_section = Column(String(100), nullable=True, index=True) # e.g. "Chapter 8.22" or "Section 8.22.030"
@@ -289,12 +297,17 @@ class MatterEvidence(Base):
     filename = Column(String(255), nullable=False)
     doc_type = Column(String(50), default="matter_facts", nullable=False) # matter_facts, evidence, lease, notice
     page_number = Column(Integer, nullable=True)
+    printed_page = Column(String(50), nullable=True)                # Printed folio string (e.g. "Page 3", "Exhibit A")
     section_locator = Column(String(100), nullable=True)
     chunk_index = Column(Integer, default=0, nullable=False)
     content = Column(Text, nullable=False)
     tags = Column(Text, nullable=True)                              # JSON list of semantic tags (e.g. ["security-deposit", "ab-12"])
     summary = Column(Text, nullable=True)                           # 1-sentence legal micro-digest
     doctrine = Column(String(100), nullable=True, index=True)       # Legal doctrine classification (e.g. "Security Deposits")
+    bbox = Column(Text, nullable=True)                              # JSON list [left, top, width, height] in 72-DPI points
+    char_start = Column(Integer, nullable=True)                     # Exact byte/char start offset in source document
+    char_end = Column(Integer, nullable=True)                       # Exact byte/char end offset in source document
+    extra_metadata = Column(Text, nullable=True)                    # JSON dictionary for structured layout data (table cells, redlines, etc.)
     embedding = Column(Vector(settings.EMBEDDING_DIM), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

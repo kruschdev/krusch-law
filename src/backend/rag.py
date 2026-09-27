@@ -1510,7 +1510,8 @@ def retrieve_laws(
                        chunk_index, embedding, parent_section, hierarchy_level, authority_class,
                        instrument_type, status, effective_from, effective_to, preempts, implements_ref,
                        defines_terms, exception_to, applies_if, definitions_ref, exceptions_ref,
-                       repealed, preempted_by, effective_date, source_url
+                       repealed, preempted_by, effective_date, source_url,
+                       page_number, printed_page, bbox, char_start, char_end, extra_metadata
                 FROM laws_vectors
                 WHERE {conditions_str}
             """)
@@ -1572,7 +1573,13 @@ def retrieve_laws(
                     "repealed": bool(getattr(row, "repealed", False)),
                     "preempted_by": getattr(row, "preempted_by", None),
                     "effective_date": str(row.effective_date) if row.effective_date else None,
-                    "source_url": getattr(row, "source_url", None)
+                    "source_url": getattr(row, "source_url", None),
+                    "page_number": getattr(row, "page_number", None),
+                    "printed_page": getattr(row, "printed_page", None),
+                    "bbox": json.loads(row.bbox) if (getattr(row, "bbox", None) and isinstance(row.bbox, str)) else getattr(row, "bbox", None),
+                    "char_start": getattr(row, "char_start", None),
+                    "char_end": getattr(row, "char_end", None),
+                    "extra_metadata": json.loads(row.extra_metadata) if (getattr(row, "extra_metadata", None) and isinstance(row.extra_metadata, str)) else getattr(row, "extra_metadata", None)
                 })
 
             results.sort(key=lambda x: x["similarity"], reverse=True)
@@ -1602,7 +1609,7 @@ def retrieve_laws(
                            l.parent_section, l.hierarchy_level, l.authority_class, l.instrument_type, l.status,
                            l.effective_from, l.effective_to, l.preempts, l.implements_ref, l.defines_terms,
                            l.exception_to, l.applies_if, l.definitions_ref, l.exceptions_ref, l.repealed,
-                           l.preempted_by, l.effective_date, l.source_url,
+                           l.preempted_by, l.effective_date, l.source_url, l.page_number, l.printed_page, l.bbox, l.char_start, l.char_end, l.extra_metadata,
                            COALESCE(1.0 / (60 + v.v_rank), 0.0) + COALESCE(1.0 / (60 + lex.l_rank), 0.0) AS hybrid_score,
                            COALESCE(v.cos_sim, 0.0) as similarity
                     FROM laws_vectors l
@@ -1618,7 +1625,7 @@ def retrieve_laws(
                            parent_section, hierarchy_level, authority_class, instrument_type, status,
                            effective_from, effective_to, preempts, implements_ref, defines_terms,
                            exception_to, applies_if, definitions_ref, exceptions_ref, repealed,
-                           preempted_by, effective_date, source_url,
+                           preempted_by, effective_date, source_url, page_number, printed_page, bbox, char_start, char_end, l.extra_metadata,
                            (1 - (embedding <=> CAST(:vec AS vector))) AS similarity
                     FROM laws_vectors
                     WHERE {conditions_str} AND embedding IS NOT NULL
@@ -1631,7 +1638,7 @@ def retrieve_laws(
                            parent_section, hierarchy_level, authority_class, instrument_type, status,
                            effective_from, effective_to, preempts, implements_ref, defines_terms,
                            exception_to, applies_if, definitions_ref, exceptions_ref, repealed,
-                           preempted_by, effective_date, source_url,
+                           preempted_by, effective_date, source_url, page_number, printed_page, bbox, char_start, char_end, l.extra_metadata,
                            ts_rank_cd(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')), plainto_tsquery('english', :text_q)) AS similarity
                     FROM laws_vectors
                     WHERE {conditions_str} AND to_tsvector('english', coalesce(title, '') || ' ' || coalesce(section, '') || ' ' || coalesce(content, '')) @@ plainto_tsquery('english', :text_q)
@@ -1673,7 +1680,13 @@ def retrieve_laws(
                     "repealed": bool(getattr(row, "repealed", False)),
                     "preempted_by": getattr(row, "preempted_by", None),
                     "effective_date": str(getattr(row, "effective_date", "")) if getattr(row, "effective_date", None) else None,
-                    "source_url": getattr(row, "source_url", None)
+                    "source_url": getattr(row, "source_url", None),
+                    "page_number": getattr(row, "page_number", None),
+                    "printed_page": getattr(row, "printed_page", None),
+                    "bbox": json.loads(row.bbox) if (getattr(row, "bbox", None) and isinstance(row.bbox, str)) else getattr(row, "bbox", None),
+                    "char_start": getattr(row, "char_start", None),
+                    "char_end": getattr(row, "char_end", None),
+                    "extra_metadata": json.loads(row.extra_metadata) if (getattr(row, "extra_metadata", None) and isinstance(row.extra_metadata, str)) else getattr(row, "extra_metadata", None)
                 })
 
         # Apply Deterministic Jurisdiction Machine (temporal, fact-pattern, preemption, child hydration)
@@ -1916,18 +1929,38 @@ def retrieve_matter_evidence(
             from .crypto import EvidenceEncryptor
             decrypted_content = EvidenceEncryptor.decrypt_text(r.content)
             decrypted_summary = EvidenceEncryptor.decrypt_text(r.summary) if r.summary else None
+
+            bbox_list = None
+            if getattr(r, "bbox", None):
+                try:
+                    bbox_list = json.loads(r.bbox) if isinstance(r.bbox, str) else list(r.bbox)
+                except Exception:
+                    bbox_list = None
+
+            extra_dict = None
+            if getattr(r, "extra_metadata", None):
+                try:
+                    extra_dict = json.loads(r.extra_metadata) if isinstance(r.extra_metadata, str) else dict(r.extra_metadata)
+                except Exception:
+                    extra_dict = None
+
             return {
                 "id": r.id,
                 "matter_id": r.matter_id,
                 "filename": r.filename,
                 "doc_type": r.doc_type,
                 "page_number": r.page_number,
+                "printed_page": getattr(r, "printed_page", None),
                 "section_locator": r.section_locator,
                 "chunk_index": r.chunk_index,
                 "content": decrypted_content,
                 "tags": tags_list,
                 "summary": decrypted_summary,
                 "doctrine": r.doctrine,
+                "bbox": bbox_list,
+                "char_start": getattr(r, "char_start", None),
+                "char_end": getattr(r, "char_end", None),
+                "extra_metadata": extra_dict,
                 "similarity": round(float(score_val), 4),
                 "created_at": r.created_at.isoformat() if r.created_at else None
             }

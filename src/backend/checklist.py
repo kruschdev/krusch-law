@@ -25,6 +25,7 @@ class ChecklistElement(BaseModel):
     check_item: str
     verified: bool = False
     evidence_found: Optional[str] = None
+    pinpoint_citation: Optional[str] = None
     advisory: str
 
 
@@ -67,8 +68,8 @@ def generate_defense_checklist(
     db: Optional[Session] = None
 ) -> DefenseChecklistReport:
     """
-    Generate an actionable legal defense checklist with explicit statutory deadlines
-    and evidentiary audits from matter facts.
+    Generate an actionable legal defense checklist with explicit statutory deadlines,
+    pinpoint citation coordinates, and decrypted evidentiary audits from matter facts.
     """
     target_date = to_utc_date(as_of_date) if as_of_date else (
         case.created_at.date() if case.created_at else datetime.now(timezone.utc).date()
@@ -77,11 +78,20 @@ def generate_defense_checklist(
     facts = case.facts or ""
     _, spotted_issues = expand_legal_query(facts)
 
-    # Fetch any evidence items linked to this matter
+    # Fetch and decrypt any evidence items linked to this matter
     evidence_text = ""
     if db and case.id:
+        from .crypto import EvidenceEncryptor
         docs = db.query(MatterEvidence).filter(MatterEvidence.matter_id == case.id).all()
-        evidence_text = " ".join([d.content or "" for d in docs]).lower()
+        decrypted_parts = []
+        for d in docs:
+            if d.content:
+                try:
+                    dec = EvidenceEncryptor.decrypt_text(d.content)
+                    decrypted_parts.append(dec)
+                except Exception:
+                    decrypted_parts.append(d.content)
+        evidence_text = " ".join(decrypted_parts).lower()
 
     facts_lower = (facts + " " + evidence_text).lower()
 
@@ -94,19 +104,22 @@ def generate_defense_checklist(
                 check_item="Written itemized statement delivered within 21 calendar days of vacating premises",
                 verified="21" in facts_lower and "itemiz" in facts_lower,
                 evidence_found="Mention of 21 days or itemized statement in file" if ("21" in facts_lower and "itemiz" in facts_lower) else None,
-                advisory="Landlord forfeits right to retain any portion of security deposit if not provided within 21 days (Granberry v. Islay Investments)."
+                advisory="Landlord forfeits right to retain any portion of security deposit if not provided within 21 days (Granberry v. Islay Investments).",
+                pinpoint_citation="Cal. Civ. Code § 1950.5(g)(1)"
             ),
             ChecklistElement(
                 check_item="Deductions limited strictly to unpaid rent, cleaning to return unit to pre-tenancy condition, and repairs beyond normal wear and tear",
                 verified="wear and tear" in facts_lower or "cleaning" in facts_lower,
                 evidence_found="Deductions discussed in record" if ("deduct" in facts_lower or "cleaning" in facts_lower) else None,
-                advisory="Charges for pre-existing conditions or ordinary painting/wear violate Cal. Civ. Code § 1950.5(e)."
+                advisory="Charges for pre-existing conditions or ordinary painting/wear violate Cal. Civ. Code § 1950.5(e).",
+                pinpoint_citation="Cal. Civ. Code § 1950.5(e)"
             ),
             ChecklistElement(
                 check_item="Copies of third-party invoices or receipts attached for any repair/cleaning deductions exceeding $125.00",
                 verified="receipt" in facts_lower or "invoice" in facts_lower,
                 evidence_found="Invoices/receipts referenced" if ("receipt" in facts_lower or "invoice" in facts_lower) else None,
-                advisory="Failure to attach invoices/receipts within 14 days of written demand triggers statutory bad-faith presumption."
+                advisory="Failure to attach invoices/receipts within 14 days of written demand triggers statutory bad-faith presumption.",
+                pinpoint_citation="Cal. Civ. Code § 1950.5(g)(2)"
             )
         ]
 
@@ -147,25 +160,29 @@ def generate_defense_checklist(
                 check_item="Effective weatherproofing and weather protection of roof and exterior walls",
                 verified="roof" in facts_lower or "leak" in facts_lower or "window" in facts_lower,
                 evidence_found="Leak / weatherproofing defects referenced" if ("leak" in facts_lower) else None,
-                advisory="Water intrusion constitutes per se untenantable dwelling under § 1941.1(a)(1)."
+                advisory="Water intrusion constitutes per se untenantable dwelling under § 1941.1(a)(1).",
+                pinpoint_citation="Cal. Civ. Code § 1941.1(a)(1)"
             ),
             ChecklistElement(
                 check_item="Plumbing and gas facilities maintained in good working order",
                 verified="plumbing" in facts_lower or "gas" in facts_lower or "hot water" in facts_lower,
                 evidence_found="Plumbing/gas defects referenced" if ("plumbing" in facts_lower or "hot water" in facts_lower) else None,
-                advisory="Lack of hot running water violates § 1941.1(a)(3) and Health & Safety Code § 17920.3."
+                advisory="Lack of hot running water violates § 1941.1(a)(3) and Health & Safety Code § 17920.3.",
+                pinpoint_citation="Cal. Civ. Code § 1941.1(a)(3)"
             ),
             ChecklistElement(
                 check_item="Heating facilities conforming with applicable law in good working order",
                 verified="heat" in facts_lower or "heater" in facts_lower,
                 evidence_found="Heating failure referenced" if ("heat" in facts_lower) else None,
-                advisory="Failure to maintain heating capable of 70°F constitutes severe habitability breach."
+                advisory="Failure to maintain heating capable of 70°F constitutes severe habitability breach.",
+                pinpoint_citation="Cal. Civ. Code § 1941.1(a)(4)"
             ),
             ChecklistElement(
                 check_item="Clean and sanitary building free from vermin, rodents, and mold",
                 verified="mold" in facts_lower or "roach" in facts_lower or "mice" in facts_lower,
                 evidence_found="Infestation or mold referenced" if ("mold" in facts_lower or "roach" in facts_lower) else None,
-                advisory="Landlord must remediate health-threatening biological hazards promptly upon notice."
+                advisory="Landlord must remediate health-threatening biological hazards promptly upon notice.",
+                pinpoint_citation="Cal. Civ. Code § 1941.1(a)(5)"
             )
         ]
 
@@ -193,19 +210,22 @@ def generate_defense_checklist(
                 check_item="Tenant exercised lawful tenant rights (complaint to landlord, code enforcement inspection, tenant union organizing)",
                 verified="complain" in facts_lower or "reported" in facts_lower or "inspector" in facts_lower,
                 evidence_found="Exercise of rights evidenced" if ("complain" in facts_lower or "reported" in facts_lower) else None,
-                advisory="Protected actions include reporting housing deficiencies to public agency under § 1942.5(a)."
+                advisory="Protected actions include reporting housing deficiencies to public agency under § 1942.5(a).",
+                pinpoint_citation="Cal. Civ. Code § 1942.5(a)"
             ),
             ChecklistElement(
                 check_item="Adverse landlord action occurred within 180 calendar days of protected activity",
                 verified=True,
                 evidence_found="Notice served following complaint",
-                advisory="Rebuttable presumption of retaliation applies if notice served within 180 days (Civ. Code § 1942.5(a))."
+                advisory="Rebuttable presumption of retaliation applies if notice served within 180 days (Civ. Code § 1942.5(a)).",
+                pinpoint_citation="Cal. Civ. Code § 1942.5(a)-(c)"
             ),
             ChecklistElement(
                 check_item="Tenant is not in default as to payment of rent",
                 verified="unpaid" not in facts_lower and "behind on rent" not in facts_lower,
                 evidence_found="Rent up to date" if ("unpaid" not in facts_lower) else None,
-                advisory="Tenant must be current on rent to assert § 1942.5 affirmative defense."
+                advisory="Tenant must be current on rent to assert § 1942.5 affirmative defense.",
+                pinpoint_citation="Cal. Civ. Code § 1942.5(g)"
             )
         ]
 
@@ -230,19 +250,22 @@ def generate_defense_checklist(
                 check_item="Landlord intended to terminate occupancy without valid court judgment and writ of possession",
                 verified="lock" in facts_lower or "shut off" in facts_lower,
                 evidence_found="Unilateral action without writ of possession",
-                advisory="California law strictly forbids self-help evictions under any circumstance."
+                advisory="California law strictly forbids self-help evictions under any circumstance.",
+                pinpoint_citation="Cal. Civ. Code § 789.3(a)"
             ),
             ChecklistElement(
                 check_item="Interruption or termination of utility services (water, heat, light, electricity, gas, telephone)",
                 verified="shut off" in facts_lower or "cut" in facts_lower or "gas" in facts_lower,
                 evidence_found="Utility cutoff documented" if ("shut off" in facts_lower or "gas" in facts_lower) else None,
-                advisory="Civ. Code § 789.3(a) imposes strict liability for intentional utility shutoffs."
+                advisory="Civ. Code § 789.3(a) imposes strict liability for intentional utility shutoffs.",
+                pinpoint_citation="Cal. Civ. Code § 789.3(a)"
             ),
             ChecklistElement(
                 check_item="Changing locks or removing outside doors/windows to prevent access",
                 verified="lock" in facts_lower or "deadbolt" in facts_lower or "door" in facts_lower,
                 evidence_found="Lock change or entry barrier documented" if ("lock" in facts_lower) else None,
-                advisory="Civ. Code § 789.3(b)(1) bars unauthorized lockouts."
+                advisory="Civ. Code § 789.3(b)(1) bars unauthorized lockouts.",
+                pinpoint_citation="Cal. Civ. Code § 789.3(b)(1)"
             )
         ]
 
@@ -267,25 +290,29 @@ def generate_defense_checklist(
                 check_item="Notice states the EXACT amount of delinquent base rent owed, completely excluding late fees, utility surcharges, or interest",
                 verified="late fee" in facts_lower,
                 evidence_found="Notice contains extraneous fees" if ("late fee" in facts_lower) else None,
-                advisory="Demanding an amount greater than actual rent owed makes a 3-day notice fatal and defective."
+                advisory="Demanding an amount greater than actual rent owed makes a 3-day notice fatal and defective.",
+                pinpoint_citation="Cal. Code Civ. Proc. § 1161(2)"
             ),
             ChecklistElement(
                 check_item="Notice provides landlord's full name, telephone number, and payment address or electronic banking details",
                 verified=False,
                 evidence_found=None,
-                advisory="Must state weekdays and hours when personal payment may be made (CCP § 1161(2))."
+                advisory="Must state weekdays and hours when personal payment may be made (CCP § 1161(2)).",
+                pinpoint_citation="Cal. Code Civ. Proc. § 1161(2)"
             ),
             ChecklistElement(
                 check_item="Tenant afforded full 3 business/court days excluding weekends and judicial holidays",
                 verified=False,
                 evidence_found=None,
-                advisory="CCP § 12a excludes Saturdays, Sundays, and legal court holidays from the 3-day computation."
+                advisory="CCP § 12a excludes Saturdays, Sundays, and legal court holidays from the 3-day computation.",
+                pinpoint_citation="Cal. Code Civ. Proc. § 12a"
             ),
             ChecklistElement(
                 check_item="Oakland Municipal Code: Copy of notice and proof of service filed with Oakland Rent Board within 10 calendar days",
                 verified=False,
                 evidence_found=None,
-                advisory="OMC § 8.22.360(F) mandates Rent Board filing. Failure to file is a complete jurisdictional defense to an unlawful detainer."
+                advisory="OMC § 8.22.360(F) mandates Rent Board filing. Failure to file is a complete jurisdictional defense to an unlawful detainer.",
+                pinpoint_citation="Oakland Municipal Code § 8.22.360(F)"
             )
         ]
 
@@ -300,6 +327,53 @@ def generate_defense_checklist(
                 "Complete physical copy of the 3-day notice with all attached proofs of service",
                 "Lease agreement showing base rent schedule",
                 "Bank ledger / rent receipts proving rent payments or disputed late fee amounts"
+            ]
+        ))
+
+    # 6. Landlord Unlawful Entry & Tenant Harassment (Cal. Civ. Code § 1954 & § 1940.2)
+    if any(w in facts_lower for w in ["entry", "entered", "inspect", "inspection", "harass", "unannounced", "show unit", "trespass"]):
+        entry_elements = [
+            ChecklistElement(
+                check_item="Landlord provided written notice of intent to enter at least 24 hours prior to proposed entry",
+                verified="24 hour" in facts_lower or "notice" in facts_lower,
+                evidence_found="Written notice timeline referenced" if ("notice" in facts_lower) else None,
+                advisory="Notice must state approximate time and statutory purpose of entry under Cal. Civ. Code § 1954(d)(1).",
+                pinpoint_citation="Cal. Civ. Code § 1954(d)(1)"
+            ),
+            ChecklistElement(
+                check_item="Entry scheduled strictly during normal business hours (Monday through Friday, 8:00 AM to 5:00 PM)",
+                verified="business hour" in facts_lower or "weekend" in facts_lower or "evening" in facts_lower,
+                evidence_found="Timing of entry noted in file" if ("weekend" in facts_lower or "evening" in facts_lower) else None,
+                advisory="Entry outside normal business hours without tenant consent violates Cal. Civ. Code § 1954(b).",
+                pinpoint_citation="Cal. Civ. Code § 1954(b)"
+            ),
+            ChecklistElement(
+                check_item="Entry confined strictly to statutory enumerated purposes (repairs, agreed services, showings, court order)",
+                verified=False,
+                evidence_found=None,
+                advisory="Fishing expeditions or general inspections without repair necessity violate Civ. Code § 1954(a).",
+                pinpoint_citation="Cal. Civ. Code § 1954(a)"
+            ),
+            ChecklistElement(
+                check_item="Landlord did not use entry or threats to force tenant to vacate or interfere with quiet enjoyment",
+                verified="harass" in facts_lower or "threat" in facts_lower,
+                evidence_found="Harassment or intimidation referenced" if ("harass" in facts_lower or "threat" in facts_lower) else None,
+                advisory="Unlawful entry with intent to influence tenant to vacate triggers statutory damages up to $2,000 per violation under Cal. Civ. Code § 1940.2(b).",
+                pinpoint_citation="Cal. Civ. Code § 1940.2(b)"
+            )
+        ]
+
+        defenses.append(DefenseItem(
+            issue="Unlawful Landlord Entry & Tenant Harassment",
+            controlling_citation="Cal. Civ. Code § 1954, Cal. Civ. Code § 1940.2",
+            statutory_deadline="At least 24 hours written notice before entry; normal business hours only",
+            status="POTENTIAL_VIOLATION",
+            statutory_remedy="Injunction against unlawful entry, breach of quiet enjoyment damages, and statutory civil penalty up to $2,000 for each violation under Cal. Civ. Code § 1940.2(b).",
+            elements=entry_elements,
+            required_evidence=[
+                "Written notices of entry received (with envelope postmark or timestamp)",
+                "Security camera / doorbell footage showing entry date and time",
+                "Log of unauthorized entries with dates, times, and persons entering"
             ]
         ))
 
@@ -330,7 +404,22 @@ def assemble_statutory_letter(
 
     sender = sender_name or case.client_name or "Tenant"
     facts = case.facts or ""
-    slots = extract_statutory_slots(facts)
+    evidence_text = ""
+    if db and case.id:
+        from .crypto import EvidenceEncryptor
+        docs = db.query(MatterEvidence).filter(MatterEvidence.matter_id == case.id).all()
+        decrypted_parts = []
+        for d in docs:
+            if d.content:
+                try:
+                    dec = EvidenceEncryptor.decrypt_text(d.content)
+                    decrypted_parts.append(dec)
+                except Exception:
+                    decrypted_parts.append(d.content)
+        evidence_text = "\n".join(decrypted_parts)
+
+    combined_facts = (facts + "\n" + evidence_text).strip()
+    slots = extract_statutory_slots(combined_facts)
 
     coverage_gaps: List[str] = []
     mandatory_citations: List[str] = []
@@ -507,9 +596,68 @@ def assemble_statutory_letter(
             coverage_gaps=coverage_gaps
         )
 
+    # Letter Type 4: Objection to Unauthorized / Defective Landlord Entry
+    elif letter_type == "landlord_entry_objection":
+        mandatory_citations = [
+            "Cal. Civ. Code § 1954",
+            "Cal. Civ. Code § 1940.2",
+            "Cal. Civ. Code § 1953(a)(1)",
+            "Cal. Civ. Code § 1927"
+        ]
+        statutory_deadlines = [
+            "24 hours reasonable written notice requirement (Civ. Code § 1954(d)(1))",
+            "Normal business hours restriction (8:00 AM to 5:00 PM, Monday-Friday)"
+        ]
+
+        subject = f"FORMAL OBJECTION TO UNLAWFUL / DEFECTIVE NOTICE OF ENTRY - {case.title}"
+        body = (
+            f"VIA CERTIFIED MAIL / EMAIL\n\n"
+            f"Date: {date_str}\n\n"
+            f"To: {recipient_name}\n"
+            f"Address: {recipient_address}\n\n"
+            f"From: {sender}\n"
+            f"Re: Objection to Unauthorized Entry Pursuant to California Civil Code § 1954\n"
+            f"Matter Reference: {case.matter_number or 'Unassigned'}\n\n"
+            f"Dear {recipient_name}:\n\n"
+            f"Please be advised that I am writing to formally object to your recent attempt or notice to enter the "
+            f"residential premises at the above-referenced address. The proposed entry fails to comply with California Civil Code § 1954 "
+            f"and constitutes an actionable invasion of privacy and breach of the statutory covenant of quiet enjoyment (Cal. Civ. Code § 1927).\n\n"
+            f"STATUTORY NOTICE DEFICIENCIES:\n"
+            f"1. Strict 24-Hour Written Notice Requirement: Under California Civil Code § 1954(d)(1), a landlord must give the tenant "
+            f"reasonable written notice of intent to enter. Twenty-four (24) hours is presumed reasonable; oral, text message, or spontaneous entry "
+            f"without written notice is strictly prohibited except in cases of true physical emergency.\n\n"
+            f"2. Normal Business Hours Mandate: Under California Civil Code § 1954(b), entry may only be scheduled during normal business hours "
+            f"(8:00 AM to 5:00 PM, Monday through Friday, excluding court holidays), unless the tenant explicitly consents in writing to an alternative time.\n\n"
+            f"3. Permissible Statutory Purposes Only: Under California Civil Code § 1954(a), a landlord may enter ONLY for specifically enumerated "
+            f"purposes: necessary or agreed repairs, exhibiting the unit to prospective purchasers/mortgagees/tenants, or pursuant to a court order. "
+            f"Unfettered 'general inspections' without justification are unlawful.\n\n"
+            f"DEMAND & NOTICE:\n"
+            f"You are hereby advised that entry without statutory written notice and outside business hours will be refused. "
+            f"Any unlawful entry will be treated as trespass and landlord harassment under Cal. Civ. Code § 1940.2, subjecting you to civil penalties "
+            f"of up to $2,000 per violation.\n\n"
+            f"Sincerely,\n\n"
+            f"______________________________________\n"
+            f"{sender}\n"
+        )
+
+        return StatutoryLetterResponse(
+            case_id=case.id,
+            letter_type=letter_type,
+            title="Objection to Unlawful Landlord Entry",
+            date_formatted=date_str,
+            recipient_name=recipient_name,
+            recipient_address=recipient_address,
+            sender_name=sender,
+            subject=subject,
+            letter_body=body,
+            mandatory_citations=mandatory_citations,
+            statutory_deadlines=statutory_deadlines,
+            coverage_gaps=coverage_gaps
+        )
+
     else:
         # Refusal for unsupported letter types
-        coverage_gaps.append(f"Unsupported letter type: '{letter_type}'. Supported: 'security_deposit_demand', 'habitability_repair_notice', 'defective_notice_response'.")
+        coverage_gaps.append(f"Unsupported letter type: '{letter_type}'. Supported: 'security_deposit_demand', 'habitability_repair_notice', 'defective_notice_response', 'landlord_entry_objection'.")
         return StatutoryLetterResponse(
             case_id=case.id,
             letter_type=letter_type,

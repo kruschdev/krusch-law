@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-09-27
+
+### 🚀 Added
+- **Physical Citation Spine Coordinates (INV-11)**: Integrated physical document layout geometry (`page_number`, `printed_page`, `bbox` `[x0, y0, x1, y1]`, `char_start`, `char_end`, `extra_metadata`) across `LawVector`, `MatterEvidence`, KruschNexus chunk ingestion, and hybrid RAG retrieval.
+- **Harmonized Floor vs. Ceiling Preemption (INV-12)**: Formalized regulatory floor vs ceiling doctrines in `STATEWIDE_PREEMPTION_REGISTRY`. Statewide floors (AB 1482 Cal. Civ. Code § 1946.2 & § 1947.12) preserve stricter local municipal ordinances (e.g., Oakland RAP OMC § 8.22) under the `HARMONIZED_FLOOR_RULE`. Statewide ceilings (Costa-Hawkins Civ. Code § 1954.52) preempt local rent caps on exempt units.
+- **Length-Descending Word-Numeral Parity**: Implemented sorted word-numeral replacement in `extract_statutory_slots` ensuring compound numbers ("twenty-one calendar days", "twenty-four hours", "three court days", "one hundred dollars per day") achieve exact quantitative parity with numeric digits.
+- **Landlord Unlawful Entry & Tenant Harassment Category**: Added 6th defense category to `generate_defense_checklist` with pinpoint statutory citations (§ 1954(d)(1) 24-hr notice, § 1954(b) normal business hours, § 1940.2(b) $2,000 harassment civil penalties).
+- **Statutory Entry Objection Letter**: Added 4th formal demand letter template (`landlord_entry_objection`) in `assemble_statutory_letter` enforcing mandatory notice restrictions and statutory quiet enjoyment rights.
+- **Decrypted Client Evidence Grounding**: Added automatic Fernet decryption when evaluating `MatterEvidence` during defense checklist generation and statutory letter drafting, preventing encrypted text blindness.
+- **Comprehensive Regression Tests**: Added property tests for numeric word-digit equivalence, physical coordinate preservation, floor vs ceiling preemption, and encrypted evidence defense spotting, increasing test suite to 151 / 151 passing tests (12/12 verified invariants).
+
+---
+
 ## [0.5.0] - 2026-09-25
 
 ### 🚀 Added

@@ -54,7 +54,8 @@ STATEWIDE_PREEMPTION_REGISTRY = {
         "doctrine": "Rent Control Preemption",
         "description": "Preempts municipal rent control on single-family homes, condos, and post-Feb 1, 1995 construction.",
         "preempts_municipal": True,
-        "keywords": ["single-family", "condo", "post-1995", "new construction", "vacancy decontrol"]
+        "ceiling_doctrine": True,
+        "keywords": ["single-family", "condo", "post-1995", "new construction", "vacancy decontrol", "costa-hawkins", "costa hawkins"]
     },
     "ab_12": {
         "statute": "Cal. Civ. Code § 1950.5(c) (Stats. 2023, ch. 290)",
@@ -62,6 +63,7 @@ STATEWIDE_PREEMPTION_REGISTRY = {
         "doctrine": "Security Deposit Cap",
         "description": "Caps residential security deposits at 1 month rent statewide regardless of furnished status (with small-landlord 2-unit exception).",
         "preempts_municipal": True,
+        "ceiling_doctrine": True,
         "keywords": ["security deposit", "deposit cap", "ab 12", "1 month rent", "two months"]
     },
     "ab_1482": {
@@ -70,14 +72,32 @@ STATEWIDE_PREEMPTION_REGISTRY = {
         "doctrine": "Just Cause & Rent Increase Caps",
         "description": "Statewide Just Cause eviction rules and 5% + CPI rent cap; sets floor but preserves stricter local just cause.",
         "preempts_municipal": False,  # Sets floor; more protective local laws survive
-        "keywords": ["just cause", "owner move-in", "rent increase cap", "cpi", "no-fault eviction"]
+        "floor_doctrine": True,
+        "keywords": ["just cause", "owner move-in", "rent increase cap", "cpi", "no-fault eviction", "tenant protection act", "1482"]
     },
     "ellis_act": {
         "statute": "Cal. Gov. Code § 7060 et seq.",
         "doctrine": "Rental Business Withdrawal",
         "description": "Preempts local municipalities from compelling landlords to remain in the rental business.",
         "preempts_municipal": True,
-        "keywords": ["ellis act", "withdraw from rental market", "going out of business"]
+        "ceiling_doctrine": True,
+        "keywords": ["ellis act", "withdraw from rental market", "going out of business", "7060"]
+    },
+    "civ_code_1953": {
+        "statute": "Cal. Civ. Code § 1953",
+        "doctrine": "Unwaivable Tenant Statutory Protections",
+        "description": "Any provision of a lease by which tenant agrees to modify or waive statutory rights (§ 1950.5, notice, procedural litigation rights) is void as contrary to public policy.",
+        "unwaivable_rights": True,
+        "preempts_contract": True,
+        "keywords": ["1953", "unwaivable", "waive statutory", "waiver of notice", "waiver of jury", "contrary to public policy"]
+    },
+    "civ_code_1942_1": {
+        "statute": "Cal. Civ. Code § 1942.1",
+        "doctrine": "Unwaivable Habitability & Repair Rights",
+        "description": "Any lease agreement by a tenant to waive or modify rights under Section 1941 or 1942 is void as contrary to public policy.",
+        "unwaivable_rights": True,
+        "preempts_contract": True,
+        "keywords": ["1942.1", "habitability waiver", "waive 1941", "waive 1942", "as-is lease"]
     }
 }
 
@@ -244,6 +264,10 @@ class LegalResolution:
     @property
     def is_coverage_hole(self) -> bool:
         return self.coverage_hole is not None or "COVERAGE_HOLE" in self.governing_citation
+
+    @property
+    def hops(self) -> List[ResolutionHop]:
+        return self.trace.hops if self.trace else []
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -471,12 +495,26 @@ def resolve_controlling_law(
         if not spatially_valid:
             spatially_valid = candidates
 
-        # Step 3: Sort by initial authority class rank (controlling_statute > municipal_ordinance)
-        def get_rank(item: LawVector) -> int:
-            cls = (item.authority_class or "").lower()
-            return AUTHORITY_RANKS.get(cls, 4)
+        # Step 3: Sort candidates to pick primary starting node for graph walk.
+        # When a specific city or county is queried, start at the local municipal ordinance
+        # to allow bottom-up preemption graph traversal (testing if local terms are preempted or survive as floor).
+        def get_traversal_priority(item: LawVector) -> tuple:
+            is_local = 0
+            if city and (item.city and item.city.lower() == city.lower()):
+                is_local = -1
+            elif county and (item.county and item.county.lower() == county.lower()):
+                is_local = -1
 
-        spatially_valid.sort(key=get_rank)
+            if is_local == -1:
+                # Prioritize local municipal ordinance first to test preemption edges
+                type_rank = 0 if item.authority_class in ("municipal_ordinance", "implementing_regulation") else 1
+            else:
+                cls = (item.authority_class or "").lower()
+                type_rank = AUTHORITY_RANKS.get(cls, 4)
+
+            return (is_local, type_rank)
+
+        spatially_valid.sort(key=get_traversal_priority)
 
         # Pick primary candidate to start graph walk
         current_node = spatially_valid[0]
@@ -509,43 +547,67 @@ def resolve_controlling_law(
             # Check 4A: Preemption Edge (State law preempts Municipal Ordinance)
             preempted_by = current_node.preempted_by
             if preempted_by:
-                # Find the preempting state statute in DB
-                clean_target = re.sub(r'[^0-9\.]', '', preempted_by)
-                preempting_node = None
-                if clean_target:
-                    preempting_node = db.query(LawVector).filter(
-                        LawVector.section.ilike(f"%{clean_target}%"),
-                        LawVector.authority_class == "controlling_statute"
-                    ).first()
+                # Check Floor vs Ceiling doctrine first:
+                # If statewide rule sets a regulatory floor (e.g. AB 1482), more protective local ordinances survive preemption!
+                is_floor_rule = False
+                for key, preg in STATEWIDE_PREEMPTION_REGISTRY.items():
+                    if any(kw in preempted_by.lower() for kw in preg.get("keywords", [])):
+                        if preg.get("floor_doctrine") or not preg.get("preempts_municipal", True):
+                            is_floor_rule = True
+                        break
 
-                if not preempting_node:
-                    # Match by doctrine or text in preemption string
-                    for key, preg in STATEWIDE_PREEMPTION_REGISTRY.items():
-                        if any(kw in preempted_by.lower() for kw in preg["keywords"]):
-                            preempting_node = db.query(LawVector).filter(
-                                LawVector.authority_class == "controlling_statute",
-                                or_(
-                                    LawVector.content.ilike(f"%{key}%"),
-                                    LawVector.title.ilike(f"%{key}%")
-                                )
-                            ).first()
-                            break
+                if is_floor_rule and current_node.authority_class in ("municipal_ordinance", "implementing_regulation"):
+                    hops.append(ResolutionHop(
+                        step=steps,
+                        hop_type="PREEMPTION",
+                        from_node=current_node.section,
+                        to_node=preempted_by,
+                        action="HARMONIZED_FLOOR_RULE",
+                        decision="KEPT",
+                        reason=f"State statute {preempted_by} establishes a regulatory floor; local ordinance {current_node.section} provides greater tenant protection and remains controlling under Cal. Civ. Code § 1946.2(g) / § 1947.12(k)",
+                        as_of_date=target_date.isoformat()
+                    ))
+                    # Retain current municipal ordinance as controlling authority
+                    preempting_node = None
+                else:
+                    # Find the preempting state statute in DB
+                    sec_match = re.search(r'§*\s*(\d+(?:\.\d+)?)', preempted_by)
+                    clean_target = sec_match.group(1) if sec_match else re.sub(r'[^0-9\.]', '', preempted_by)
+                    preempting_node = None
+                    if clean_target:
+                        preempting_node = db.query(LawVector).filter(
+                            LawVector.section.ilike(f"%{clean_target}%"),
+                            LawVector.authority_class == "controlling_statute"
+                        ).first()
 
-                # If preempting node found, verify it is effective as of target_date!
-                if preempting_node:
-                    p_eff = to_utc_date(preempting_node.effective_from or preempting_node.effective_date)
-                    if p_eff > target_date:
-                        hops.append(ResolutionHop(
-                            step=steps,
-                            hop_type="PREEMPTION",
-                            from_node=current_node.section,
-                            to_node=preempted_by,
-                            action="FUTURE_PREEMPTION_NOT_YET_IN_FORCE",
-                            decision="KEPT",
-                            reason=f"Preempting statute {preempted_by} effective {p_eff.isoformat()} is after inquiry date {target_date.isoformat()}; retaining current authority",
-                            as_of_date=target_date.isoformat()
-                        ))
-                        preempting_node = None
+                    if not preempting_node:
+                        # Match by doctrine or text in preemption string
+                        for key, preg in STATEWIDE_PREEMPTION_REGISTRY.items():
+                            if any(kw in preempted_by.lower() for kw in preg.get("keywords", [])):
+                                preempting_node = db.query(LawVector).filter(
+                                    LawVector.authority_class == "controlling_statute",
+                                    or_(
+                                        LawVector.content.ilike(f"%{preg['statute']}%"),
+                                        LawVector.title.ilike(f"%{key}%")
+                                    )
+                                ).first()
+                                break
+
+                    # If preempting node found, verify it is effective as of target_date!
+                    if preempting_node:
+                        p_eff = to_utc_date(preempting_node.effective_from or preempting_node.effective_date)
+                        if p_eff > target_date:
+                            hops.append(ResolutionHop(
+                                step=steps,
+                                hop_type="PREEMPTION",
+                                from_node=current_node.section,
+                                to_node=preempted_by,
+                                action="FUTURE_PREEMPTION_NOT_YET_IN_FORCE",
+                                decision="KEPT",
+                                reason=f"Preempting statute {preempted_by} effective {p_eff.isoformat()} is after inquiry date {target_date.isoformat()}; retaining current authority",
+                                as_of_date=target_date.isoformat()
+                            ))
+                            preempting_node = None
 
                 if preempting_node:
                     chain_step["action"] = "FOLLOW_PREEMPTION"
@@ -952,10 +1014,38 @@ def explain_why_not_controlling(
     }
 
 
+WORD_NUMERALS = {
+    r'\bzero\b': '0',
+    r'\bone\b': '1',
+    r'\btwo\b': '2',
+    r'\bthree\b': '3',
+    r'\bfour\b': '4',
+    r'\bfive\b': '5',
+    r'\bsix\b': '6',
+    r'\bseven\b': '7',
+    r'\beight\b': '8',
+    r'\bnine\b': '9',
+    r'\bten\b': '10',
+    r'\bfourteen\b': '14',
+    r'\bfifteen\b': '15',
+    r'\btwenty\b': '20',
+    r'\btwenty[- ]one\b': '21',
+    r'\btwenty[- ]four\b': '24',
+    r'\bthirty\b': '30',
+    r'\bforty[- ]five\b': '45',
+    r'\bsixty\b': '60',
+    r'\bninety\b': '90',
+    r'\bone[- ]hundred\b': '100',
+    r'\bone hundred eighty\b': '180',
+    r'\bone[- ]hundred[- ]eighty\b': '180',
+}
+
+
 def extract_statutory_slots(text_content: str) -> Dict[str, Any]:
     """
     Deterministic quantitative extraction of binding statutory numbers and deadlines.
-    Extracts notice timelines, deposit caps, damages multipliers, and interest terms.
+    Extracts notice timelines, deposit caps, damages multipliers, interest terms,
+    and public policy non-waiver covenants.
     """
     slots: Dict[str, Any] = {}
     if not text_content:
@@ -963,44 +1053,58 @@ def extract_statutory_slots(text_content: str) -> Dict[str, Any]:
 
     content_lower = text_content.lower()
 
-    # 1. Statutory Notice Periods
-    notice_matches = re.findall(r'(\d+)\s*(?:business\s+|calendar\s+)?days?\b', text_content, re.IGNORECASE)
+    # Pre-process text to normalize word numerals into digits for robust slot extraction
+    normalized_text = text_content
+    for pattern, rep in sorted(WORD_NUMERALS.items(), key=lambda x: len(x[0]), reverse=True):
+        normalized_text = re.sub(pattern, rep, normalized_text, flags=re.IGNORECASE)
+
+    # 1. Statutory Notice Periods (matching calendar, business, or court days)
+    notice_matches = re.findall(r'(\d+)\s*(?:court\s+|business\s+|calendar\s+)?days?\b', normalized_text, re.IGNORECASE)
     if notice_matches:
         days_list = sorted(list({int(d) for d in notice_matches if int(d) < 365}))
         slots["statutory_notice_days"] = days_list
-        if 21 in days_list and ("security deposit" in content_lower or "1950.5" in text_content):
+        if 21 in days_list and ("security deposit" in content_lower or "1950.5" in text_content or "accounting" in content_lower):
             slots["deposit_accounting_days"] = 21
             slots["deposit_return_days"] = 21
-        if 3 in days_list and ("pay or quit" in content_lower or "cure" in content_lower):
+        if 3 in days_list and ("pay or quit" in content_lower or "cure" in content_lower or "1161" in text_content or "court" in content_lower):
             slots["cure_notice_days"] = 3
+            if "court" in content_lower or "1161" in text_content:
+                slots["cure_notice_court_days"] = 3
         if 14 in days_list and ("inspection" in content_lower):
             slots["inspection_request_days"] = 14
-        if 180 in days_list and ("retaliat" in content_lower or "presumption" in content_lower):
+        if 180 in days_list and ("retaliat" in content_lower or "presumption" in content_lower or "1942.5" in text_content):
             slots["retaliation_presumption_days"] = 180
 
-    # Hours notice for landlord entry
-    hour_match = re.search(r'(\d+)\s*hours?\s*(?:written\s+)?notice', text_content, re.IGNORECASE)
+    # Hours notice for landlord entry (Civ. Code § 1954)
+    hour_match = re.search(r'(\d+)\s*hours?\s*(?:written\s+)?notice|notice\s*(?:of\s*)?(?:at\s+least\s+)?(\d+)\s*hours?', normalized_text, re.IGNORECASE)
     if hour_match:
-        slots["entry_notice_hours"] = int(hour_match.group(1))
+        slots["entry_notice_hours"] = int(hour_match.group(1) or hour_match.group(2))
 
     # 2. Security Deposit Cap (Months of Rent)
-    if "one month's rent" in content_lower or "1 month's rent" in content_lower or "one month rent" in content_lower:
+    if "one month" in content_lower or "1 month" in content_lower:
         slots["deposit_cap_months"] = 1.0
-    elif "two months' rent" in content_lower or "2 months' rent" in content_lower or "two months rent" in content_lower:
+    elif "two month" in content_lower or "2 month" in content_lower:
         slots["deposit_cap_months"] = 2.0
-    elif "three months' rent" in content_lower or "3 months' rent" in content_lower:
+    elif "three month" in content_lower or "3 month" in content_lower:
         slots["deposit_cap_months"] = 3.0
 
     # 3. Statutory Damages Multiplier
-    if re.search(r'twice\s+the\s+amount|2x|double\s+damages|two\s+times', content_lower):
+    if re.search(r'twice\s+the\s+amount|2x|double\s+damages|two\s+times|twice\s+the\s+security', content_lower) or "1950.5(l)" in text_content:
         slots["statutory_damages_multiplier"] = 2.0
+        slots["bad_faith_deposit_multiplier"] = 2.0
     elif re.search(r'treble\s+damages|three\s+times|3x', content_lower):
         slots["statutory_damages_multiplier"] = 3.0
 
-    # 4. Daily Statutory Penalty (e.g. § 789.3 utility shutoff)
+    # 4. Daily Statutory Penalty (e.g. § 789.3 utility shutoff / self-help lockout)
     penalty_match = re.search(r'(?:one\s+hundred|100)\s*dollars?\s*(?:for\s+each|per)\s*day', content_lower)
-    if penalty_match or "$100" in text_content:
+    if penalty_match or "$100" in text_content or "789.3" in text_content:
         slots["daily_statutory_penalty"] = 100.0
+        slots["utility_shutoff_daily_penalty"] = 100.0
+
+    # Retaliation Punitive Damages (§ 1942.5(f): $100 to $2,000)
+    if "1942.5" in text_content and ("punitive" in content_lower or "2,000" in text_content or "2000" in text_content):
+        slots["retaliation_punitive_min"] = 100.0
+        slots["retaliation_punitive_max"] = 2000.0
 
     # 5. Rent Increase Caps (AB 1482 5% + CPI max 10%)
     if "5 percent" in content_lower or "5%" in text_content:
@@ -1009,19 +1113,25 @@ def extract_statutory_slots(text_content: str) -> Dict[str, Any]:
         slots["rent_cap_max_pct"] = 10.0
 
     # 6. Relocation Assistance
-    if "one month of the tenant's rent" in content_lower or "one month's rent" in content_lower:
+    if "one month of the tenant's rent" in content_lower or "one month's rent" in content_lower or "1 month rent" in content_lower:
         if "relocation" in content_lower:
             slots["relocation_assistance_months"] = 1.0
 
     # 7. Habitability & Repair-and-Deduct Waiver Prohibition (§ 1942.1)
     if "1942.1" in text_content or ("waive" in content_lower and ("1941" in text_content or "1942" in text_content or "habitability" in content_lower)):
         slots["habitability_waiver_prohibited"] = True
+        slots["lease_waiver_void_under_1942_1"] = True
 
     # 8. Retaliation Waiver Prohibition (§ 1942.5(h))
     if "1942.5" in text_content and ("waiver" in content_lower or "void" in content_lower):
         slots["retaliation_waiver_prohibited"] = True
 
-    # 9. Commercial Security Deposit Permissive Waiver (§ 1950.7(f))
+    # 9. Unwaivable Statutory Tenant Protections (§ 1953)
+    if "1953" in text_content or ("waive" in content_lower and ("deposit" in content_lower or "notice" in content_lower or "jury" in content_lower or "procedural" in content_lower)):
+        slots["statutory_rights_waiver_prohibited"] = True
+        slots["lease_waiver_void_under_1953"] = True
+
+    # 10. Commercial Security Deposit Permissive Waiver (§ 1950.7(f))
     if "1950.7" in text_content:
         slots["commercial_deposit_waiver_permitted"] = True
 

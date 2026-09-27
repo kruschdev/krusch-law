@@ -18,6 +18,8 @@
 | **INV-8** | **Pre-Spool Magic-Byte Gate** | Polyglot files, executable binaries (PE/ELF/Mach-O), or HTML disguised as matter evidence PDFs | `tests/test_security_hardening.py::TestSecurityHardening::test_03_magic_byte_rejection_pre_spool` | ✅ PASS |
 | **INV-9** | **Legal Hold & 423 Locked Gating** | Case records subject to litigation hold deleted or purged; chain-of-custody export unavailable | `tests/test_security_hardening.py (test_05, test_06, test_07)` | ✅ PASS |
 | **INV-10** | **Strict Loopback Residency** | Orchestrator processes bind externally; API key requirements bypassed outside local development | `tests/test_security_hardening.py (test_01, test_02)` | ✅ PASS |
+| **INV-11** | **Physical Citation Spine Coordinates** | Spatial bounding box or character offset loss during ingestion or RAG retrieval; ungrounded page folios | `tests/unit/test_grounding_properties.py::TestGroundingProperties::test_property_7_physical_citation_spine_coordinate_persistence_and_retrieval` | ✅ PASS |
+| **INV-12** | **Harmonized Floor vs. Ceiling Preemption** | Statewide floor statutes (AB 1482) mistakenly preempting stricter municipal tenant protections (Oakland RAP); failure of word-to-digit normalization | `tests/eval/test_conflict_pairs.py (test_10, test_11)`<br>`tests/integration/test_defense_checklist_and_letter.py (test_07, test_08)` | ✅ PASS |
 
 ---
 
@@ -122,3 +124,28 @@
   ```bash
   pytest tests/test_security_hardening.py -k "test_01_api_key_required_outside_development or test_02_strict_loopback_binding_enforced"
   ```
+
+### INV-11: Physical Citation Spine Coordinate Invariance
+* **Requirement**: Discovery documents, exhibits, and statutory corpora must preserve physical layout geometry across chunking, ingestion, and RAG retrieval.
+* **Behavior**:
+  - `LawVector` and `MatterEvidence` persist `page_number`, `printed_page` (folio string), `bbox` (`[x0, y0, x1, y1]` in 72-DPI points), `char_start`, `char_end`, and `extra_metadata`.
+  - Ingestion via KruschNexus pipeline extracts exact Poppler/Tesseract OCR bounding boxes and character offsets.
+  - Hybrid RAG retrieval projects all physical spine coordinates without truncation or distortion, enabling pinpoint litigation citations and bounding-box exhibit highlighting.
+* **Verification Command**:
+  ```bash
+  pytest tests/unit/test_grounding_properties.py -k "test_property_7_physical_citation_spine_coordinate_persistence_and_retrieval"
+  ```
+
+### INV-12: Harmonized Floor vs. Ceiling Preemption & Quantitative Parity
+* **Requirement**: Preemption analysis must distinguish statewide regulatory floors from statutory ceilings, with deterministic quantitative word-to-digit normalization.
+* **Behavior**:
+  - **Regulatory Floors**: State statutes establishing minimum tenant protections (e.g., AB 1482 Cal. Civ. Code § 1946.2 & § 1947.12) preserve stricter municipal enactments (e.g., Oakland Rent Adjustment Program OMC § 8.22) under the `HARMONIZED_FLOOR_RULE`.
+  - **Statutory Ceilings**: Statewide preemption ceilings (e.g., Costa-Hawkins Civ. Code § 1954.52) strictly preempt local municipal rent control on exempt units (single-family homes and post-1995 construction).
+  - **Quantitative Slot Parity**: Statutory slots use length-descending word-numeral replacement (`"twenty-one calendar days"` == `21 days`, `"three court days"` == `3 days`, `"twenty-four hours"` == `24 hours`) guaranteeing parity regardless of drafting syntax.
+  - **Evidence Decryption Grounding**: Defense checklists and statutory letter assembly decrypt client evidence documents before factual pattern matching, preventing encrypted text blindness.
+* **Verification Command**:
+  ```bash
+  pytest tests/eval/test_conflict_pairs.py -k "test_10 or test_11"
+  pytest tests/integration/test_defense_checklist_and_letter.py -k "test_07 or test_08"
+  ```
+

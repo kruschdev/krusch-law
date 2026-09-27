@@ -260,6 +260,11 @@ class LawItem(BaseModel):
     effective_date: Optional[str] = None
     source_url: Optional[str] = None
     is_hydrated_context: Optional[bool] = False
+    page_number: Optional[int] = None
+    printed_page: Optional[str] = None
+    bbox: Optional[List[float]] = None
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
 
 
 class CaseSummary(BaseModel):
@@ -298,12 +303,17 @@ class MatterEvidenceItem(BaseModel):
     filename: str
     doc_type: str
     page_number: Optional[int] = None
+    printed_page: Optional[str] = None
     section_locator: Optional[str] = None
     chunk_index: int
     content: str
     tags: List[str] = Field(default_factory=list)
     summary: Optional[str] = None
     doctrine: Optional[str] = None
+    bbox: Optional[List[float]] = None
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
+    extra_metadata: Optional[Dict[str, Any]] = None
     similarity: float
     created_at: Optional[str] = None
 

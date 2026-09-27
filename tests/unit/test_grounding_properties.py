@@ -160,6 +160,80 @@ class TestGroundingProperties(KruschLawTestCase):
         self.assertEqual(claims[0]["verdict"], "not_in_corpus")
         self.assertIn("999.99", claims[0]["reason"])
 
+    def test_property_6_word_numeral_and_numeric_slot_equivalence(self):
+        """
+        Property 6: Word-to-digit normalization equivalence.
+        Assertions or statutory clauses stated in written english word numerals
+        MUST extract the exact same quantitative slots as arabic digit numerals.
+        """
+        from src.backend.resolver import extract_statutory_slots
+
+        # Timelines
+        slots_word_21 = extract_statutory_slots("Tenant must provide twenty-one calendar days notice.")
+        slots_digit_21 = extract_statutory_slots("Tenant must provide 21 calendar days notice.")
+        self.assertEqual(slots_word_21.get("statutory_notice_days"), slots_digit_21.get("statutory_notice_days"))
+
+        # Entry Notice Hours
+        slots_word_24 = extract_statutory_slots("Landlord shall provide twenty-four hours written notice.")
+        slots_digit_24 = extract_statutory_slots("Landlord shall provide 24 hours written notice.")
+        self.assertEqual(slots_word_24.get("entry_notice_hours"), 24)
+        self.assertEqual(slots_digit_24.get("entry_notice_hours"), 24)
+
+        # Court Days Cure Notice
+        slots_word_3 = extract_statutory_slots("Three court days to pay or quit.")
+        slots_digit_3 = extract_statutory_slots("3 court days to pay or quit.")
+        self.assertEqual(slots_word_3.get("cure_notice_court_days"), 3)
+        self.assertEqual(slots_digit_3.get("cure_notice_court_days"), 3)
+
+        # Security Deposit Caps
+        slots_word_cap = extract_statutory_slots("Security deposit capped at one month rent.")
+        slots_digit_cap = extract_statutory_slots("Security deposit capped at 1 month rent.")
+        self.assertEqual(slots_word_cap.get("deposit_cap_months"), 1.0)
+        self.assertEqual(slots_digit_cap.get("deposit_cap_months"), 1.0)
+
+    def test_property_7_physical_citation_spine_coordinate_persistence_and_retrieval(self):
+        """
+        Property 7: Physical Citation Spine Coordinate Invariance (INV-11).
+        LawVector records with spatial and layout coordinates (page_number, printed_page,
+        bbox, char_start, char_end) MUST preserve coordinates through DB persistence
+        and RAG retrieval without precision degradation.
+        """
+        import json
+        from src.backend.db import LawVector
+        from src.backend.rag import retrieve_laws
+
+        bbox_coords = [72.0, 144.0, 540.0, 288.0]
+        node = LawVector(
+            section="Section 1954(a)",
+            title="Landlord Permissible Purpose of Entry",
+            jurisdiction="California Civil Code",
+            authority_class="controlling_statute",
+            content="A landlord may enter the dwelling unit only in the following cases: In case of emergency.",
+            topic="Landlord Entry",
+            page_number=42,
+            printed_page="Page 42",
+            bbox=json.dumps(bbox_coords),
+            char_start=1024,
+            char_end=2048,
+            extra_metadata=json.dumps({"volume": 4, "reporter": "Cal. App. 4th"})
+        )
+        self.db.add(node)
+        self.db.commit()
+
+        results = retrieve_laws(
+            text_query="In case of emergency landlord entry Section 1954",
+            limit=5,
+            db_session=self.db
+        )
+        self.assertTrue(len(results) > 0)
+        target = next((r for r in results if r.get("section") == "Section 1954(a)"), None)
+        self.assertIsNotNone(target, "Inserted Section 1954(a) must be retrieved")
+        self.assertEqual(target.get("page_number"), 42)
+        self.assertEqual(target.get("printed_page"), "Page 42")
+        self.assertEqual(target.get("char_start"), 1024)
+        self.assertEqual(target.get("char_end"), 2048)
+
 
 if __name__ == "__main__":
     unittest.main()
+
