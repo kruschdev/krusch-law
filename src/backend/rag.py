@@ -1502,6 +1502,19 @@ def retrieve_laws(
             expanded_text, _ = expand_legal_query(text_query)
             effective_text_query = expanded_text
 
+        # Dual-provider routing: Delegate to KruschNexus / Wondersearch provider when configured
+        if getattr(settings, "RAG_PROVIDER", "local") in ("nexus", "wondersearch") and effective_text_query:
+            from .nexus_rag import search_laws_nexus, is_nexus_available
+            if is_nexus_available():
+                return search_laws_nexus(
+                    text_query=effective_text_query,
+                    limit=limit or 5,
+                    state_filter=state_filter,
+                    city_filter=city_filter,
+                    topic_filter=topic_filter,
+                    as_of_date=as_of_date
+                )
+
         if query_vector is None and text_query:
             query_vector = get_embedding(text_query)
 
@@ -1950,6 +1963,18 @@ def retrieve_matter_evidence(
         close_session = True
 
     try:
+        # Dual-provider routing: Delegate to KruschNexus / Wondersearch provider when configured
+        if getattr(settings, "RAG_PROVIDER", "local") in ("nexus", "wondersearch"):
+            from .nexus_rag import search_matter_evidence_nexus, is_nexus_available
+            if is_nexus_available():
+                return search_matter_evidence_nexus(
+                    matter_id=matter_id,
+                    text_query=text_query,
+                    limit=limit,
+                    doc_type=doc_type,
+                    doctrine=doctrine,
+                    tag=tag
+                )
         query = db.query(MatterEvidence).filter(MatterEvidence.matter_id == matter_id)
         if doc_type:
             query = query.filter(MatterEvidence.doc_type == doc_type)

@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     )
     extra_allowed_dirs: list[str] = []
 
+    # Dual-Provider RAG & Cloud Gateway
+    RAG_PROVIDER: str = os.getenv("RAG_PROVIDER", "local")  # "local" | "nexus" | "wondersearch"
+    KRUSCH_NEXUS_PATH: Optional[str] = os.getenv("KRUSCH_NEXUS_PATH", None)
+    ALLOW_CLOUD: bool = os.getenv("ALLOW_CLOUD", "0") in ("1", "true", "True")
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
