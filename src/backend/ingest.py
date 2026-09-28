@@ -322,6 +322,12 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "preempted_by": None,
         "preempts": json.dumps(["Section 1950.5 (Pre-2024)"]),
         "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1950.5.&lawCode=CIV",
+        "page_number": 3,
+        "printed_page": "Page 3",
+        "bbox": [54.0, 120.0, 480.0, 85.0],
+        "char_start": 0,
+        "char_end": 412,
+        "extra_metadata": {"statute": "AB 12", "chapter": 290},
         "content": (
             "Under California Civil Code § 1950.5(c) as amended by Stats. 2023, ch. 290 (AB 12), "
             "effective July 1, 2024, a landlord may not demand or receive security, however denominated, "
@@ -377,6 +383,12 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "repealed": False,
         "preempted_by": None,
         "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1946.2.&lawCode=CIV",
+        "page_number": 1,
+        "printed_page": "Page 1",
+        "bbox": [54.0, 95.0, 480.0, 110.0],
+        "char_start": 0,
+        "char_end": 480,
+        "extra_metadata": {"statute": "AB 1482", "chapter": 597},
         "content": (
             "After a tenant has continuously and lawfully occupied a residential real property for 12 months, "
             "the owner of the residential real property shall not terminate the tenancy without just cause, "
@@ -712,7 +724,13 @@ def ingest_mock_data(db: Optional[Session] = None) -> int:
                     applies_if=item.get("applies_if"),
                     source_url=item.get("source_url"),
                     definitions_ref=item.get("definitions_ref"),
-                    exceptions_ref=item.get("exceptions_ref")
+                    exceptions_ref=item.get("exceptions_ref"),
+                    page_number=item.get("page_number"),
+                    printed_page=item.get("printed_page"),
+                    bbox=json.dumps(item.get("bbox")) if isinstance(item.get("bbox"), (list, dict)) else item.get("bbox"),
+                    char_start=item.get("char_start"),
+                    char_end=item.get("char_end"),
+                    extra_metadata=json.dumps(item.get("extra_metadata")) if isinstance(item.get("extra_metadata"), (list, dict)) else item.get("extra_metadata")
                 )
                 db.add(law_vec)
                 inserted += 1
