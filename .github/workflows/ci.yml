@@ -45,7 +45,7 @@ jobs:
           pip install ruff pytest pytest-asyncio
           pip install -r requirements-backend.txt
           pip install -r requirements-frontend.txt || true
-          pip install -e ./krusch-nexus --no-deps
+          pip install -e "./krusch-nexus[dev]"
 
       - name: Code Quality & Lint Gate (Ruff)
         run: |
@@ -72,7 +72,7 @@ jobs:
           KRUSCH_NEXUS_DIR: ${{ github.workspace }}/krusch-nexus
           KRUSCH_NEXUS_PATH: ${{ github.workspace }}/krusch-nexus/src
         run: |
-          pytest tests/ -v
+          python scripts/run_ci_tests.py tests/ -v
 
       - name: 60-Second Headless Demo Verification
         env:
@@ -138,7 +138,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest ruff
           pip install -r requirements-backend.txt psycopg2-binary pgvector
-          pip install -e ./krusch-nexus --no-deps
+          pip install -e "./krusch-nexus[dev]"
 
       - name: Run Tests on PostgreSQL + pgvector
         env:
@@ -150,4 +150,4 @@ jobs:
           KRUSCH_NEXUS_DIR: ${{ github.workspace }}/krusch-nexus
           KRUSCH_NEXUS_PATH: ${{ github.workspace }}/krusch-nexus/src
         run: |
-          pytest tests/ -v
+          python scripts/run_ci_tests.py tests/ -v
