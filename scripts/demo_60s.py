@@ -24,6 +24,14 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+demo_db_path = os.path.join(PROJECT_ROOT, "data", "demo.db")
+if os.path.exists(demo_db_path) and (
+    not os.environ.get("DATABASE_URL")
+    or os.environ.get("DATABASE_URL") == "sqlite:///:memory:"
+    or "localhost" in os.environ.get("DATABASE_URL", "")
+):
+    os.environ["DATABASE_URL"] = f"sqlite:///{demo_db_path}"
+
 # Mock pgvector before SQLAlchemy imports so SQLite can treat Vector as JSON/TEXT
 from sqlalchemy.types import UserDefinedType
 

@@ -78,7 +78,7 @@ jobs:
         env:
           APP_ENV: development
           ALLOW_LAN: 1
-          DATABASE_URL: "sqlite:///:memory:"
+          DATABASE_URL: "sqlite:///data/demo.db"
           HEADLESS_MODE: 1
           USE_MOCK_EMBEDDINGS: 1
         run: |
