@@ -12,16 +12,26 @@ on:
 
 jobs:
   lint-and-test:
-    name: Lint, Test Suite & Golden Evaluation (SQLite)
+    name: Test Suite & Golden Evaluation (SQLite)
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
     steps:
-      - name: Checkout Code
+      - name: Checkout KruschLaw
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Checkout KruschNexus
+        uses: actions/checkout@v4
+        with:
+          repository: kruschdev/krusch-nexus
+          path: krusch-nexus
+
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: "pip"
 
       - name: Install System Dependencies
@@ -32,22 +42,35 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff pytest
+          pip install ruff pytest pytest-asyncio
           pip install -r requirements-backend.txt
           pip install -r requirements-frontend.txt || true
+          pip install -e ./krusch-nexus --no-deps
 
       - name: Code Quality & Lint Gate (Ruff)
         run: |
           ruff check .
 
-      - name: Run Test Suite (145 Passing Unit & Integration Tests)
+      - name: Homelab Path & Secret Hygiene Guard
+        run: |
+          echo "Verifying no absolute homelab machine paths exist in source, docs, tests, data, or markdown..."
+          ! grep -rn --exclude-dir=__pycache__ --exclude-dir=.git --exclude-dir=.venv "/home/krusch" src/ tests/ data/ docs/ *.md
+
+      - name: Air-Gap Vendor Independence Guard
+        run: |
+          echo "Verifying zero external cloud vendor references in source..."
+          ! grep -rn -i -E "google|gemini|openai|anthropic" src/
+
+      - name: Run Test Suite (159 Passing Tests)
         env:
           APP_ENV: development
           ALLOW_LAN: 1
-          DATABASE_URL: sqlite:///:memory:
+          DATABASE_URL: "sqlite:///:memory:"
           ENVIRONMENT: test
           HEADLESS_MODE: 1
           USE_MOCK_EMBEDDINGS: 1
+          KRUSCH_NEXUS_DIR: ${{ github.workspace }}/krusch-nexus
+          KRUSCH_NEXUS_PATH: ${{ github.workspace }}/krusch-nexus/src
         run: |
           pytest tests/ -v
 
@@ -55,6 +78,7 @@ jobs:
         env:
           APP_ENV: development
           ALLOW_LAN: 1
+          DATABASE_URL: "sqlite:///:memory:"
           HEADLESS_MODE: 1
           USE_MOCK_EMBEDDINGS: 1
         run: |
@@ -64,7 +88,7 @@ jobs:
         env:
           APP_ENV: development
           ALLOW_LAN: 1
-          DATABASE_URL: sqlite:///:memory:
+          DATABASE_URL: "sqlite:///:memory:"
           HEADLESS_MODE: 1
           USE_MOCK_EMBEDDINGS: 1
         run: |
@@ -90,8 +114,14 @@ jobs:
           --health-retries 5
 
     steps:
-      - name: Checkout Code
+      - name: Checkout KruschLaw
         uses: actions/checkout@v4
+
+      - name: Checkout KruschNexus
+        uses: actions/checkout@v4
+        with:
+          repository: kruschdev/krusch-nexus
+          path: krusch-nexus
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -108,13 +138,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest ruff
           pip install -r requirements-backend.txt psycopg2-binary pgvector
+          pip install -e ./krusch-nexus --no-deps
 
       - name: Run Tests on PostgreSQL + pgvector
         env:
           APP_ENV: development
           ALLOW_LAN: 1
-          DATABASE_URL: postgresql://kruschlaw:test_password@localhost:5432/kruschlaw_test_db
+          DATABASE_URL: "postgresql://kruschlaw:test_password@localhost:5432/kruschlaw_test_db"
           USE_MOCK_EMBEDDINGS: 1
           HEADLESS_MODE: 1
+          KRUSCH_NEXUS_DIR: ${{ github.workspace }}/krusch-nexus
+          KRUSCH_NEXUS_PATH: ${{ github.workspace }}/krusch-nexus/src
         run: |
           pytest tests/ -v

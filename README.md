@@ -3,6 +3,7 @@
 > **Production-Grade Legal Intelligence Engine & Versioned Statutory Graph**  
 > *Private municipal code retrieval, two-pass assertion grounding, and verifiable cryptographic purge using on-premise open-weight models.*
 
+[![CI](https://github.com/kruschdev/krusch-law/actions/workflows/ci.yml/badge.svg)](https://github.com/kruschdev/krusch-law/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Version: 0.7.0](https://img.shields.io/badge/Version-0.7.0-green.svg)](https://github.com/kruschdev/krusch-law)
 [![Python 3.11 | 3.12](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)

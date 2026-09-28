@@ -362,7 +362,7 @@ class TestKruschLawPipeline(unittest.TestCase):
         self.assertIn("Citation & Grounding Advisory", notice)
 
     def test_parquet_path_traversal_rejection(self):
-        disallowed_path = "/home/krusch/unauthorized_directory/sample.parquet"
+        disallowed_path = "/etc/unauthorized_directory/sample.parquet"
         with self.assertRaises(ValueError) as ctx:
             ingest_locus_parquet(disallowed_path, db=self.db)
         self.assertIn("Security Exception", str(ctx.exception))
@@ -586,8 +586,8 @@ class TestKruschLawPipeline(unittest.TestCase):
         try:
             import krusch_nexus
         except ImportError:
-            nexus_src = os.getenv("KRUSCH_NEXUS_PATH", "/home/krusch/homelab/projects/krusch-nexus/src")
-            if not os.path.isdir(nexus_src):
+            nexus_src = os.getenv("KRUSCH_NEXUS_PATH", "")
+            if not nexus_src or not os.path.isdir(nexus_src):
                 self.skipTest("krusch_nexus is not available in the current environment")
 
         import tempfile

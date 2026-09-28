@@ -126,7 +126,7 @@ class TestApiMattersIntegration(KruschLawTestCase):
             src.backend.config.settings.API_KEY = None
 
     def test_ingest_path_traversal_rejection(self):
-        disallowed_path = "/home/krusch/unauthorized_directory/sample.parquet"
+        disallowed_path = "/etc/unauthorized_directory/sample.parquet"
         resp = self.client.post("/api/ingest/parquet", json={"file_path": disallowed_path, "limit": 5})
         self.assertEqual(resp.status_code, 400)
         self.assertIn("Security Exception", resp.json()["detail"])
