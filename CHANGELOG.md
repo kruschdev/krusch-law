@@ -4,6 +4,16 @@ All notable changes to **KruschLaw** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-09-28
+
+### 🚀 Added
+- **Dual-Provider RAG Substrate (`src/backend/nexus_rag.py`)**: Wired KruschLaw into the swappable retrieval substrate via `NexusClient`. Supports `RAG_PROVIDER="local"` (PostgreSQL pgvector / SQLite) and `RAG_PROVIDER="nexus"` / `"wondersearch"` (Wondersearch Cloud Drives) with zero code changes in the statutory resolution engine.
+- **Physical Coordinates Preserved (INV-11)**: Propagates bounding boxes (`bbox: [x0, y0, w, h]`), 1-based page numbers (`page_number`), and character slice offsets (`char_start`, `char_end`) bit-for-bit from Wondersearch SearchHit models directly into downstream proposition grounders and litigation exhibit highlighters.
+- **Air-Gap Invariant Gate**: Explicitly enforces `ALLOW_CLOUD=1` before connecting to cloud Wondersearch backends, failing closed with `AirGapViolationError` to prevent inadvertent legal data leakage.
+- **Unit Test Coverage (`tests/test_nexus_rag_provider.py`)**: Added 5 automated unit tests verifying law search routing, matter evidence isolation, and air-gap exception gating (159 passing tests total).
+
+---
+
 ## [0.7.0] - 2026-09-27
 
 ### 🚀 Added
