@@ -43,7 +43,7 @@ def main():
 
     if return_code != 0:
         print(f"\n[run_ci_tests] Pytest failed with exit code {return_code}", file=sys.stderr)
-        
+
         # Extract failed test lines and summary
         failed_tests = []
         in_short_summary = False

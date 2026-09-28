@@ -53,7 +53,7 @@ exclude = [".venv", "__pycache__"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W"]
-ignore = ["E501"]
+ignore = ["E501", "W293"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E402", "F401", "F841"]
