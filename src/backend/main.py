@@ -1429,7 +1429,7 @@ def get_claims_feedback(
 
 
 class StatutoryLetterRequest(BaseModel):
-    letter_type: str = Field(..., description="security_deposit_demand | habitability_repair_notice | defective_notice_response")
+    letter_type: str = Field(..., description="security_deposit_demand | habitability_repair_notice | defective_notice_response | landlord_entry_objection | unlawful_rent_increase_objection | no_fault_relocation_demand | sf_rent_ordinance_defense | la_rso_relocation_and_defect_notice")
     recipient_name: str
     recipient_address: str
     sender_name: Optional[str] = None

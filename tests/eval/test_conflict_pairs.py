@@ -522,6 +522,54 @@ class TestConflictPairsEvaluation(KruschLawTestCase):
         self.assertIn("1946.2(d)(4)", c["section"])
         self.assertIn("void", c["issue"])
 
+    def test_14_sf_omi_and_la_lahd_filing_conflicts(self):
+        """
+        Conflict Pair 14: San Francisco & Los Angeles Municipal Ordinance Conflicts:
+          1. San Francisco OMI: Landlord recorded ownership <25% and occupancy duration <36 months (§ 37.9(a)(8)).
+          2. Los Angeles RSO: Failure to file notice with LAHD within 3 business days and failure to deposit relocation fees within 15 days (LAMC § 151.09).
+        """
+        from src.backend.resolver import detect_legal_conflicts
+
+        sf_authorities = [
+            {
+                "section": "S.F. Admin. Code § 37.9(a)(8)",
+                "content": "Owner move-in eviction requires at least 25% recorded ownership interest and good faith intent to occupy for at least 36 continuous months as principal residence."
+            }
+        ]
+
+        # SF Test: Landlord only owns 15% and notice states 12 months occupancy
+        sf_facts = {
+            "sf_omi_termination": True,
+            "landlord_recorded_ownership_pct": 15.0,
+            "omi_occupancy_months": 12
+        }
+        sf_conflicts = detect_legal_conflicts(sf_authorities, matter_facts=sf_facts, as_of_date="2025-01-15")
+        self.assertEqual(len(sf_conflicts), 2)
+        self.assertTrue(all(c["conflict_type"] == "municipal_statutory_violation" for c in sf_conflicts))
+        self.assertTrue(any("25%" in c["operative_rule"] for c in sf_conflicts))
+        self.assertTrue(any("36 continuous months" in c["operative_rule"] for c in sf_conflicts))
+
+        la_authorities = [
+            {
+                "section": "LAMC § 151.09",
+                "content": "Landlord must file copy of termination notice with LAHD within 3 business days of service. Relocation assistance must be deposited within 15 days."
+            }
+        ]
+
+        # LA Test: Notice not filed with LAHD within 3 days, and relocation assistance unpaid after 20 days
+        la_facts = {
+            "la_rso_termination": True,
+            "filed_with_lahd_within_3_days": False,
+            "no_fault": True,
+            "la_relocation_paid": False,
+            "la_relocation_days_elapsed": 20
+        }
+        la_conflicts = detect_legal_conflicts(la_authorities, matter_facts=la_facts, as_of_date="2025-01-15")
+        self.assertEqual(len(la_conflicts), 2)
+        self.assertTrue(all(c["conflict_type"] == "municipal_statutory_violation" for c in la_conflicts))
+        self.assertTrue(any("151.09(C)(1)" in c["section"] for c in la_conflicts))
+        self.assertTrue(any("151.09(G)" in c["section"] for c in la_conflicts))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -399,6 +399,82 @@ class TestDefenseChecklistAndLetterIntegration(KruschLawTestCase):
         self.assertIn("opportunity to cure", cure_defense.statutory_deadline)
         self.assertIn("void under Cal. Civ. Code § 1946.2(c)", cure_defense.statutory_remedy)
 
+    def test_12_sf_rent_ordinance_checklist_and_letter(self):
+        case = Case(
+            title="Mission District SF OMI Defect & Harassment",
+            matter_number="MAT-SF-001",
+            client_name="Gabriel Chen",
+            facts="Landlord in San Francisco Mission District served a 60-day notice claiming owner move-in. Landlord only owns 15% of the building, stated they only plan to stay 12 months, and offered zero relocation payments while harassing tenant."
+        )
+        self.db.add(case)
+        self.db.commit()
+        self.db.refresh(case)
+
+        report = generate_defense_checklist(case, as_of_date="2025-02-01", db=self.db)
+        issues = [d.issue for d in report.defenses]
+        self.assertTrue(any("San Francisco Rent Ordinance" in iss for iss in issues))
+
+        sf_defense = next(d for d in report.defenses if "San Francisco Rent Ordinance" in d.issue)
+        self.assertIn("37.9", sf_defense.controlling_citation)
+        self.assertIn("37.10B", sf_defense.controlling_citation)
+        self.assertIn("36-month continuous occupancy", sf_defense.statutory_deadline)
+        self.assertIn("treble damages", sf_defense.statutory_remedy)
+        self.assertTrue(len(sf_defense.elements) >= 5)
+
+        # Assemble letter
+        res = assemble_statutory_letter(
+            case=case,
+            letter_type="sf_rent_ordinance_defense",
+            recipient_name="Landlord SF Partners",
+            recipient_address="500 Valencia St, San Francisco, CA",
+            sender_name="Gabriel Chen",
+            as_of_date="2025-02-01",
+            db=self.db
+        )
+        self.assertEqual(res.letter_type, "sf_rent_ordinance_defense")
+        self.assertIn("S.F. Admin. Code § 37.9", res.mandatory_citations)
+        self.assertIn("S.F. Admin. Code § 37.10B", res.mandatory_citations)
+        self.assertIn("twenty-five percent (25%)", res.letter_body)
+        self.assertIn("thirty-six (36) continuous months", res.letter_body)
+        self.assertIn("treble damages", res.letter_body)
+
+    def test_13_la_rso_checklist_and_letter(self):
+        case = Case(
+            title="Koreatown LA RSO Eviction Notice Defect",
+            matter_number="MAT-LA-001",
+            client_name="Soo-Min Park",
+            facts="Landlord in Los Angeles Koreatown issued a termination notice on an RSO apartment but never filed with LAHD and failed to deposit mandatory relocation assistance."
+        )
+        self.db.add(case)
+        self.db.commit()
+        self.db.refresh(case)
+
+        report = generate_defense_checklist(case, as_of_date="2025-02-01", db=self.db)
+        issues = [d.issue for d in report.defenses]
+        self.assertTrue(any("Los Angeles Rent Stabilization" in iss for iss in issues))
+
+        la_defense = next(d for d in report.defenses if "Los Angeles Rent Stabilization" in d.issue)
+        self.assertIn("151.09", la_defense.controlling_citation)
+        self.assertIn("3 business days", la_defense.statutory_deadline)
+        self.assertIn("void for failure to file with LAHD", la_defense.statutory_remedy)
+
+        # Assemble letter
+        res = assemble_statutory_letter(
+            case=case,
+            letter_type="la_rso_relocation_and_defect_notice",
+            recipient_name="Wilshire Property Group",
+            recipient_address="3600 Wilshire Blvd, Los Angeles, CA",
+            sender_name="Soo-Min Park",
+            as_of_date="2025-02-01",
+            db=self.db
+        )
+        self.assertEqual(res.letter_type, "la_rso_relocation_and_defect_notice")
+        self.assertIn("LAMC § 151.09", res.mandatory_citations)
+        self.assertIn("LAMC § 151.09(G)", res.mandatory_citations)
+        self.assertIn("three (3) business days", res.letter_body)
+        self.assertIn("Los Angeles Housing Department (LAHD)", res.letter_body)
+        self.assertIn("void ab initio", res.letter_body)
+
 
 if __name__ == "__main__":
     unittest.main()

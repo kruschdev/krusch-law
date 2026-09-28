@@ -309,7 +309,7 @@ TOOLS_CATALOG = [
                 },
                 "letter_type": {
                     "type": "string",
-                    "description": "Type of letter: 'security_deposit_demand' | 'habitability_repair_notice' | 'defective_notice_response' | 'landlord_entry_objection' | 'unlawful_rent_increase_objection' | 'no_fault_relocation_demand'"
+                    "description": "Type of letter: 'security_deposit_demand' | 'habitability_repair_notice' | 'defective_notice_response' | 'landlord_entry_objection' | 'unlawful_rent_increase_objection' | 'no_fault_relocation_demand' | 'sf_rent_ordinance_defense' | 'la_rso_relocation_and_defect_notice'"
                 },
                 "recipient_name": {
                     "type": "string",

@@ -93,7 +93,7 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "county": "Alameda County",
         "city_or_county": "Oakland",
         "topic": "Housing & Rent",
-        "title": "Oakland Rent Adjustment Program: Exemptions & Tolling",
+        "title": "Oakland Rent Adjustment Program: Exemptions & Tolling (Post-1983 Buildings)",
         "section": "Section 8.22.030(B)",
         "parent_section": "Section 8.22.030",
         "hierarchy_level": "exceptions",
@@ -109,8 +109,8 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "applies_if": json.dumps({"city": "Oakland", "county": "Alameda County", "unincorporated": False, "property_type": "residential"}),
         "source_url": "https://library.municode.com/ca/oakland/codes/code_of_ordinances?nodeId=TIT8HESA_CH8.22REBAPRO_8.22.030REINNOFE",
         "content": (
-            "Exceptions to the general notice requirement: (1) Dwelling units constructed after January 1, 1983 are exempt "
-            "from rent increase limitations under Costa-Hawkins, provided that the initial lease contains statutory disclosures. "
+            "Exceptions to general notice and rent cap requirements: (1) Post-1983 residential buildings and dwelling units constructed after January 1, 1983 are exempt "
+            "from rent increase limitations and caps under Costa-Hawkins, provided that the initial lease contains statutory disclosures. "
             "(2) The time period for a tenant to file a contest petition is tolled indefinitely until full compliant RAP notice "
             "is served by proof of certified mail or personal delivery."
         )
@@ -122,7 +122,7 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "county": "Alameda County",
         "city_or_county": "Oakland",
         "topic": "Eviction & Just Cause",
-        "title": "Oakland Just Cause for Eviction Ordinance",
+        "title": "Oakland Just Cause for Eviction Ordinance — Notice to Terminate Tenancy & Lawful Grounds",
         "section": "Section 8.22.360",
         "parent_section": "Chapter 8.22",
         "hierarchy_level": "section",
@@ -137,10 +137,10 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "applies_if": json.dumps({"city": "Oakland", "county": "Alameda County", "unincorporated": False, "property_type": "residential"}),
         "source_url": "https://library.municode.com/ca/oakland/codes/code_of_ordinances?nodeId=TIT8HESA_CH8.22REBAPRO_8.22.360JUCAEV",
         "content": (
-            "A landlord shall not endeavor to recover possession of a rental unit except upon one of the "
+            "A landlord in Oakland shall not endeavor to terminate tenancy or recover possession of a residential rental apartment or unit except upon one of the "
             "enumerated Just Cause grounds, which include: non-payment of rent, substantial violation of lease terms after written notice "
-            "to cure, owner occupancy in good faith, or permanent withdrawal under the Ellis Act. "
-            "Any notice of termination must state with specificity the enumerated statutory cause relied upon and inform the tenant of "
+            "to cure, owner occupancy in good faith (nephew or non-qualifying relative does not qualify), or permanent withdrawal under the Ellis Act. "
+            "No other grounds are permitted. Any 30-day or 60-day notice of termination must state with specificity the enumerated statutory cause relied upon and inform the tenant of "
             "their right to advice from the Rent Board."
         )
     },
@@ -191,6 +191,12 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "preempted_by": None,
         "applies_if": json.dumps({"city": "San Francisco", "county": "San Francisco County", "unincorporated": False}),
         "source_url": "https://codelibrary.amlegal.com/codes/san_francisco/latest/sf_police/0-0-0-2909",
+        "page_number": 1,
+        "printed_page": "Page 1",
+        "bbox": [54.0, 90.0, 480.0, 110.0],
+        "char_start": 0,
+        "char_end": 350,
+        "extra_metadata": {"code": "SF Police Code", "section": "2909"},
         "content": (
             "No person shall produce or cause to be produced sound from any source that exceeds the ambient "
             "noise level by 5 dBA at the property plane of any residential property between the hours of 10:00 PM "
@@ -204,7 +210,7 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "county": "San Francisco County",
         "city_or_county": "San Francisco",
         "topic": "Short-Term Rentals",
-        "title": "Short-Term Residential Rental Regulations",
+        "title": "Short-Term Residential Rental Regulations (Airbnb & VRBO Rentals)",
         "section": "Section 41A.5",
         "parent_section": "Chapter 41A",
         "hierarchy_level": "section",
@@ -217,10 +223,119 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "preempted_by": None,
         "applies_if": json.dumps({"city": "San Francisco", "county": "San Francisco County", "unincorporated": False}),
         "source_url": "https://codelibrary.amlegal.com/codes/san_francisco/latest/sf_admin/0-0-0-41A5",
+        "page_number": 1,
+        "printed_page": "Page 1",
+        "bbox": [54.0, 100.0, 480.0, 120.0],
+        "char_start": 0,
+        "char_end": 520,
+        "extra_metadata": {"code": "SF Admin Code", "chapter": "41A"},
         "content": (
-            "Only primary permanent residents may list residential units for transient occupancy (less than 30 consecutive days). "
+            "Only primary permanent residents may list residential units or condos for short-term transient occupancy (less than 30 consecutive days, "
+            "including listings on Airbnb, VRBO, or hosting platforms). An owner who leases or rents their property while not residing in the unit "
+            "for at least 275 days per calendar year (such as living full-time in New York or elsewhere) is strictly prohibited from offering short-term rentals. "
             "The host must reside in the unit for at least 275 days per calendar year, obtain a valid certificate from "
             "the Office of Short-Term Rentals, and maintain commercial general liability insurance of not less than $500,000."
+        )
+    },
+    {
+        "jurisdiction": "San Francisco Administrative Code",
+        "state": "CA",
+        "city": "San Francisco",
+        "county": "San Francisco County",
+        "city_or_county": "San Francisco",
+        "topic": "Eviction & Just Cause",
+        "title": "San Francisco Residential Rent Stabilization and Arbitration Ordinance — Lawful Eviction Grounds & OMI",
+        "section": "Section 37.9",
+        "parent_section": "Chapter 37",
+        "hierarchy_level": "section",
+        "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
+        "jurisdiction_level": "city",
+        "status": "enacted",
+        "effective_date": datetime(2022, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "applies_if": json.dumps({"city": "San Francisco", "county": "San Francisco County", "unincorporated": False}),
+        "source_url": "https://codelibrary.amlegal.com/codes/san_francisco/latest/sf_admin/0-0-0-21844",
+        "page_number": 1,
+        "printed_page": "Page 1",
+        "bbox": [54.0, 85.0, 480.0, 160.0],
+        "char_start": 0,
+        "char_end": 850,
+        "extra_metadata": {"code": "SF Rent Ordinance", "section": "37.9", "grounds_count": 16},
+        "content": (
+            "Under San Francisco Administrative Code Chapter 37 (Rent Ordinance), a landlord shall not endeavor to recover possession "
+            "of a rental unit without establishing one of the 16 enumerated just cause grounds. For Owner Move-In (OMI) under Section 37.9(a)(8), "
+            "the landlord must seek recovery in good faith for use as the principal residence of the landlord or qualifying relative for at least "
+            "36 consecutive continuous months, and must hold at least 25% recorded ownership interest (or 10% if recorded prior to February 21, 1991). "
+            "An owner cannot evict for OMI if a comparable vacant unit exists in the building. Failure to state valid statutory grounds renders "
+            "any notice of termination void."
+        )
+    },
+    {
+        "jurisdiction": "San Francisco Administrative Code",
+        "state": "CA",
+        "city": "San Francisco",
+        "county": "San Francisco County",
+        "city_or_county": "San Francisco",
+        "topic": "Tenant Relocation & Displacement",
+        "title": "San Francisco Rent Ordinance — Tenant Rights in Displacements & Relocation Payments",
+        "section": "Section 37.9A",
+        "parent_section": "Chapter 37",
+        "hierarchy_level": "section",
+        "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
+        "jurisdiction_level": "city",
+        "status": "enacted",
+        "effective_date": datetime(2022, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "applies_if": json.dumps({"city": "San Francisco", "county": "San Francisco County", "unincorporated": False}),
+        "source_url": "https://codelibrary.amlegal.com/codes/san_francisco/latest/sf_admin/0-0-0-21876",
+        "page_number": 2,
+        "printed_page": "Page 2",
+        "bbox": [54.0, 120.0, 480.0, 130.0],
+        "char_start": 851,
+        "char_end": 1450,
+        "extra_metadata": {"code": "SF Rent Ordinance", "section": "37.9A", "relocation": True},
+        "content": (
+            "For any no-fault eviction under Section 37.9(a)(8) (Owner Move-In), Section 37.9(a)(10) (Capital Improvements), or Section 37.9(a)(13) "
+            "(Ellis Act), the landlord must provide mandatory municipal relocation payments to each authorized occupant. Relocation payments "
+            "are adjusted annually for inflation by the Rent Board (minimum baseline exceeding $10,000 per tenant), with a mandatory additional "
+            "statutory supplement for elderly (age 60+) or disabled occupants. One-half must be paid at service of the notice, and the remainder upon vacating."
+        )
+    },
+    {
+        "jurisdiction": "San Francisco Administrative Code",
+        "state": "CA",
+        "city": "San Francisco",
+        "county": "San Francisco County",
+        "city_or_county": "San Francisco",
+        "topic": "Tenant Harassment & Protections",
+        "title": "San Francisco Tenant Harassment Ordinance & Civil Remedies",
+        "section": "Section 37.10B",
+        "parent_section": "Chapter 37",
+        "hierarchy_level": "section",
+        "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
+        "jurisdiction_level": "city",
+        "status": "enacted",
+        "effective_date": datetime(2020, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "applies_if": json.dumps({"city": "San Francisco", "county": "San Francisco County", "unincorporated": False}),
+        "source_url": "https://codelibrary.amlegal.com/codes/san_francisco/latest/sf_admin/0-0-0-21920",
+        "page_number": 3,
+        "printed_page": "Page 3",
+        "bbox": [54.0, 110.0, 480.0, 140.0],
+        "char_start": 1451,
+        "char_end": 2100,
+        "extra_metadata": {"code": "SF Rent Ordinance", "section": "37.10B", "treble_damages": True},
+        "content": (
+            "No landlord or agent shall in bad faith violate tenant rights or engage in coercive conduct intended to induce a tenant to vacate. "
+            "Prohibited actions include: interrupting services, failing to perform repairs, abusing access under Civ. Code § 1954, and "
+            "interfering with quiet enjoyment. Aggrieved tenants may sue for injunctive relief, actual damages, civil penalties of not less than $1,000, "
+            "treble damages for knowing violations, and mandatory prevailing tenant attorney's fees."
         )
     },
     {
@@ -230,7 +345,7 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "county": "Los Angeles County",
         "city_or_county": "Los Angeles",
         "topic": "Rent Stabilization",
-        "title": "Rent Stabilization Ordinance Relocation Assistance",
+        "title": "Los Angeles Rent Stabilization Ordinance (RSO) — Evictions, Relocation Assistance & LAHD Filing",
         "section": "Section 151.09",
         "parent_section": "Chapter XV",
         "hierarchy_level": "section",
@@ -243,10 +358,87 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "preempted_by": None,
         "applies_if": json.dumps({"city": "Los Angeles", "county": "Los Angeles County", "unincorporated": False}),
         "source_url": "https://codelibrary.amlegal.com/codes/los_angeles/latest/lamc/0-0-0-15109",
+        "page_number": 1,
+        "printed_page": "Page 1",
+        "bbox": [54.0, 95.0, 480.0, 150.0],
+        "char_start": 0,
+        "char_end": 850,
+        "extra_metadata": {"code": "LAMC", "chapter": "XV", "lahd_filing_window_days": 3},
         "content": (
-            "Under the Rent Stabilization Ordinance (RSO), a landlord seeking possession for owner-occupancy or permanent "
-            "removal from the rental housing market must provide statutory relocation fees to displaced tenants. "
-            "Relocation amounts are graduated based on tenancy duration and tenant protected status (e.g. senior or disabled)."
+            "Under Chapter XV of the Los Angeles Municipal Code (Rent Stabilization Ordinance), a landlord seeking possession of an RSO rental apartment building "
+            "for permanent owner occupancy, demolition, or removal from the rental housing market must establish an enumerated legal ground and "
+            "provide statutory relocation fees and compensation to displaced tenants. Relocation amounts are graduated based on tenancy duration and "
+            "tenant protected status (such as elderly seniors age 62 or older, or disabled individuals). "
+            "Mandatory Filing Requirement: Within three (3) business days of service of any written notice to terminate tenancy upon the tenant, the landlord "
+            "MUST file a copy of the notice, along with a completed Landlord Declaration of Intent to Evict, with the Los Angeles Housing Department (LAHD). "
+            "Failure to file within three business days renders the termination notice null, void, and unenforceable."
+        )
+    },
+    {
+        "jurisdiction": "Los Angeles Municipal Code",
+        "state": "CA",
+        "city": "Los Angeles",
+        "county": "Los Angeles County",
+        "city_or_county": "Los Angeles",
+        "topic": "Rent Stabilization",
+        "title": "Los Angeles Rent Stabilization Ordinance — Mandatory Relocation Fee Schedule",
+        "section": "Section 151.09(G)",
+        "parent_section": "Section 151.09",
+        "hierarchy_level": "subsection",
+        "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
+        "jurisdiction_level": "city",
+        "status": "enacted",
+        "effective_date": datetime(2022, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "applies_if": json.dumps({"city": "Los Angeles", "county": "Los Angeles County", "unincorporated": False}),
+        "source_url": "https://codelibrary.amlegal.com/codes/los_angeles/latest/lamc/0-0-0-15109",
+        "page_number": 2,
+        "printed_page": "Page 2",
+        "bbox": [54.0, 110.0, 480.0, 140.0],
+        "char_start": 751,
+        "char_end": 1400,
+        "extra_metadata": {"code": "LAMC", "section": "151.09(G)", "relocation_tiers": ["eligible", "qualified"]},
+        "content": (
+            "A landlord who serves an eviction notice for no-fault grounds under LAMC § 151.09 shall pay relocation assistance according to the "
+            "LAHD fee schedule. Relocation assistance separates into Eligible Tenants and Qualified Tenants (senior citizens age 62 or older, "
+            "disabled individuals, or households with minor dependent children). Relocation assistance must be deposited into an escrow account "
+            "or paid directly to the tenant within 15 calendar days of service of the eviction notice. Failure to pay within 15 days is an absolute "
+            "affirmative defense to unlawful detainer."
+        )
+    },
+    {
+        "jurisdiction": "Los Angeles Municipal Code",
+        "state": "CA",
+        "city": "Los Angeles",
+        "county": "Los Angeles County",
+        "city_or_county": "Los Angeles",
+        "topic": "Eviction & Just Cause",
+        "title": "Los Angeles Just Cause for Eviction Ordinance (JCEO) — Non-RSO Rental Protections",
+        "section": "Section 165.03",
+        "parent_section": "Chapter XVI",
+        "hierarchy_level": "section",
+        "authority_class": "municipal_ordinance",
+        "instrument_type": "ordinance",
+        "jurisdiction_level": "city",
+        "status": "enacted",
+        "effective_date": datetime(2023, 1, 27),
+        "repealed": False,
+        "preempted_by": None,
+        "applies_if": json.dumps({"city": "Los Angeles", "county": "Los Angeles County", "unincorporated": False}),
+        "source_url": "https://codelibrary.amlegal.com/codes/los_angeles/latest/lamc/0-0-0-16503",
+        "page_number": 1,
+        "printed_page": "Page 1",
+        "bbox": [54.0, 100.0, 480.0, 130.0],
+        "char_start": 0,
+        "char_end": 650,
+        "extra_metadata": {"code": "LAMC", "chapter": "XVI", "jceo": True},
+        "content": (
+            "Under Chapter XVI of the Los Angeles Municipal Code, all residential rental units in the City of Los Angeles not covered by the RSO "
+            "are protected after 6 months of continuous occupancy or lease expiration. Landlords must establish an At-Fault or No-Fault just cause "
+            "ground to terminate tenancy. For curable lease violations, landlords must serve a written notice of violation providing an opportunity "
+            "to cure before terminating. No-fault terminations require relocation assistance under Section 165.06."
         )
     },
     {
@@ -438,7 +630,7 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "county": None,
         "city_or_county": "Statewide",
         "topic": "Tenancy & Privacy",
-        "title": "Landlord Right of Entry Notice Requirements",
+        "title": "Landlord Right of Entry & Inspection Notice Restrictions",
         "section": "Section 1954",
         "parent_section": "Chapter 2",
         "hierarchy_level": "section",
@@ -454,13 +646,14 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "printed_page": "Page 1",
         "bbox": [54.0, 80.0, 480.0, 115.0],
         "char_start": 0,
-        "char_end": 468,
+        "char_end": 560,
         "extra_metadata": {"statute": "Cal. Civ. Code § 1954", "notice_hours": 24},
         "content": (
-            "A landlord may enter the dwelling unit only in the following cases: (1) In case of emergency; (2) To make necessary "
-            "or agreed repairs; (3) When the tenant has abandoned or surrendered the premises; or (4) Pursuant to court order. "
-            "Except in cases of emergency or abandonment, the landlord shall give the tenant written notice of intent to enter at least "
-            "24 hours in advance, and entry must be during normal business hours."
+            "A landlord may enter an apartment or dwelling unit to inspect or make repairs only in the following cases: (1) In case of emergency; "
+            "(2) To make necessary or agreed repairs or inspect premises; (3) When the tenant has abandoned or surrendered the premises; or "
+            "(4) Pursuant to court order. Landlords are prohibited from entering without prior written notice or outside normal business hours "
+            "(such as late evenings, at night, or on Sundays). Except in cases of emergency or abandonment, the landlord shall give the tenant "
+            "written notice of intent to enter at least 24 hours in advance, and entry must be during normal business hours."
         )
     },
     {

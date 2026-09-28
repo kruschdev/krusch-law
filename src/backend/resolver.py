@@ -1082,6 +1082,16 @@ def extract_statutory_slots(text_content: str) -> Dict[str, Any]:
             slots["rent_increase_notice_days_large"] = 90
         if 180 in days_list and ("retaliat" in content_lower or "presumption" in content_lower or "1942.5" in text_content):
             slots["retaliation_presumption_days"] = 180
+        if 3 in days_list and ("lahd" in content_lower or "151.09" in text_content or "housing department" in content_lower):
+            slots["lahd_filing_days"] = 3
+
+    # S.F. Admin. Code § 37.9 OMI 36-month continuous occupancy
+    if "36" in text_content and ("continuous" in content_lower or "occupy" in content_lower or "37.9" in text_content or "principal residence" in content_lower):
+        slots["omi_occupancy_months"] = 36
+
+    # S.F. Admin. Code § 37.9(a)(8) OMI 25% recorded ownership interest
+    if ("25 percent" in content_lower or "25%" in text_content) and ("ownership" in content_lower or "37.9" in text_content or "record" in content_lower):
+        slots["omi_min_ownership_pct"] = 25.0
 
     # Hours notice for landlord entry (Civ. Code § 1954)
     hour_match = re.search(r'(\d+)\s*hours?\s*(?:written\s+)?notice|notice\s*(?:of\s*)?(?:at\s+least\s+)?(\d+)\s*hours?', normalized_text, re.IGNORECASE)
@@ -1353,5 +1363,76 @@ def detect_legal_conflicts(
                             "Landlord cannot maintain an unlawful detainer action based upon this defective notice."
                         )
                     })
+
+        # Conflict 11: San Francisco Rent Ordinance OMI Ownership Shortfall / Occupancy Term (§ 37.9(a)(8))
+        if "37.9" in sec or ("san francisco" in content.lower() and "37.9" in content):
+            if matter_facts.get("sf_omi_termination") or (matter_facts.get("owner_move_in") and ("san francisco" in matter_facts.get("jurisdiction", "").lower() or matter_facts.get("sf_property"))):
+                # 11a: Ownership percentage requirement (< 25% recorded interest)
+                recorded_ownership = matter_facts.get("landlord_recorded_ownership_pct")
+                if recorded_ownership is not None and float(recorded_ownership) < 25.0:
+                    conflicts.append({
+                        "conflict_type": "municipal_statutory_violation",
+                        "severity": "CRITICAL",
+                        "section": "S.F. Admin. Code § 37.9(a)(8)",
+                        "operative_rule": "Landlord must hold at least a 25% recorded ownership interest to execute an owner move-in eviction (10% if recorded prior to Feb 21, 1991).",
+                        "violating_term": f"Landlord holds only {float(recorded_ownership):.1f}% recorded ownership interest.",
+                        "issue": "San Francisco Rent Ordinance prohibits owner move-in evictions where landlord holds less than 25% recorded interest.",
+                        "attorney_advisory": (
+                            "Notice of termination is defective under S.F. Admin. Code § 37.9(a)(8). "
+                            "Landlord lacks statutory standing to evict for owner occupancy. File demurrer or motion for summary judgment."
+                        )
+                    })
+                # 11b: 36-month continuous occupancy commitment shortfall
+                occupancy_months = matter_facts.get("omi_occupancy_months")
+                if occupancy_months is not None and int(occupancy_months) < 36:
+                    conflicts.append({
+                        "conflict_type": "municipal_statutory_violation",
+                        "severity": "CRITICAL",
+                        "section": "S.F. Admin. Code § 37.9(a)(8)",
+                        "operative_rule": "Owner or designated family member must intend in good faith to occupy unit as principal residence for at least 36 continuous months.",
+                        "violating_term": f"Notice commits to only {int(occupancy_months)} months occupancy.",
+                        "issue": "Failure to commit to statutory 36-month minimum continuous occupancy invalidates S.F. OMI notice.",
+                        "attorney_advisory": (
+                            "Under S.F. Admin. Code § 37.9(a)(8), 36 months continuous principal residence is mandatory. "
+                            "Notice specifying shorter occupancy is defective as a matter of law."
+                        )
+                    })
+
+        # Conflict 12: Los Angeles Rent Stabilization Ordinance Notice Filing & Relocation Escrow (LAMC § 151.09)
+        if "151.09" in sec or "165.03" in sec or ("los angeles" in content.lower() and "lahd" in content.lower()):
+            if matter_facts.get("la_rso_termination") or matter_facts.get("lamc_termination") or ("los angeles" in matter_facts.get("jurisdiction", "").lower() and matter_facts.get("termination_notice")):
+                # 12a: Mandatory LAHD filing within 3 business days of service
+                lahd_filed = matter_facts.get("filed_with_lahd_within_3_days")
+                lahd_days = matter_facts.get("lahd_filing_days")
+                if lahd_filed is False or (lahd_days is not None and int(lahd_days) > 3):
+                    conflicts.append({
+                        "conflict_type": "municipal_statutory_violation",
+                        "severity": "CRITICAL",
+                        "section": "LAMC § 151.09(C)(1)",
+                        "operative_rule": "A copy of any notice terminating tenancy must be filed with the Los Angeles Housing Department (LAHD) within 3 business days of service.",
+                        "violating_term": "Termination notice was not filed with LAHD within 3 business days of service.",
+                        "issue": "Failure to file termination notice with LAHD within 3 business days renders eviction notice void under LAMC § 151.09(C)(1) and § 165.03.",
+                        "attorney_advisory": (
+                            "Under LAMC § 151.09(C)(1), timely filing with LAHD is a jurisdictional prerequisite to any unlawful detainer. "
+                            "Notice is void ab initio; landlord cannot maintain eviction action."
+                        )
+                    })
+                # 12b: Mandatory relocation assistance escrow deposit within 15 calendar days
+                if matter_facts.get("no_fault") or matter_facts.get("no_fault_termination"):
+                    reloc_paid = matter_facts.get("la_relocation_paid", False)
+                    reloc_days = matter_facts.get("la_relocation_days_elapsed", 0)
+                    if not reloc_paid and int(reloc_days) > 15:
+                        conflicts.append({
+                            "conflict_type": "municipal_statutory_violation",
+                            "severity": "CRITICAL",
+                            "section": "LAMC § 151.09(G)",
+                            "operative_rule": "Relocation assistance (Eligible or Qualified tier) must be paid or deposited into escrow within 15 calendar days of service.",
+                            "violating_term": f"Relocation assistance not paid or escrowed after {reloc_days} days.",
+                            "issue": "Failure to deposit or pay mandatory relocation assistance under LAMC § 151.09(G) voids no-fault eviction.",
+                            "attorney_advisory": (
+                                "Under LAMC § 151.09(G), payment or escrow deposit of relocation fees within 15 days is mandatory. "
+                                "Failure to comply provides tenant a complete affirmative defense to unlawful detainer."
+                            )
+                        })
 
     return conflicts

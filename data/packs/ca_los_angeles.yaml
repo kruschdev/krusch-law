@@ -1,0 +1,228 @@
+pack_id: "ca_los_angeles_pack_v1"
+version: "1.0.0"
+state: "CA"
+municipality: "Los Angeles"
+county: "Los Angeles County"
+code_families:
+  - "California Civil Code"
+  - "Los Angeles Municipal Code"
+description: "Authoritative California statewide statutes and City of Los Angeles municipal ordinances governing residential tenancy, the Rent Stabilization Ordinance (LAMC Chapter XV), the Just Cause for Eviction Ordinance (LAMC Chapter XVI), tenant relocation assistance schedules, and rent adjustments."
+publisher: "California Office of Legislative Counsel & City of Los Angeles / American Legal Publishing"
+edition: "2024 Legislative Session / LAMC Chapter XV & Chapter XVI Supp. 2024"
+retrieved_at: "2026-09-27T12:00:00Z"
+
+coverage:
+  covered_topics:
+    - "Security Deposits"
+    - "Just Cause Evictions"
+    - "Rent Control & Preemption"
+    - "Rent Stabilization Ordinance (RSO)"
+    - "Relocation Assistance"
+    - "Tenant Harassment"
+    - "Non-RSO Just Cause"
+    - "Rent Increases"
+  known_uncovered_topics:
+    - "Commercial Lease Evictions"
+    - "Mobile Home Parks (under separate division)"
+    - "Transient Occupancy Tax"
+
+statutes:
+  - citation: "Cal. Civ. Code § 1950.5(c)"
+    section_number: "1950.5(c)"
+    title: "Residential Security Deposit Limits & Enactment of Assembly Bill 12"
+    topic: "Security Deposits"
+    authority_class: "controlling_statute"
+    hierarchy_level: "subsection"
+    effective_date: "2024-07-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1950.5"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2023, ch. 290 (AB 12)"
+    raw_content: |
+      Under Section 1950.5(c) as amended by Assembly Bill 12 (effective July 1, 2024), a landlord may not demand or receive security, however denominated, in an amount or value in excess of an amount equal to one month's rent, in addition to any rent for the first month paid on or before initial occupancy.
+
+      This one-month rent limitation applies to both unfurnished and furnished residential rental properties. A limited exception exists for a natural person or family LLC owning no more than two residential rental properties that collectively comprise no more than four units, who may demand up to two months' rent unless the tenant is a service member.
+
+      Within 21 calendar days after the tenant has vacated the premises, the landlord shall furnish the tenant with a copy of an itemized statement indicating the basis for, and the amount of, any security received and the disposition of the security, and shall return any remaining portion of the security to the tenant. Bad faith retention of security subjects the landlord to statutory damages of up to twice the amount of the security.
+    statutory_slots:
+      deposit_cap_months: 1.0
+      small_landlord_cap_months: 2.0
+      accounting_days: 21
+      statutory_damages_multiplier: 2.0
+
+  - citation: "Cal. Civ. Code § 1954.52"
+    section_number: "1954.52"
+    title: "Costa-Hawkins Rental Housing Act — Statewide Rent Control Preemption"
+    topic: "Rent Control & Preemption"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1996-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1954.52"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 1995, ch. 331"
+    raw_content: |
+      Notwithstanding any other provision of law, an owner of residential real property may establish the initial and all subsequent rental rates for a dwelling or a unit about which any of the following is true:
+      (1) It has a certificate of occupancy issued after February 1, 1995.
+      (2) It has already been exempt from the residential rent control ordinance of any city, county, or city and county on or before February 1, 1995.
+      (3) It is alienable separate from the title to any other dwelling unit, including single-family residences, condominiums, and townhomes.
+
+      Statewide preemption under Costa-Hawkins restricts local rent control ordinances from establishing rent ceilings on post-1995 construction or single-family homes, but preserves local authority over eviction grounds and habitability standards.
+    statutory_slots:
+      vacancy_decontrol: true
+      single_family_exempt: true
+
+  - citation: "Cal. Civ. Code § 1946.2"
+    section_number: "1946.2"
+    title: "California Tenant Protection Act of 2019 — Statewide Just Cause Evictions"
+    topic: "Just Cause Evictions"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2020-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1946.2"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2019, ch. 597 (AB 1482)"
+    raw_content: |
+      Notwithstanding any other law, after a tenant has continuously and lawfully occupied a residential real property for 12 months, the owner of the residential real property shall not terminate the tenancy without just cause, which shall be stated in the written notice to terminate tenancy.
+
+      For a no-fault just cause termination, the owner shall either provide direct relocation assistance equal to one month of the tenant's rent or waive in writing the payment of the final month's rent. Local just cause ordinances adopted on or before September 1, 2019, or local ordinances providing greater tenant protections, are not preempted and remain enforceable under the harmonized floor rule.
+    statutory_slots:
+      occupancy_threshold_months: 12
+      relocation_months: 1.0
+      preserves_local_just_cause: true
+
+  - citation: "Cal. Civ. Code § 1947.12"
+    section_number: "1947.12"
+    title: "California Tenant Protection Act of 2019 — Statewide Rent Increase Caps"
+    topic: "Rent Increases"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2020-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1947.12"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2019, ch. 597 (AB 1482)"
+    raw_content: |
+      An owner of residential real property shall not, over the course of any 12-month period, increase the gross rental rate for a dwelling or a unit more than 5 percent plus the percentage change in the cost of living (Consumer Price Index), or 10 percent, whichever is lower, of the lowest gross rental rate charged for that dwelling or unit at any time during the 12 months prior to the effective date of the increase.
+    statutory_slots:
+      base_cap_percent: 5.0
+      max_cap_percent: 10.0
+      max_increases_per_year: 2
+
+  - citation: "Los Angeles Municipal Code § 151.09"
+    section_number: "151.09"
+    title: "Los Angeles Rent Stabilization Ordinance — Evictions & Mandatory LAHD Filing"
+    topic: "Rent Stabilization Ordinance (RSO)"
+    authority_class: "municipal_ordinance"
+    hierarchy_level: "section"
+    effective_date: "1979-05-01"
+    source_url: "https://codelibrary.amlegal.com/codes/los_angeles/latest/lamc/0-0-0-15109"
+    publisher: "City of Los Angeles / American Legal Publishing"
+    edition: "LAMC Chapter XV Article 1"
+    raw_content: |
+      A landlord may bring an action to recover possession of a rental unit subject to Chapter XV (Rent Stabilization Ordinance) only upon one of the 14 enumerated grounds:
+      (1) Failure to pay lawful rent.
+      (2) Breach of a material lease covenant after written notice to cure.
+      (3) Committing or permitting a nuisance.
+      (4) Illegal use of the rental unit.
+      (5) Refusal to execute a written extension on identical terms.
+      (6) Refusal to provide landlord reasonable access.
+      (7) Unapproved subtenant holding over.
+      (8) Owner Move-In (OMI): Good faith recovery for use as a principal residence by the landlord, spouse, children, or parents, provided the landlord is a natural person holding at least a 25% recorded ownership interest.
+      (9) Permanent removal from the rental housing market under the Ellis Act.
+      (10) Demolition or substantial remodel.
+      (11) Government compliance order or hazardous conditions.
+      (12) HUD or government owned property.
+      (13) Resident manager employment termination.
+      (14) Residential hotel conversion.
+
+      Mandatory Notice Filing: Within 3 business days of service of any written notice to terminate tenancy upon a tenant, the landlord must file a true and complete copy of the notice, along with a completed Landlord Declaration of Intent to Evict, with the Los Angeles Housing Department (LAHD). Failure to file within 3 business days renders the notice null, void, and unenforceable.
+    statutory_slots:
+      lahd_filing_window_business_days: 3
+      rso_grounds_count: 14
+      omi_ownership_percent_floor: 25.0
+      mandatory_lahd_declaration: true
+      failure_to_file_voids_notice: true
+    preempts: []
+
+  - citation: "Los Angeles Municipal Code § 151.09(G)"
+    section_number: "151.09(G)"
+    title: "Los Angeles Rent Stabilization Ordinance — Mandatory Relocation Assistance Fee Schedule"
+    topic: "Relocation Assistance"
+    authority_class: "municipal_ordinance"
+    hierarchy_level: "subsection"
+    effective_date: "1979-05-01"
+    source_url: "https://codelibrary.amlegal.com/codes/los_angeles/latest/lamc/0-0-0-15109"
+    publisher: "City of Los Angeles / American Legal Publishing"
+    edition: "LAMC Chapter XV Article 1"
+    raw_content: |
+      A landlord who serves a notice of eviction for no-fault grounds under Section 151.09 (including owner move-in, Ellis Act withdrawal, demolition, or government order) shall pay relocation assistance to the tenant as follows:
+      (1) Eligible Tenants:
+          - Tenancies less than 3 years: Baseline fee established by the LAHD Fee Schedule (adjusted annually, approximately $10,000 to $12,000 depending on low-income tier).
+          - Tenancies 3 years or longer: Long-term fee schedule (approximately $13,000 to $15,000).
+      (2) Qualified Tenants (Senior citizen age 62 or older, physically or mentally disabled individual, or households with minor dependent children):
+          - Tenancies less than 3 years: Qualified fee schedule (approximately $21,000 to $23,000).
+          - Tenancies 3 years or longer: Long-term qualified fee schedule (approximately $25,000 to $27,000).
+
+      Relocation assistance must be deposited into an escrow account or paid directly to the tenant within 15 calendar days of service of the eviction notice. Failure to pay or deposit the required relocation fee within 15 days is an absolute affirmative defense to any unlawful detainer action and invalidates the termination notice.
+    statutory_slots:
+      relocation_payment_window_days: 15
+      qualified_senior_age_threshold: 62
+      qualified_includes_disabled: true
+      qualified_includes_minor_dependents: true
+      escrow_or_direct_payment_mandatory: true
+
+  - citation: "Los Angeles Municipal Code § 165.03"
+    section_number: "165.03"
+    title: "Los Angeles Just Cause for Eviction Ordinance — Non-RSO Rental Protections"
+    topic: "Non-RSO Just Cause"
+    authority_class: "municipal_ordinance"
+    hierarchy_level: "section"
+    effective_date: "2023-01-27"
+    source_url: "https://codelibrary.amlegal.com/codes/los_angeles/latest/lamc/0-0-0-16503"
+    publisher: "City of Los Angeles / American Legal Publishing"
+    edition: "LAMC Chapter XVI Ordinance No. 187,763"
+    raw_content: |
+      Applies to all residential rental units in the City of Los Angeles that are not subject to Chapter XV (Rent Stabilization Ordinance), once the tenant has continuously and lawfully occupied the residential rental unit for 6 months or upon the expiration of an initial lease term, whichever comes first.
+
+      No landlord shall endeavor to terminate a tenancy or recover possession without establishing one of the enumerated At-Fault or No-Fault just cause grounds. The landlord must specify the just cause grounds in the written notice of termination.
+
+      Before serving a notice to terminate based on curable lease violations or failure to provide access, the landlord must first provide the tenant with written notice of the violation and a reasonable opportunity to cure of not less than three court days.
+    statutory_slots:
+      occupancy_threshold_months: 6
+      applies_to_non_rso_units: true
+      written_notice_to_cure_required: true
+
+  - citation: "Los Angeles Municipal Code § 165.06"
+    section_number: "165.06"
+    title: "Los Angeles Just Cause Ordinance — Relocation Assistance for Non-RSO No-Fault Evictions"
+    topic: "Relocation Assistance"
+    authority_class: "municipal_ordinance"
+    hierarchy_level: "section"
+    effective_date: "2023-01-27"
+    source_url: "https://codelibrary.amlegal.com/codes/los_angeles/latest/lamc/0-0-0-16506"
+    publisher: "City of Los Angeles / American Legal Publishing"
+    edition: "LAMC Chapter XVI Ordinance No. 187,763"
+    raw_content: |
+      For any no-fault eviction of a unit subject to the Just Cause for Eviction Ordinance (Chapter XVI), the landlord shall provide relocation assistance equal to the amounts specified in Section 151.09(G) of the Rent Stabilization Ordinance or three months' fair market rent as established by HUD, whichever is higher, unless the eviction is due to economic displacement caused by a rent increase exceeding the statutory threshold.
+
+      Payment of relocation assistance must be made within 15 calendar days of service of the notice of termination.
+    statutory_slots:
+      relocation_payment_window_days: 15
+      pegged_to_rso_fee_schedule_or_3mo_hud: true
+
+  - citation: "Los Angeles Municipal Code § 151.06"
+    section_number: "151.06"
+    title: "Los Angeles Rent Stabilization Ordinance — Annual Allowable Rent Adjustments"
+    topic: "Rent Increases"
+    authority_class: "municipal_ordinance"
+    hierarchy_level: "section"
+    effective_date: "1979-05-01"
+    source_url: "https://codelibrary.amlegal.com/codes/los_angeles/latest/lamc/0-0-0-15106"
+    publisher: "City of Los Angeles / American Legal Publishing"
+    edition: "LAMC Chapter XV Article 1"
+    raw_content: |
+      The maximum gross rental rate for a rental unit subject to Chapter XV may be increased annually only pursuant to the formula published by the Los Angeles Housing Department based on the Consumer Price Index for the Los Angeles-Long Beach-Anaheim area.
+
+      A landlord may not impose any rent increase unless the rental unit is registered with the City of Los Angeles Housing Department and all annual registration fees and penalties have been fully paid. A landlord who demands or collects rent in excess of the allowable increase is liable to the tenant for three times the amount of the excess rent collected.
+    statutory_slots:
+      annual_cpi_formula: true
+      city_registration_mandatory: true
+      treble_damages_excess_rent: true

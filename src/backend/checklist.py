@@ -527,6 +527,122 @@ def generate_defense_checklist(
             ]
         ))
 
+    # 10. San Francisco Rent Ordinance Eviction Defect & Tenant Harassment (S.F. Admin. Code § 37.9 & § 37.10B)
+    if (
+        any("San Francisco" in item["issue"] for item in spotted_issues)
+        or any(w in facts_lower for w in ["san francisco", "sf rent ordinance", "37.9", "37.10b", "tenderloin", "mission district", "soma", "sunset district", "richmond district", "haight"])
+        or (("owner move-in" in facts_lower or "omi" in facts_lower or "sf" in facts_lower) and "san francisco" in facts_lower)
+    ):
+        sf_elements = [
+            ChecklistElement(
+                check_item="Notice states one of the 16 lawful Just Cause grounds under S.F. Admin. Code § 37.9(a)",
+                verified="just cause" in facts_lower or "owner move" in facts_lower or "37.9" in facts_lower,
+                evidence_found="Just cause ground specified" if ("cause" in facts_lower or "move" in facts_lower) else None,
+                advisory="Under S.F. Admin. Code § 37.9(a), landlords may only evict under 16 strict enumerated grounds. No eviction without stated cause.",
+                pinpoint_citation="S.F. Admin. Code § 37.9(a)"
+            ),
+            ChecklistElement(
+                check_item="Owner Move-In (OMI): Landlord holds >=25% recorded ownership interest (or >=10% pre-1991)",
+                verified="25%" in facts_lower or "ownership" in facts_lower,
+                evidence_found="Ownership percentage identified" if ("%" in facts_lower and "ownership" in facts_lower) else None,
+                advisory="S.F. Admin. Code § 37.9(a)(8) requires owner to hold at least 25% recorded ownership interest. Ownership shortfalls render notice void.",
+                pinpoint_citation="S.F. Admin. Code § 37.9(a)(8)"
+            ),
+            ChecklistElement(
+                check_item="Owner Move-In (OMI): Good faith intent to occupy unit as principal residence for 36 continuous months",
+                verified="36" in facts_lower or "continuous" in facts_lower,
+                evidence_found="36-month commitment referenced" if ("36" in facts_lower or "month" in facts_lower) else None,
+                advisory="Landlord must move in within 3 months and occupy for at least 36 continuous months (§ 37.9(a)(8)).",
+                pinpoint_citation="S.F. Admin. Code § 37.9(a)(8)"
+            ),
+            ChecklistElement(
+                check_item="Protected Tenant Status: Tenant age 60+ (10+ yrs residency) or disabled (5+ yrs residency) protected from OMI",
+                verified="senior" in facts_lower or "disabled" in facts_lower or "60" in facts_lower,
+                evidence_found="Protected tenant status documented" if ("senior" in facts_lower or "disabled" in facts_lower) else None,
+                advisory="S.F. Admin. Code § 37.9(i) bars OMI evictions of senior or disabled tenants unless owner has no other units.",
+                pinpoint_citation="S.F. Admin. Code § 37.9(i)"
+            ),
+            ChecklistElement(
+                check_item="Statutory Relocation Payment: 50% paid at notice service; remaining 50% upon vacating (S.F. Admin. Code § 37.9A)",
+                verified="relocation" in facts_lower and "paid" in facts_lower,
+                evidence_found="Relocation payment tendered" if ("relocation" in facts_lower and "paid" in facts_lower) else None,
+                advisory="Statutory relocation payments must be tendered according to the annual schedule published by the SF Rent Board.",
+                pinpoint_citation="S.F. Admin. Code § 37.9A"
+            ),
+            ChecklistElement(
+                check_item="Tenant Harassment Protection: No bad faith interference or coercion under S.F. Admin. Code § 37.10B",
+                verified="harass" in facts_lower or "threat" in facts_lower,
+                evidence_found="Harassment allegations noted" if ("harass" in facts_lower or "threat" in facts_lower) else None,
+                advisory="Violations of § 37.10B entitle tenant to actual damages, mandatory treble damages, and attorney fees.",
+                pinpoint_citation="S.F. Admin. Code § 37.10B"
+            )
+        ]
+
+        defenses.append(DefenseItem(
+            issue="San Francisco Rent Ordinance Eviction Defect & Tenant Harassment",
+            controlling_citation="S.F. Admin. Code § 37.9, S.F. Admin. Code § 37.9A, S.F. Admin. Code § 37.10B, Cal. Civ. Code § 1946.2(g)",
+            statutory_deadline="50% relocation payment due with notice; 36-month continuous occupancy; Rent Board copy filed within 10 days",
+            status="POTENTIAL_VIOLATION",
+            statutory_remedy="Notice void ab initio; mandatory dismissal of unlawful detainer; treble damages and attorney fees under S.F. Admin. Code § 37.10B.",
+            elements=sf_elements,
+            required_evidence=[
+                "Copy of eviction notice with proof of Rent Board filing",
+                "Recorded grant deed proving landlord's percentage ownership interest",
+                "Proof of tenant tenancy duration and birthdate / disability documentation for protected status",
+                "Relocation fee receipt or evidence of non-payment"
+            ]
+        ))
+
+    # 11. Los Angeles Rent Stabilization Ordinance (RSO) 3-Day Notice Filing & Relocation Assistance (LAMC § 151.09 & § 165.03)
+    if (
+        any("Los Angeles" in item["issue"] for item in spotted_issues)
+        or any(w in facts_lower for w in ["los angeles", "la rso", "lamc", "151.09", "165.03", "lahd", "koreatown", "hollywood", "van nuys", "san pedro", "valley", "silver lake"])
+    ):
+        la_elements = [
+            ChecklistElement(
+                check_item="Mandatory LAHD Filing: Copy of termination notice filed with LAHD within 3 business days of service",
+                verified="lahd" in facts_lower or "filed" in facts_lower,
+                evidence_found="LAHD filing receipt confirmed" if ("lahd" in facts_lower and "filed" in facts_lower) else None,
+                advisory="LAMC § 151.09(C)(1) and § 165.03 require landlord to file copy with LAHD within 3 business days. Failure voids the notice.",
+                pinpoint_citation="LAMC § 151.09(C)(1)"
+            ),
+            ChecklistElement(
+                check_item="Grounds for Eviction: Predicated upon one of 14 lawful grounds under LAMC § 151.09(A)",
+                verified="ground" in facts_lower or "cause" in facts_lower or "rso" in facts_lower,
+                evidence_found="Stated legal ground" if ("ground" in facts_lower or "cause" in facts_lower) else None,
+                advisory="Under LAMC § 151.09(A), tenancy termination is unlawful unless based upon one of 14 enumerated reasons.",
+                pinpoint_citation="LAMC § 151.09(A)"
+            ),
+            ChecklistElement(
+                check_item="Relocation Assistance Deposit: Mandatory relocation fees deposited into escrow or paid within 15 calendar days",
+                verified="relocation" in facts_lower and "paid" in facts_lower,
+                evidence_found="Relocation fees tendered" if ("relocation" in facts_lower and "paid" in facts_lower) else None,
+                advisory="LAMC § 151.09(G) requires relocation fees (Eligible vs Qualified [senior 62+, disabled, minor] tiers) deposited within 15 days.",
+                pinpoint_citation="LAMC § 151.09(G)"
+            ),
+            ChecklistElement(
+                check_item="Non-RSO Just Cause Protection: Units built post-1978 protected by LAMC § 165.03 just cause and notice filing",
+                verified="165.03" in facts_lower or "just cause" in facts_lower,
+                evidence_found="Non-RSO just cause invoked" if "165.03" in facts_lower else None,
+                advisory="LAMC Chapter XVI extends just cause and LAHD notice filing requirements to non-RSO rental units.",
+                pinpoint_citation="LAMC § 165.03"
+            )
+        ]
+
+        defenses.append(DefenseItem(
+            issue="Los Angeles Rent Stabilization Ordinance (RSO) Notice Filing & Relocation Assistance",
+            controlling_citation="LAMC § 151.09, LAMC § 151.09(G), LAMC § 165.03, Cal. Civ. Code § 1946.2(g)",
+            statutory_deadline="Notice filed with LAHD within 3 business days; relocation fees paid/escrowed within 15 calendar days",
+            status="POTENTIAL_VIOLATION",
+            statutory_remedy="Notice void for failure to file with LAHD or deposit relocation fees; complete affirmative defense to unlawful detainer; civil penalties under LAMC § 151.10.",
+            elements=la_elements,
+            required_evidence=[
+                "Copy of eviction notice served on tenant",
+                "LAHD declaration of filing or proof of non-filing from LAHD records",
+                "Proof of age, disability, or minor dependents for Qualified relocation tier under LAMC § 151.09(G)"
+            ]
+        ))
+
     return DefenseChecklistReport(
         case_id=case.id,
         as_of_date=target_date.isoformat(),
@@ -923,9 +1039,136 @@ def assemble_statutory_letter(
             coverage_gaps=coverage_gaps
         )
 
+    # Letter Type 7: San Francisco Rent Ordinance Notice Defect & Harassment Defense
+    elif letter_type == "sf_rent_ordinance_defense":
+        mandatory_citations = [
+            "S.F. Admin. Code § 37.9",
+            "S.F. Admin. Code § 37.9A",
+            "S.F. Admin. Code § 37.10B",
+            "Cal. Civ. Code § 1946.2(g)"
+        ]
+        statutory_deadlines = [
+            "50% relocation payment due upon service of notice; remaining 50% upon vacating (S.F. Admin. Code § 37.9A)",
+            "Mandatory notice copy filed with SF Rent Board within 10 calendar days",
+            "36-month continuous occupancy requirement for owner move-in (S.F. Admin. Code § 37.9(a)(8))"
+        ]
+
+        subject = f"NOTICE OF EVICTION DEFECT & HARASSMENT OBJECTION UNDER S.F. ADMIN. CODE CH. 37 - {case.title}"
+        body = (
+            f"VIA CERTIFIED MAIL / EMAIL\n\n"
+            f"Date: {date_str}\n\n"
+            f"To: {recipient_name}\n"
+            f"Address: {recipient_address}\n\n"
+            f"From: {sender}\n"
+            f"Re: Objection to Defective Eviction Notice & Tenant Harassment (S.F. Admin. Code Chapter 37)\n"
+            f"Matter Reference: {case.matter_number or 'Unassigned'}\n\n"
+            f"Dear {recipient_name}:\n\n"
+            f"I am writing in response to the notice purporting to terminate my tenancy at the above-referenced residential premises. "
+            f"Please be advised that the property is governed by the San Francisco Residential Rent Stabilization and Arbitration Ordinance "
+            f"(S.F. Admin. Code Chapter 37), and your notice is legally defective, void ab initio, and in violation of municipal and California law.\n\n"
+            f"MUNICIPAL & STATUTORY VIOLATIONS:\n"
+            f"1. Just Cause Requirement (§ 37.9(a)): Under S.F. Admin. Code § 37.9(a), a landlord may endeavor to recover possession of a rental unit "
+            f"ONLY upon demonstrating one of sixteen (16) strictly defined Just Cause grounds. A termination notice failing to state an authorized ground "
+            f"is null and void.\n\n"
+            f"2. Owner Move-In (OMI) Requirements (§ 37.9(a)(8)): If an owner move-in is asserted, the landlord must own at least a twenty-five percent (25%) "
+            f"recorded interest in the property (or 10% recorded prior to February 21, 1991), and must intend in good faith to occupy the unit as their "
+            f"principal residence for a minimum of thirty-six (36) continuous months. Any failure to meet these statutory thresholds voids the notice.\n\n"
+            f"3. Mandatory Relocation Payments (§ 37.9A): Under S.F. Admin. Code § 37.9A, landlords executing no-fault or OMI evictions must pay "
+            f"statutory relocation expenses (with 50% paid at the time of service of the notice, and the remaining 50% paid when the tenant vacates). "
+            f"Failure to tender statutory relocation fees renders the eviction defective.\n\n"
+            f"4. S.F. Rent Board Filing: A copy of the termination notice, together with proof of service, must be filed with the San Francisco Rent Board "
+            f"within ten (10) calendar days of service.\n\n"
+            f"5. Tenant Harassment Prohibitions (§ 37.10B): S.F. Admin. Code § 37.10B prohibits landlords from acting in bad faith to coerce or force "
+            f"tenants to vacate through defective notices, threats, or service interruptions. Violations subject the landlord to actual damages, "
+            f"mandatory treble damages, and attorney fees.\n\n"
+            f"DEMAND:\n"
+            f"Demand is hereby made that you withdraw this defective notice immediately. Tenancy will continue undisturbed at the existing lawful rate. "
+            f"Any unlawful detainer action commenced upon this void notice will be vigorously defended with claims for statutory dismissal and treble damages.\n\n"
+            f"Sincerely,\n\n"
+            f"______________________________________\n"
+            f"{sender}\n"
+        )
+
+        return StatutoryLetterResponse(
+            case_id=case.id,
+            letter_type=letter_type,
+            title="San Francisco Rent Ordinance Eviction Defect Notice",
+            date_formatted=date_str,
+            recipient_name=recipient_name,
+            recipient_address=recipient_address,
+            sender_name=sender,
+            subject=subject,
+            letter_body=body,
+            mandatory_citations=mandatory_citations,
+            statutory_deadlines=statutory_deadlines,
+            coverage_gaps=coverage_gaps
+        )
+
+    # Letter Type 8: Los Angeles Rent Stabilization Ordinance (RSO) Notice Defect & Relocation Demand
+    elif letter_type == "la_rso_relocation_and_defect_notice":
+        mandatory_citations = [
+            "LAMC § 151.09",
+            "LAMC § 151.09(G)",
+            "LAMC § 165.03",
+            "Cal. Civ. Code § 1946.2(g)"
+        ]
+        statutory_deadlines = [
+            "Mandatory 3 business days to file notice copy with LAHD (LAMC § 151.09(C)(1))",
+            "Mandatory 15 calendar days to deposit relocation assistance into escrow (LAMC § 151.09(G))"
+        ]
+
+        subject = f"DEMAND FOR LAHD FILING PROOF & RSO RELOCATION ASSISTANCE UNDER LAMC CH. XV - {case.title}"
+        body = (
+            f"VIA CERTIFIED MAIL / EMAIL\n\n"
+            f"Date: {date_str}\n\n"
+            f"To: {recipient_name}\n"
+            f"Address: {recipient_address}\n\n"
+            f"From: {sender}\n"
+            f"Re: Demand for LAHD Notice Filing & Relocation Assistance Under Los Angeles Municipal Code § 151.09\n"
+            f"Matter Reference: {case.matter_number or 'Unassigned'}\n\n"
+            f"Dear {recipient_name}:\n\n"
+            f"I am in receipt of your notice purporting to terminate my tenancy at the above-referenced residential premises. "
+            f"Please be advised that the property is subject to the Los Angeles Rent Stabilization Ordinance (LAMC Chapter XV) and the "
+            f"Los Angeles Just Cause for Eviction Ordinance (LAMC Chapter XVI). Your notice is legally defective and void under City of Los Angeles law.\n\n"
+            f"MUNICIPAL REQUIREMENTS & VIOLATIONS:\n"
+            f"1. Jurisdictional LAHD 3-Day Filing Requirement: Under Los Angeles Municipal Code § 151.09(C)(1) and § 165.03(D), a true and complete "
+            f"copy of any notice terminating tenancy MUST be filed with the Los Angeles Housing Department (LAHD) within three (3) business days of service "
+            f"upon the tenant. Compliance with this filing requirement is a strict jurisdictional condition precedent; failure to timely file with LAHD "
+            f"renders the termination notice void ab initio.\n\n"
+            f"2. Enumerated Legal Grounds (§ 151.09(A)): Tenancy may only be terminated for one of the fourteen (14) specific grounds recognized under "
+            f"LAMC § 151.09(A). Any eviction based on reasons outside these statutory grounds is unlawful.\n\n"
+            f"3. Mandatory Relocation Assistance Escrow (§ 151.09(G)): For all no-fault terminations (including owner move-in or government orders), "
+            f"the landlord MUST deposit mandatory relocation assistance into an escrow account or pay the tenant directly within fifteen (15) calendar "
+            f"days of serving the notice. The City of Los Angeles enforces established fee schedules distinguishing between 'Eligible' and 'Qualified' "
+            f"(senior age 62+, disabled, or minor dependent children) households.\n\n"
+            f"DEMAND & NOTICE:\n"
+            f"Demand is hereby made that you provide immediate written proof of the certified LAHD notice filing and deposit all required relocation "
+            f"assistance funds. In the absence of strict compliance, the notice of termination is void and of no legal force or effect. "
+            f"Any unlawful detainer lawsuit filed without meeting these mandatory prerequisites will be defended with an immediate motion to quash/demurrer "
+            f"and an application for statutory sanctions.\n\n"
+            f"Sincerely,\n\n"
+            f"______________________________________\n"
+            f"{sender}\n"
+        )
+
+        return StatutoryLetterResponse(
+            case_id=case.id,
+            letter_type=letter_type,
+            title="Los Angeles RSO Notice Defect & Relocation Demand",
+            date_formatted=date_str,
+            recipient_name=recipient_name,
+            recipient_address=recipient_address,
+            sender_name=sender,
+            subject=subject,
+            letter_body=body,
+            mandatory_citations=mandatory_citations,
+            statutory_deadlines=statutory_deadlines,
+            coverage_gaps=coverage_gaps
+        )
+
     else:
         # Refusal for unsupported letter types
-        coverage_gaps.append(f"Unsupported letter type: '{letter_type}'. Supported: 'security_deposit_demand', 'habitability_repair_notice', 'defective_notice_response', 'landlord_entry_objection', 'unlawful_rent_increase_objection', 'no_fault_relocation_demand'.")
+        coverage_gaps.append(f"Unsupported letter type: '{letter_type}'. Supported: 'security_deposit_demand', 'habitability_repair_notice', 'defective_notice_response', 'landlord_entry_objection', 'unlawful_rent_increase_objection', 'no_fault_relocation_demand', 'sf_rent_ordinance_defense', 'la_rso_relocation_and_defect_notice'.")
         return StatutoryLetterResponse(
             case_id=case.id,
             letter_type=letter_type,

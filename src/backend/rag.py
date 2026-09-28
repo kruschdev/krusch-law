@@ -1255,8 +1255,9 @@ def filter_authorities_by_jurisdiction(
     # 4. Mandatory Child Hydration (Definitions & Exceptions)
     if db and final_governing:
         existing_secs = {g.get("section") for g in final_governing}
-        hydrated_nodes = []
+        hydrated_governing = []
         for g in final_governing:
+            hydrated_governing.append(g)
             def_ref = g.get("definitions_ref")
             if def_ref and def_ref not in existing_secs:
                 sibling_def = db.query(LawVector).filter(
@@ -1264,7 +1265,7 @@ def filter_authorities_by_jurisdiction(
                     (LawVector.section == def_ref) | (LawVector.section == f"Section {def_ref}")
                 ).first()
                 if sibling_def:
-                    hydrated_nodes.append({
+                    hydrated_governing.append({
                         "id": sibling_def.id,
                         "jurisdiction": sibling_def.jurisdiction,
                         "state": sibling_def.state,
@@ -1289,7 +1290,7 @@ def filter_authorities_by_jurisdiction(
                     (LawVector.section == exc_ref) | (LawVector.section == f"Section {exc_ref}")
                 ).first()
                 if sibling_exc:
-                    hydrated_nodes.append({
+                    hydrated_governing.append({
                         "id": sibling_exc.id,
                         "jurisdiction": sibling_exc.jurisdiction,
                         "state": sibling_exc.state,
@@ -1308,7 +1309,7 @@ def filter_authorities_by_jurisdiction(
                     })
                     existing_secs.add(exc_ref)
 
-        final_governing.extend(hydrated_nodes)
+        final_governing = hydrated_governing
 
     # Attach deterministic statutory slots to all surviving governing authorities
     for item in final_governing:
@@ -1577,7 +1578,7 @@ def retrieve_laws(
 
                 lex_score = 0.0
                 if query_tokens:
-                    doc_text = f"{row.title or ''} {row.section or ''} {row.content or ''}".lower()
+                    doc_text = f"{row.jurisdiction or ''} {row.topic or ''} {row.title or ''} {row.section or ''} {row.content or ''}".lower()
                     matches = sum(1 for t in query_tokens if t in doc_text)
                     lex_score = min(1.0, matches / max(1, len(query_tokens)))
                     if row.section and row.section.lower() in (effective_text_query or "").lower():

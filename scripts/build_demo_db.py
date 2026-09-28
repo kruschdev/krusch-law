@@ -116,6 +116,50 @@ def main():
                 reviewed_by="attorney:krusch",
                 reviewed_at=datetime.now(timezone.utc),
                 rationale="Statewide mandatory just cause baseline under Tenant Protection Act."
+            ),
+            StatuteRelation(
+                source_statute="Cal. Civ. Code § 1954.52",
+                target_statute="S.F. Admin. Code § 37.3",
+                relation_type="PREEMPTS",
+                scope_topic="Rent Control",
+                confidence=1.0,
+                status="confirmed",
+                reviewed_by="attorney:krusch",
+                reviewed_at=datetime.now(timezone.utc),
+                rationale="Costa-Hawkins Rental Housing Act preempts municipal rent control on post-1995 construction."
+            ),
+            StatuteRelation(
+                source_statute="Cal. Civ. Code § 1946.2",
+                target_statute="S.F. Admin. Code § 37.9",
+                relation_type="CREATES",
+                scope_topic="Eviction & Just Cause",
+                confidence=1.0,
+                status="confirmed",
+                reviewed_by="attorney:krusch",
+                reviewed_at=datetime.now(timezone.utc),
+                rationale="Tenant Protection Act sets statewide just cause floor while preserving more protective municipal ordinances under § 1946.2(g)."
+            ),
+            StatuteRelation(
+                source_statute="Cal. Civ. Code § 1954.52",
+                target_statute="LAMC § 151.06",
+                relation_type="PREEMPTS",
+                scope_topic="Rent Control",
+                confidence=1.0,
+                status="confirmed",
+                reviewed_by="attorney:krusch",
+                reviewed_at=datetime.now(timezone.utc),
+                rationale="Costa-Hawkins preempts municipal rent stabilization on post-1995 residential construction."
+            ),
+            StatuteRelation(
+                source_statute="Cal. Civ. Code § 1946.2",
+                target_statute="LAMC § 151.09",
+                relation_type="CREATES",
+                scope_topic="Eviction & Just Cause",
+                confidence=1.0,
+                status="confirmed",
+                reviewed_by="attorney:krusch",
+                reviewed_at=datetime.now(timezone.utc),
+                rationale="Tenant Protection Act preserves and harmonizes with local Los Angeles Rent Stabilization Ordinance protections."
             )
         ]
 
