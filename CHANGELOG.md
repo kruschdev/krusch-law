@@ -4,6 +4,16 @@ All notable changes to **KruschLaw** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-09-27
+
+### 🚀 Added
+- **Tenant Rent Cap & Notice Defense Workflows**: Added Defense 7 (`Unlawful Rent Increase & Statutory Rent Cap Violation`), Defense 8 (`No-Fault Eviction & Mandatory Relocation Assistance Compliance`), and Defense 9 (`Curable Lease Breach & Mandatory Opportunity to Cure`) to `generate_defense_checklist` with pinpoint statutory citations and verified remedies.
+- **Formal Statutory Letter Templates**: Added 5th template (`unlawful_rent_increase_objection`) and 6th template (`no_fault_relocation_demand`) to `assemble_statutory_letter`, enforcing advance notice timelines (Civ. Code § 827 30/90 days + CCP § 1013 mail extension) and strict relocation compliance voiding mandates (Civ. Code § 1946.2(d)(4) / Oakland OMC § 8.22.360).
+- **Substantive Conflict Detector Hardening**: Added Conflict 8 (Rent increase cap violations exceeding 5% + CPI or 10% maximum), Conflict 9 (Rent increase notice period shortfall), and Conflict 10 (No-fault relocation assistance payment default voiding termination notice) to `detect_legal_conflicts`.
+- **California Statutory Corpus Expansion**: Added Cal. Civ. Code § 1947.12 (Tenant Protection Act Rent Cap), Cal. Civ. Code § 827 (Notice Requirements for Terms & Rent Increases), Cal. Civ. Code § 1942.5 (Retaliatory Eviction Prohibition), and Cal. Civ. Code § 789.3 (Self-Help Lockout Prohibition) to `SEED_CALIFORNIA_ORDINANCES`, complete with physical citation spine coordinates and traceability fixtures.
+- **Rebuilt Offline Fixture `data/demo.db`**: Regenerated frozen SQLite demo database (663,552 bytes) with 20 California and municipal statutes with full coordinate geometry and 0.068s headless demo speed.
+- **Test Suite Expansion**: Added 5 new regression and conflict-pair tests across `test_defense_checklist_and_letter.py` and `test_conflict_pairs.py`, increasing KruschLaw's test suite to 156 / 156 passing tests.
+
 ---
 
 ## [0.6.0] - 2026-09-27

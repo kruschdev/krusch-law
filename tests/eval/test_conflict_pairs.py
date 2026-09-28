@@ -453,6 +453,75 @@ class TestConflictPairsEvaluation(KruschLawTestCase):
         self.assertEqual(conflicts[0]["conflict_type"], "statutory_term_violation")
         self.assertIn("1950.5", conflicts[0]["section"])
 
+    def test_12_rent_increase_cap_and_notice_period_conflicts(self):
+        """
+        Conflict Pair 12: Cal. Civ. Code § 1947.12 rent cap and Cal. Civ. Code § 827 notice periods.
+        Tests:
+          1. Rent increase exceeding statutory ceiling (e.g. 15% > 10% maximum).
+          2. Rent increase notice period shortfall (e.g. 30 days notice for 15% increase, where 90 is required).
+        """
+        from src.backend.resolver import detect_legal_conflicts
+
+        authorities = [
+            {
+                "section": "Cal. Civ. Code § 1947.12",
+                "content": "An owner of residential real property shall not increase the gross rental rate more than 5 percent plus CPI or 10 percent maximum."
+            },
+            {
+                "section": "Cal. Civ. Code § 827(b)",
+                "content": "If the proposed rent increase is greater than 10 percent, the notice shall be delivered not less than 90 calendar days prior to the effective date."
+            }
+        ]
+
+        # Scenario A: 15% increase with only 30 days notice
+        matter_facts_excess = {
+            "rent_increase_pct": 15.0,
+            "statutory_cap_pct": 10.0,
+            "rent_increase_notice_days": 30.0
+        }
+        conflicts = detect_legal_conflicts(authorities, matter_facts=matter_facts_excess, as_of_date="2025-01-15")
+        self.assertEqual(len(conflicts), 2)
+        conflict_types = [c["conflict_type"] for c in conflicts]
+        self.assertTrue(all(ct == "statutory_term_violation" for ct in conflict_types))
+
+        # Check rent cap violation
+        cap_c = next(c for c in conflicts if "1947.12" in c["section"])
+        self.assertEqual(cap_c["severity"], "CRITICAL")
+        self.assertIn("15.0%", cap_c["violating_term"])
+
+        # Check notice period shortfall
+        notice_c = next(c for c in conflicts if "827" in c["section"])
+        self.assertEqual(notice_c["severity"], "HIGH")
+        self.assertIn("30 days", notice_c["violating_term"])
+        self.assertIn("90 days required", notice_c["issue"])
+
+    def test_13_no_fault_relocation_payment_deadline_conflict(self):
+        """
+        Conflict Pair 13: Cal. Civ. Code § 1946.2(d)(4) mandatory relocation assistance compliance.
+        Failure to provide relocation assistance within 15 calendar days renders the termination notice void.
+        """
+        from src.backend.resolver import detect_legal_conflicts
+
+        authorities = [
+            {
+                "section": "Cal. Civ. Code § 1946.2(d)",
+                "content": "Owner must provide relocation assistance equal to 1 month rent within 15 calendar days of service. Failure to strictly comply renders notice of termination void."
+            }
+        ]
+
+        matter_facts_unpaid = {
+            "no_fault_termination": True,
+            "relocation_assistance_paid": False,
+            "relocation_days_elapsed": 20
+        }
+        conflicts = detect_legal_conflicts(authorities, matter_facts=matter_facts_unpaid, as_of_date="2025-01-15")
+        self.assertEqual(len(conflicts), 1)
+        c = conflicts[0]
+        self.assertEqual(c["conflict_type"], "statutory_term_violation")
+        self.assertEqual(c["severity"], "CRITICAL")
+        self.assertIn("1946.2(d)(4)", c["section"])
+        self.assertIn("void", c["issue"])
+
 
 if __name__ == "__main__":
     unittest.main()

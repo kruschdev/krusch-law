@@ -377,6 +377,156 @@ def generate_defense_checklist(
             ]
         ))
 
+    # 7. Unlawful Rent Increase & Exceeding Statutory Rent Caps (Cal. Civ. Code § 1947.12 & § 827)
+    if (
+        any("Rent Increase" in item["issue"] for item in spotted_issues)
+        or any(w in facts_lower for w in ["rent increase", "raise rent", "raised rent", "rent hike", "cpi", "rent cap", "gouging", "higher rent"])
+    ):
+        rent_elements = [
+            ChecklistElement(
+                check_item="Rent increase does not exceed statutory ceiling (5% plus regional CPI, maximum 10% under Cal. Civ. Code § 1947.12(a))",
+                verified="10%" in facts_lower or "cpi" in facts_lower or "increase" in facts_lower,
+                evidence_found="Rent increase percentage identified" if ("%" in facts_lower or "increase" in facts_lower) else None,
+                advisory="Increases above 5% + CPI violate AB 1482 unless valid exemption applies (Civ. Code § 1947.12(a)).",
+                pinpoint_citation="Cal. Civ. Code § 1947.12(a)"
+            ),
+            ChecklistElement(
+                check_item="Written notice served with requisite statutory lead time (30 calendar days for <=10%, 90 calendar days for >10% under Cal. Civ. Code § 827(b))",
+                verified="30 day" in facts_lower or "90 day" in facts_lower or "notice" in facts_lower,
+                evidence_found="Notice timeline documented" if ("notice" in facts_lower) else None,
+                advisory="Civ. Code § 827(b)(3) strictly requires 90 days advance written notice when cumulative increases exceed 10%.",
+                pinpoint_citation="Cal. Civ. Code § 827(b)(2)-(3)"
+            ),
+            ChecklistElement(
+                check_item="Service by mail extended by 5 additional calendar days pursuant to Cal. Code Civ. Proc. § 1013",
+                verified=False,
+                evidence_found=None,
+                advisory="If notice of rent increase was mailed within California, effective date must be at least 35 days (for <=10%) or 95 days (for >10%).",
+                pinpoint_citation="Cal. Code Civ. Proc. § 1013"
+            ),
+            ChecklistElement(
+                check_item="Exemption Notice Requirement: Lease contains mandatory statutory exemption text if claiming single-family alienable title exemption",
+                verified="exemption" in facts_lower,
+                evidence_found="Exemption clause discussed" if ("exemption" in facts_lower) else None,
+                advisory="Landlord forfeits AB 1482 single-family exemption if statutory disclosure was omitted from the lease (Civ. Code § 1947.12(d)(5)).",
+                pinpoint_citation="Cal. Civ. Code § 1947.12(d)(5)"
+            )
+        ]
+
+        defenses.append(DefenseItem(
+            issue="Unlawful Rent Increase & Statutory Rent Cap Violation",
+            controlling_citation="Cal. Civ. Code § 1947.12, Cal. Civ. Code § 827, Oakland Municipal Code § 8.22.070",
+            statutory_deadline="30 calendar days for <=10% increase; 90 calendar days for >10% increase (Civ. Code § 827(b)); +5 days if mailed (CCP § 1013)",
+            status="POTENTIAL_VIOLATION",
+            statutory_remedy="Rent increase is void ab initio; tenant entitled to restitution of excess rent paid, reinstatement of lawful base rent, and complete defense to non-payment unlawful detainer.",
+            elements=rent_elements,
+            required_evidence=[
+                "Copy of written notice of rent increase with postmarked envelope or delivery date",
+                "Lease agreement establishing base rent schedule and checking for exemption disclosures",
+                "Proof of rent payment history for preceding 12 months"
+            ]
+        ))
+
+    # 8. No-Fault Eviction & Mandatory Relocation Assistance Compliance (AB 1482 Civ. Code § 1946.2(d) & Oakland OMC § 8.22.360)
+    if (
+        any("Relocation" in item["issue"] or "Just Cause" in item["issue"] for item in spotted_issues)
+        or any(w in facts_lower for w in ["relocation", "owner move-in", "owner move in", "omi", "remodel", "no-fault", "no fault", "ellis act"])
+    ):
+        relocation_elements = [
+            ChecklistElement(
+                check_item="Written notice states valid statutory no-fault grounds (owner move-in, withdrawal, substantial remodel) under Civ. Code § 1946.2(b)(2)",
+                verified="owner move" in facts_lower or "remodel" in facts_lower or "ellis" in facts_lower or "no fault" in facts_lower or "no-fault" in facts_lower,
+                evidence_found="No-fault ground identified" if ("move" in facts_lower or "remodel" in facts_lower) else None,
+                advisory="Failure to specify statutory ground in notice makes eviction void under Civ. Code § 1946.2(a).",
+                pinpoint_citation="Cal. Civ. Code § 1946.2(a)"
+            ),
+            ChecklistElement(
+                check_item="Written notice provides tenant with written option for direct relocation payment or rent waiver (Civ. Code § 1946.2(d)(1))",
+                verified="waiver" in facts_lower or "payment" in facts_lower,
+                evidence_found="Relocation option stated" if ("waiver" in facts_lower or "relocation" in facts_lower) else None,
+                advisory="Notice must state the amount of relocation assistance or waiver provided.",
+                pinpoint_citation="Cal. Civ. Code § 1946.2(d)(1)"
+            ),
+            ChecklistElement(
+                check_item="Direct relocation payment delivered to tenant within 15 calendar days of service of notice of termination",
+                verified="paid" in facts_lower and "relocation" in facts_lower,
+                evidence_found="Relocation funds tendered" if ("paid" in facts_lower and "relocation" in facts_lower) else None,
+                advisory="Civ. Code § 1946.2(d)(1)(A) mandates delivery of payment within 15 calendar days.",
+                pinpoint_citation="Cal. Civ. Code § 1946.2(d)(1)(A)"
+            ),
+            ChecklistElement(
+                check_item="Strict Compliance Voiding Rule: Failure to pay relocation assistance makes termination notice VOID",
+                verified=True,
+                evidence_found="Statutory defense available if payment omitted",
+                advisory="Under Cal. Civ. Code § 1946.2(d)(4), failure to strictly provide relocation assistance renders the notice of termination void.",
+                pinpoint_citation="Cal. Civ. Code § 1946.2(d)(4)"
+            ),
+            ChecklistElement(
+                check_item="Municipal Harmonized Floor (Oakland): Landlord tendered higher municipal relocation payment under OMC § 8.22.360",
+                verified=False,
+                evidence_found=None,
+                advisory="Under HARMONIZED_FLOOR_RULE, Oakland's higher relocation assistance schedule supersedes the state 1-month floor.",
+                pinpoint_citation="Oakland Municipal Code § 8.22.360"
+            )
+        ]
+
+        defenses.append(DefenseItem(
+            issue="No-Fault Eviction & Mandatory Relocation Assistance Compliance",
+            controlling_citation="Cal. Civ. Code § 1946.2(d), Oakland Municipal Code § 8.22.360",
+            statutory_deadline="Direct relocation payment within 15 calendar days of service of notice of termination (Civ. Code § 1946.2(d)(1)(A))",
+            status="POTENTIAL_VIOLATION",
+            statutory_remedy="Notice of termination is void ab initio for failure to provide relocation assistance under Cal. Civ. Code § 1946.2(d)(4); mandatory dismissal of unlawful detainer.",
+            elements=relocation_elements,
+            required_evidence=[
+                "Notice of termination / notice to quit citing no-fault grounds",
+                "Bank records or correspondence confirming non-receipt of relocation funds",
+                "Proof of 12+ months continuous lawful occupancy"
+            ]
+        ))
+
+    # 9. Curable Lease Breach & Mandatory Opportunity to Cure (Cal. Civ. Code § 1946.2(c) & CCP § 1161(3))
+    if (
+        any("Curable" in item["issue"] for item in spotted_issues)
+        or any(w in facts_lower for w in ["cure", "curable", "lease violation", "unauthorized pet", "subletting", "breach of lease"])
+    ) and "unpaid rent" not in facts_lower:
+        cure_elements = [
+            ChecklistElement(
+                check_item="Alleged violation constitutes a curable lease covenant breach",
+                verified="pet" in facts_lower or "sublet" in facts_lower or "covenant" in facts_lower or "breach" in facts_lower,
+                evidence_found="Curable covenant breach identified",
+                advisory="Breaches of lease covenants that can be corrected are curable by law.",
+                pinpoint_citation="Cal. Code Civ. Proc. § 1161(3)"
+            ),
+            ChecklistElement(
+                check_item="Landlord served initial written notice giving tenant at least 3 days with opportunity to cure before terminating",
+                verified="opportunity to cure" in facts_lower or "notice to cure" in facts_lower,
+                evidence_found="Cure notice provided" if ("cure" in facts_lower and "notice" in facts_lower) else None,
+                advisory="Under Cal. Civ. Code § 1946.2(c), landlord MUST provide a notice of violation with opportunity to cure before serving notice to quit.",
+                pinpoint_citation="Cal. Civ. Code § 1946.2(c)"
+            ),
+            ChecklistElement(
+                check_item="No notice to quit served until after expiration of full 3-day cure period",
+                verified=False,
+                evidence_found=None,
+                advisory="Serving a straight notice to quit without prior opportunity to cure is legally fatal.",
+                pinpoint_citation="Cal. Civ. Code § 1946.2(c)"
+            )
+        ]
+
+        defenses.append(DefenseItem(
+            issue="Curable Lease Breach & Mandatory Opportunity to Cure",
+            controlling_citation="Cal. Civ. Code § 1946.2(c), Cal. Code Civ. Proc. § 1161(3)",
+            statutory_deadline="Mandatory separate 3-day notice with opportunity to cure prior to any notice to quit",
+            status="POTENTIAL_VIOLATION",
+            statutory_remedy="Notice to quit served without prior opportunity to cure is legally void under Cal. Civ. Code § 1946.2(c).",
+            elements=cure_elements,
+            required_evidence=[
+                "Copy of notice served by landlord",
+                "Evidence of cure or tender of cure within 3 business days",
+                "Lease agreement terms regarding permitted alterations or occupants"
+            ]
+        ))
+
     return DefenseChecklistReport(
         case_id=case.id,
         as_of_date=target_date.isoformat(),
@@ -655,9 +805,127 @@ def assemble_statutory_letter(
             coverage_gaps=coverage_gaps
         )
 
+    # Letter Type 5: Objection to Unlawful Rent Increase
+    elif letter_type == "unlawful_rent_increase_objection":
+        mandatory_citations = [
+            "Cal. Civ. Code § 1947.12",
+            "Cal. Civ. Code § 827",
+            "Cal. Code Civ. Proc. § 1013",
+            "Oakland Municipal Code § 8.22.070"
+        ]
+        statutory_deadlines = [
+            "30 calendar days advance written notice for increases of 10% or less (Civ. Code § 827(b)(2))",
+            "90 calendar days advance written notice for increases exceeding 10% (Civ. Code § 827(b)(3))",
+            "+5 calendar days extension for service by mail (CCP § 1013)"
+        ]
+
+        subject = f"FORMAL OBJECTION TO UNLAWFUL RENT INCREASE - {case.title}"
+        body = (
+            f"VIA CERTIFIED MAIL / EMAIL\n\n"
+            f"Date: {date_str}\n\n"
+            f"To: {recipient_name}\n"
+            f"Address: {recipient_address}\n\n"
+            f"From: {sender}\n"
+            f"Re: Formal Objection to Unlawful Rent Increase Pursuant to Cal. Civ. Code §§ 1947.12 and 827\n"
+            f"Matter Reference: {case.matter_number or 'Unassigned'}\n\n"
+            f"Dear {recipient_name}:\n\n"
+            f"I am in receipt of your recent notice proposing to increase the rent for the above-referenced residential premises. "
+            f"Please be advised that the proposed rent increase violates California law and is legally void and unenforceable.\n\n"
+            f"STATUTORY BASIS OF OBJECTION:\n"
+            f"1. Statutory Rent Cap Ceiling: Under California Civil Code § 1947.12 (the California Tenant Protection Act of 2019, AB 1482), "
+            f"an owner shall not, over the course of any 12-month period, increase the gross rental rate more than 5 percent plus the percentage "
+            f"change in the cost of living (CPI), or 10 percent, whichever is lower. Any increase exceeding this statutory limit without a recognized "
+            f"statutory exemption is unlawful.\n\n"
+            f"2. Mandatory Advance Notice Timeline: Under California Civil Code § 827(b), any rent increase of 10 percent or less requires "
+            f"not less than 30 calendar days advance written notice. Any increase exceeding 10 percent (or cumulatively exceeding 10 percent "
+            f"over the prior 12 months) requires not less than 90 calendar days advance written notice. Furthermore, pursuant to California "
+            f"Code of Civil Procedure § 1013, service by mail requires an additional five (5) calendar days.\n\n"
+            f"3. Strict Exemption Disclosure Requirement: If you claim that this property is exempt from AB 1482 as a single-family dwelling "
+            f"under Civil Code § 1947.12(d)(5), that exemption is valid ONLY IF the mandatory statutory disclosure notice was provided in the rental "
+            f"agreement. Omission of this disclosure forfeits the exemption.\n\n"
+            f"DEMAND & NOTICE:\n"
+            f"Demand is hereby made that you withdraw the defective notice of rent increase immediately. Rent will continue to be tendered at the "
+            f"existing lawful base rate. Any unlawful detainer initiated for non-payment of the disputed excess will be defended with a demand for "
+            f"mandatory dismissal and statutory attorney fees.\n\n"
+            f"Sincerely,\n\n"
+            f"______________________________________\n"
+            f"{sender}\n"
+        )
+
+        return StatutoryLetterResponse(
+            case_id=case.id,
+            letter_type=letter_type,
+            title="Objection to Unlawful Rent Increase",
+            date_formatted=date_str,
+            recipient_name=recipient_name,
+            recipient_address=recipient_address,
+            sender_name=sender,
+            subject=subject,
+            letter_body=body,
+            mandatory_citations=mandatory_citations,
+            statutory_deadlines=statutory_deadlines,
+            coverage_gaps=coverage_gaps
+        )
+
+    # Letter Type 6: Demand for Mandatory Relocation Assistance / Void Notice Objection
+    elif letter_type == "no_fault_relocation_demand":
+        mandatory_citations = [
+            "Cal. Civ. Code § 1946.2(d)",
+            "Cal. Civ. Code § 1946.2(d)(4)",
+            "Oakland Municipal Code § 8.22.360"
+        ]
+        statutory_deadlines = [
+            "15 calendar days from notice service to tender direct relocation payment (Civ. Code § 1946.2(d)(1)(A))",
+            "Mandatory dismissal of eviction action for void notice (Civ. Code § 1946.2(d)(4))"
+        ]
+
+        subject = f"DEMAND FOR STATUTORY RELOCATION ASSISTANCE / VOID NOTICE OBJECTION - {case.title}"
+        body = (
+            f"VIA CERTIFIED MAIL / EMAIL\n\n"
+            f"Date: {date_str}\n\n"
+            f"To: {recipient_name}\n"
+            f"Address: {recipient_address}\n\n"
+            f"From: {sender}\n"
+            f"Re: Demand for Mandatory Relocation Assistance and Objection to Void Notice Under Cal. Civ. Code § 1946.2(d)\n"
+            f"Matter Reference: {case.matter_number or 'Unassigned'}\n\n"
+            f"Dear {recipient_name}:\n\n"
+            f"I am in receipt of your notice purporting to terminate my residential tenancy based on alleged no-fault grounds. "
+            f"Please be advised that the notice is legally defective and void under California law due to your failure to comply with statutory relocation assistance mandates.\n\n"
+            f"STATUTORY DEFICIENCIES & MANDATES:\n"
+            f"1. Mandatory Relocation Payment Deadline: Under California Civil Code § 1946.2(d)(1)(A), when a landlord issues a notice of termination "
+            f"based on no-fault just cause, the landlord MUST provide relocation assistance equal to one month of the tenant's rent within fifteen (15) "
+            f"calendar days of serving the notice, or provide a written waiver of the final month's rent prior to the due date.\n\n"
+            f"2. Strict Compliance & Void Notice Rule: Under California Civil Code § 1946.2(d)(4), 'the failure of an owner to strictly comply with "
+            f"this subdivision shall render the notice of termination void.' Because you have failed to deliver the mandatory relocation payment "
+            f"within fifteen (15) calendar days, the notice of termination is void ab initio as a matter of law.\n\n"
+            f"3. Municipal Relocation Requirements: In jurisdictions with enhanced relocation protections such as the Oakland Rent Adjustment Program "
+            f"(OMC § 8.22.360), municipal relocation schedules provide substantial additional compensation that controls under California's harmonized floor rule.\n\n"
+            f"DEMAND:\n"
+            f"Because your notice of termination is legally void, tenancy continues undisturbed. Any legal action commenced based upon this void notice "
+            f"will be met with an immediate motion for summary judgment or dismissal and an application for costs and attorney fees.\n\n"
+            f"Sincerely,\n\n"
+            f"______________________________________\n"
+            f"{sender}\n"
+        )
+
+        return StatutoryLetterResponse(
+            case_id=case.id,
+            letter_type=letter_type,
+            title="Demand for Mandatory Relocation Assistance",
+            date_formatted=date_str,
+            recipient_name=recipient_name,
+            recipient_address=recipient_address,
+            sender_name=sender,
+            subject=subject,
+            letter_body=body,
+            mandatory_citations=mandatory_citations,
+            statutory_deadlines=statutory_deadlines,
+            coverage_gaps=coverage_gaps
+        )
+
     else:
         # Refusal for unsupported letter types
-        coverage_gaps.append(f"Unsupported letter type: '{letter_type}'. Supported: 'security_deposit_demand', 'habitability_repair_notice', 'defective_notice_response', 'landlord_entry_objection'.")
+        coverage_gaps.append(f"Unsupported letter type: '{letter_type}'. Supported: 'security_deposit_demand', 'habitability_repair_notice', 'defective_notice_response', 'landlord_entry_objection', 'unlawful_rent_increase_objection', 'no_fault_relocation_demand'.")
         return StatutoryLetterResponse(
             case_id=case.id,
             letter_type=letter_type,

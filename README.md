@@ -4,13 +4,13 @@
 > *Private municipal code retrieval, two-pass assertion grounding, and verifiable cryptographic purge using on-premise open-weight models.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Version: 0.6.0](https://img.shields.io/badge/Version-0.6.0-green.svg)](https://github.com/kruschdev/krusch-law)
+[![Version: 0.7.0](https://img.shields.io/badge/Version-0.7.0-green.svg)](https://github.com/kruschdev/krusch-law)
 [![Python 3.11 | 3.12](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.31+-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![pgvector](https://img.shields.io/badge/PostgreSQL-pgvector%2016-336791.svg?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Ollama](https://img.shields.io/badge/Ollama-Local%20Inference-black.svg)](https://ollama.com)
-[![Tests: 151 Passing](https://img.shields.io/badge/Tests-151%20Passing-brightgreen.svg)](tests/)
+[![Tests: 156 Passing](https://img.shields.io/badge/Tests-156%20Passing-brightgreen.svg)](tests/)
 [![Invariants: 12/12 Verified](https://img.shields.io/badge/Invariants-12%2F12%20Verified-blue.svg)](docs/INVARIANTS.md)
 [![Grounding: 0.00% False Support](https://img.shields.io/badge/Grounding-0.00%25%20False%20Support-brightgreen.svg)](data/eval/labeled_grounding_golden.json)
 

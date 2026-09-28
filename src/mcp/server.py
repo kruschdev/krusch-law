@@ -309,7 +309,7 @@ TOOLS_CATALOG = [
                 },
                 "letter_type": {
                     "type": "string",
-                    "description": "Type of letter: 'security_deposit_demand' | 'habitability_repair_notice' | 'defective_notice_response'"
+                    "description": "Type of letter: 'security_deposit_demand' | 'habitability_repair_notice' | 'defective_notice_response' | 'landlord_entry_objection' | 'unlawful_rent_increase_objection' | 'no_fault_relocation_demand'"
                 },
                 "recipient_name": {
                     "type": "string",

@@ -1070,8 +1070,16 @@ def extract_statutory_slots(text_content: str) -> Dict[str, Any]:
             slots["cure_notice_days"] = 3
             if "court" in content_lower or "1161" in text_content:
                 slots["cure_notice_court_days"] = 3
+        if 10 in days_list and ("rent board" in content_lower or "8.22.360" in text_content):
+            slots["rent_board_filing_days"] = 10
         if 14 in days_list and ("inspection" in content_lower):
             slots["inspection_request_days"] = 14
+        if 15 in days_list and ("relocation" in content_lower or "1946.2" in text_content):
+            slots["relocation_payment_days"] = 15
+        if 30 in days_list and ("rent increase" in content_lower or "827" in text_content or "tenancy" in content_lower):
+            slots["rent_increase_notice_days_standard"] = 30
+        if 90 in days_list and ("rent increase" in content_lower or "827" in text_content or ">10%" in text_content or "10 percent" in text_content):
+            slots["rent_increase_notice_days_large"] = 90
         if 180 in days_list and ("retaliat" in content_lower or "presumption" in content_lower or "1942.5" in text_content):
             slots["retaliation_presumption_days"] = 180
 
@@ -1286,5 +1294,64 @@ def detect_legal_conflicts(
                         "Retaliatory eviction defense remains fully available in any unlawful detainer."
                     )
                 })
+
+        # Conflict 8: Rent Increase Cap Conflict (Civ. Code § 1947.12 & OMC § 8.22.070)
+        if ("1947.12" in sec or "rent cap" in sec.lower() or "1947.12" in content) and "827" not in sec:
+            claimed_increase_pct = matter_facts.get("rent_increase_pct")
+            statutory_cap = matter_facts.get("statutory_cap_pct", 10.0)
+            if claimed_increase_pct and float(claimed_increase_pct) > float(statutory_cap):
+                conflicts.append({
+                    "conflict_type": "statutory_term_violation",
+                    "severity": "CRITICAL",
+                    "section": "Cal. Civ. Code § 1947.12",
+                    "operative_rule": f"Annual rent increases capped at 5% plus regional CPI, maximum {float(statutory_cap):.1f}%.",
+                    "violating_term": f"Landlord imposed a {float(claimed_increase_pct):.1f}% rent increase.",
+                    "issue": "Proposed rent increase exceeds statutory ceiling under California Tenant Protection Act of 2019 (AB 1482).",
+                    "attorney_advisory": (
+                        f"Advise client that the {float(claimed_increase_pct):.1f}% increase is unlawful and void ab initio. "
+                        "Tenant may tender rent at the previous lawful rate without incurring default."
+                    )
+                })
+
+        # Conflict 9: Rent Increase Notice Period Shortfall (Civ. Code § 827 & CCP § 1013)
+        if "827" in sec or ("827" in content and "1947.12" not in sec):
+            notice_days = matter_facts.get("rent_increase_notice_days")
+            inc_pct = matter_facts.get("rent_increase_pct", 0.0)
+            if notice_days is not None:
+                req_days = 90.0 if float(inc_pct) > 10.0 else 30.0
+                if matter_facts.get("served_by_mail"):
+                    req_days += 5.0
+                if float(notice_days) < req_days:
+                    conflicts.append({
+                        "conflict_type": "statutory_term_violation",
+                        "severity": "HIGH",
+                        "section": "Cal. Civ. Code § 827(b)",
+                        "operative_rule": f"Mandatory {int(req_days)} calendar days advance written notice required.",
+                        "violating_term": f"Landlord provided only {int(notice_days)} days notice before increase.",
+                        "issue": f"Rent increase notice period falls short of statutory requirement ({int(req_days)} days required, {int(notice_days)} provided).",
+                        "attorney_advisory": (
+                            "Notice of rent increase is legally ineffective. The rent increase cannot take effect until a new, "
+                            f"valid notice providing full {int(req_days)} days is served."
+                        )
+                    })
+
+        # Conflict 10: No-Fault Relocation Assistance Compliance (Civ. Code § 1946.2(d))
+        if "1946.2" in sec:
+            if matter_facts.get("no_fault_termination"):
+                assistance_paid = matter_facts.get("relocation_assistance_paid", False)
+                days_since_notice = matter_facts.get("relocation_days_elapsed", 0)
+                if not assistance_paid and days_since_notice > 15:
+                    conflicts.append({
+                        "conflict_type": "statutory_term_violation",
+                        "severity": "CRITICAL",
+                        "section": "Cal. Civ. Code § 1946.2(d)(4)",
+                        "operative_rule": "Direct relocation assistance equal to 1 month's rent must be provided within 15 calendar days of notice service.",
+                        "violating_term": f"No relocation payment or waiver provided after {days_since_notice} days.",
+                        "issue": "Failure to provide mandatory relocation assistance renders no-fault termination notice void.",
+                        "attorney_advisory": (
+                            "Under Cal. Civ. Code § 1946.2(d)(4), the notice of termination is void ab initio. "
+                            "Landlord cannot maintain an unlawful detainer action based upon this defective notice."
+                        )
+                    })
 
     return conflicts

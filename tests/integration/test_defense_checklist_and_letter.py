@@ -301,6 +301,104 @@ class TestDefenseChecklistAndLetterIntegration(KruschLawTestCase):
         self.assertIn("789.3", lockout_defense.controlling_citation)
         self.assertTrue(any(el.verified for el in lockout_defense.elements))
 
+    def test_09_unlawful_rent_increase_checklist_and_letter(self):
+        case = Case(
+            title="Excessive 15 Percent Rent Hike Dispute",
+            matter_number="MAT-RENT-001",
+            client_name="Maria Gonzales",
+            facts="Landlord served a notice of rent increase raising rent by 15% with only 30 days notice."
+        )
+        self.db.add(case)
+        self.db.commit()
+        self.db.refresh(case)
+
+        report = generate_defense_checklist(case, as_of_date="2025-02-01", db=self.db)
+        issues = [d.issue for d in report.defenses]
+        self.assertTrue(any("Unlawful Rent Increase" in iss for iss in issues))
+
+        rent_defense = next(d for d in report.defenses if "Unlawful Rent Increase" in d.issue)
+        self.assertIn("1947.12", rent_defense.controlling_citation)
+        self.assertIn("827", rent_defense.controlling_citation)
+        self.assertIn("90 calendar days", rent_defense.statutory_deadline)
+        self.assertIn("void ab initio", rent_defense.statutory_remedy)
+        self.assertTrue(any("5% plus regional CPI" in el.check_item for el in rent_defense.elements))
+
+        # Assemble letter
+        res = assemble_statutory_letter(
+            case=case,
+            letter_type="unlawful_rent_increase_objection",
+            recipient_name="Oakland Properties Management",
+            recipient_address="1200 Lakeshore Ave, Oakland, CA 94606",
+            sender_name="Maria Gonzales",
+            as_of_date="2025-02-01",
+            db=self.db
+        )
+        self.assertEqual(res.letter_type, "unlawful_rent_increase_objection")
+        self.assertIn("Cal. Civ. Code § 1947.12", res.mandatory_citations)
+        self.assertIn("Cal. Civ. Code § 827", res.mandatory_citations)
+        self.assertIn("Cal. Code Civ. Proc. § 1013", res.mandatory_citations)
+        self.assertIn("formal objection to unlawful rent increase", res.letter_body.lower())
+        self.assertIn("proposing to increase the rent", res.letter_body.lower())
+        self.assertIn("90 calendar days", res.letter_body)
+        self.assertIn("five (5) calendar days", res.letter_body)
+
+    def test_10_no_fault_relocation_checklist_and_letter(self):
+        case = Case(
+            title="Owner Move-In Eviction Without Relocation Funds",
+            matter_number="MAT-OMI-001",
+            client_name="Robert Jenkins",
+            facts="Landlord served a 60-day notice to quit for owner move-in on an AB 1482 covered property. It has been 25 days since service and landlord has not paid any relocation assistance or waived rent."
+        )
+        self.db.add(case)
+        self.db.commit()
+        self.db.refresh(case)
+
+        report = generate_defense_checklist(case, as_of_date="2025-02-01", db=self.db)
+        issues = [d.issue for d in report.defenses]
+        self.assertTrue(any("Relocation Assistance" in iss for iss in issues))
+
+        omi_defense = next(d for d in report.defenses if "Relocation Assistance" in d.issue)
+        self.assertIn("1946.2(d)", omi_defense.controlling_citation)
+        self.assertIn("15 calendar days", omi_defense.statutory_deadline)
+        self.assertIn("void ab initio", omi_defense.statutory_remedy)
+
+        # Assemble letter
+        res = assemble_statutory_letter(
+            case=case,
+            letter_type="no_fault_relocation_demand",
+            recipient_name="Landlord Peter",
+            recipient_address="300 Telegraph Ave, Oakland, CA",
+            sender_name="Robert Jenkins",
+            as_of_date="2025-02-01",
+            db=self.db
+        )
+        self.assertEqual(res.letter_type, "no_fault_relocation_demand")
+        self.assertIn("Cal. Civ. Code § 1946.2(d)", res.mandatory_citations)
+        self.assertIn("Cal. Civ. Code § 1946.2(d)(4)", res.mandatory_citations)
+        self.assertIn("fifteen (15) calendar days", res.letter_body)
+        self.assertIn("strictly comply with this subdivision shall render the notice of termination void", res.letter_body)
+
+    def test_11_curable_lease_breach_checklist(self):
+        case = Case(
+            title="Unauthorized Dog Curable Violation",
+            matter_number="MAT-PET-001",
+            client_name="Carlos Ruiz",
+            facts="Landlord immediately served a straight notice to quit alleging an unauthorized pet without ever giving a 3-day notice with opportunity to cure."
+        )
+        self.db.add(case)
+        self.db.commit()
+        self.db.refresh(case)
+
+        report = generate_defense_checklist(case, as_of_date="2025-02-01", db=self.db)
+        issues = [d.issue for d in report.defenses]
+        self.assertTrue(any("Curable Lease Breach" in iss for iss in issues))
+
+        cure_defense = next(d for d in report.defenses if "Curable Lease Breach" in d.issue)
+        self.assertIn("1946.2(c)", cure_defense.controlling_citation)
+        self.assertIn("1161(3)", cure_defense.controlling_citation)
+        self.assertIn("opportunity to cure", cure_defense.statutory_deadline)
+        self.assertIn("void under Cal. Civ. Code § 1946.2(c)", cure_defense.statutory_remedy)
+
 
 if __name__ == "__main__":
     unittest.main()

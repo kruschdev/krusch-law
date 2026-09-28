@@ -19,7 +19,7 @@
 | **INV-9** | **Legal Hold & 423 Locked Gating** | Case records subject to litigation hold deleted or purged; chain-of-custody export unavailable | `tests/test_security_hardening.py (test_05, test_06, test_07)` | ✅ PASS |
 | **INV-10** | **Strict Loopback Residency** | Orchestrator processes bind externally; API key requirements bypassed outside local development | `tests/test_security_hardening.py (test_01, test_02)` | ✅ PASS |
 | **INV-11** | **Physical Citation Spine Coordinates** | Spatial bounding box or character offset loss during ingestion or RAG retrieval; ungrounded page folios | `tests/unit/test_grounding_properties.py::TestGroundingProperties::test_property_7_physical_citation_spine_coordinate_persistence_and_retrieval` | ✅ PASS |
-| **INV-12** | **Harmonized Floor vs. Ceiling Preemption** | Statewide floor statutes (AB 1482) mistakenly preempting stricter municipal tenant protections (Oakland RAP); failure of word-to-digit normalization | `tests/eval/test_conflict_pairs.py (test_10, test_11)`<br>`tests/integration/test_defense_checklist_and_letter.py (test_07, test_08)` | ✅ PASS |
+| **INV-12** | **Harmonized Floor vs. Ceiling Preemption** | Statewide floor statutes (AB 1482) mistakenly preempting stricter municipal tenant protections (Oakland RAP); failure of word-to-digit normalization; rent cap & notice shortfalls | `tests/eval/test_conflict_pairs.py (test_10, test_11, test_12, test_13)`<br>`tests/integration/test_defense_checklist_and_letter.py (test_07, test_08, test_09, test_10, test_11)` | ✅ PASS |
 
 ---
 
@@ -143,9 +143,10 @@
   - **Statutory Ceilings**: Statewide preemption ceilings (e.g., Costa-Hawkins Civ. Code § 1954.52) strictly preempt local municipal rent control on exempt units (single-family homes and post-1995 construction).
   - **Quantitative Slot Parity**: Statutory slots use length-descending word-numeral replacement (`"twenty-one calendar days"` == `21 days`, `"three court days"` == `3 days`, `"twenty-four hours"` == `24 hours`) guaranteeing parity regardless of drafting syntax.
   - **Evidence Decryption Grounding**: Defense checklists and statutory letter assembly decrypt client evidence documents before factual pattern matching, preventing encrypted text blindness.
+  - **Rent Cap & Relocation Compliance**: Audits proposed rent hikes against the 5% + CPI ceiling and 30/90-day notice timelines (Civ. Code § 827 + CCP § 1013), and validates 15-day relocation assistance payment compliance for no-fault evictions under Civ. Code § 1946.2(d)(4).
 * **Verification Command**:
   ```bash
-  pytest tests/eval/test_conflict_pairs.py -k "test_10 or test_11"
-  pytest tests/integration/test_defense_checklist_and_letter.py -k "test_07 or test_08"
+  pytest tests/eval/test_conflict_pairs.py -k "test_10 or test_11 or test_12 or test_13"
+  pytest tests/integration/test_defense_checklist_and_letter.py -k "test_07 or test_08 or test_09 or test_10 or test_11"
   ```
 

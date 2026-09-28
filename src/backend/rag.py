@@ -131,6 +131,49 @@ LEGAL_ISSUE_RULES: List[Dict[str, Any]] = [
             r"\bprimary\s+resident\b", r"\b275\s+days\b"
         ],
         "statutory_terms": "SF Administrative Code Chapter 41A Section 41A.5 primary permanent resident reside at least 275 days calendar year"
+    },
+    {
+        "issue": "Unlawful Rent Increase & Exceeding Statutory Rent Caps",
+        "jurisdiction": "California Civil Code / Oakland / San Francisco",
+        "governing_authorities": "Cal. Civ. Code § 1947.12, Cal. Civ. Code § 827, OMC § 8.22.070",
+        "keywords": [
+            r"\brent\s+increase\b", r"\brais(?:ed|ing)\s+(?:the\s+)?rent\b", r"\brent\s+hike\b",
+            r"\b5%\s*(?:\+|\band\b)\s*cpi\b", r"\brent\s+cap\b", r"\bexcessive\s+rent\b",
+            r"\brent\s+gouging\b", r"\b10\s*percent\s+rent\b", r"\bnotice\s+of\s+rent\s+increase\b"
+        ],
+        "statutory_terms": "Cal Civ Code 1947.12 gross rental rate increase 5 percent plus CPI 10 percent maximum notice requirements Cal Civ Code 827 30 days 90 days OMC 8.22.070"
+    },
+    {
+        "issue": "Unlawful Landlord Entry & Privacy Harassment",
+        "jurisdiction": "California Civil Code",
+        "governing_authorities": "Cal. Civ. Code § 1954, Cal. Civ. Code § 1940.2, Cal. Civ. Code § 1927",
+        "keywords": [
+            r"\bunannounced\s+entry\b", r"\bentered\s+without\s+notice\b", r"\blandlord\s+walked\s+in\b",
+            r"\bno\s+24\s*hour\s+notice\b", r"\bentry\s+without\s+notice\b", r"\bshowing\s+unit\b",
+            r"\blandlord\s+harassment\b", r"\bunlawful\s+entry\b", r"\bforced\s+entry\b"
+        ],
+        "statutory_terms": "Cal Civ Code 1954 entry by landlord 24 hours written notice normal business hours Cal Civ Code 1940.2 civil penalty 2000 dollars quiet enjoyment 1927"
+    },
+    {
+        "issue": "Defective Notice to Terminate / 3-Day Notice Defense",
+        "jurisdiction": "California Code of Civil Procedure / Oakland",
+        "governing_authorities": "Cal. Code Civ. Proc. § 1161(2), Cal. Code Civ. Proc. § 12a, OMC § 8.22.360(F)",
+        "keywords": [
+            r"\b3\s*day\s+notice\b", r"\bthree\s*day\s+notice\b", r"\bpay\s+or\s+quit\b",
+            r"\bcure\s+or\s+quit\b", r"\blate\s+fees?\s+in\s+notice\b", r"\beviction\s+notice\b",
+            r"\bdefective\s+notice\b"
+        ],
+        "statutory_terms": "Cal Code Civ Proc 1161 3-day notice pay or quit exact amount of rent late fees excluded CCP 12a court holidays Oakland Rent Board filing OMC 8.22.360"
+    },
+    {
+        "issue": "Curable Lease Breach & Mandatory Opportunity to Cure",
+        "jurisdiction": "California Civil Code / Code of Civil Procedure",
+        "governing_authorities": "Cal. Civ. Code § 1946.2(c), Cal. Code Civ. Proc. § 1161(3)",
+        "keywords": [
+            r"\bcurable\s+violation\b", r"\bopportunity\s+to\s+cure\b", r"\bunauthorized\s+pet\b",
+            r"\bcurable\s+breach\b", r"\bnotice\s+to\s+perform\s+covenant\b", r"\bcurable\s+lease\b"
+        ],
+        "statutory_terms": "Cal Civ Code 1946.2 curable lease violation notice of violation opportunity to cure 3-day notice to quit"
     }
 ]
 

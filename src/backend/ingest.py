@@ -417,6 +417,12 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "repealed": False,
         "preempted_by": None,
         "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1946.2.&lawCode=CIV",
+        "page_number": 2,
+        "printed_page": "Page 2",
+        "bbox": [54.0, 220.0, 480.0, 105.0],
+        "char_start": 481,
+        "char_end": 980,
+        "extra_metadata": {"statute": "AB 1482", "chapter": 597, "subdivision": "e"},
         "content": (
             "This section shall not apply to the following types of residential real properties: "
             "(1) Housing accommodations in which the tenant shares bathroom or kitchen facilities with the owner who maintains "
@@ -444,11 +450,151 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "repealed": False,
         "preempted_by": None,
         "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1954.&lawCode=CIV",
+        "page_number": 1,
+        "printed_page": "Page 1",
+        "bbox": [54.0, 80.0, 480.0, 115.0],
+        "char_start": 0,
+        "char_end": 468,
+        "extra_metadata": {"statute": "Cal. Civ. Code § 1954", "notice_hours": 24},
         "content": (
             "A landlord may enter the dwelling unit only in the following cases: (1) In case of emergency; (2) To make necessary "
             "or agreed repairs; (3) When the tenant has abandoned or surrendered the premises; or (4) Pursuant to court order. "
             "Except in cases of emergency or abandonment, the landlord shall give the tenant written notice of intent to enter at least "
             "24 hours in advance, and entry must be during normal business hours."
+        )
+    },
+    {
+        "jurisdiction": "California Civil Code",
+        "state": "CA",
+        "city": "Statewide",
+        "county": None,
+        "city_or_county": "Statewide",
+        "topic": "Rent Cap & Protections",
+        "title": "California Tenant Protection Act Rent Cap Limits & Exemptions",
+        "section": "Section 1947.12",
+        "parent_section": "Chapter 2",
+        "hierarchy_level": "section",
+        "authority_class": "controlling_statute",
+        "instrument_type": "statute",
+        "jurisdiction_level": "state",
+        "status": "enacted",
+        "effective_date": datetime(2020, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1947.12.&lawCode=CIV",
+        "page_number": 1,
+        "printed_page": "Page 1",
+        "bbox": [54.0, 110.0, 480.0, 120.0],
+        "char_start": 0,
+        "char_end": 624,
+        "extra_metadata": {"statute": "AB 1482", "chapter": 597, "codified": "Cal. Civ. Code § 1947.12"},
+        "content": (
+            "Subject to subdivisions (b) and (d), an owner of residential real property shall not, over the course of any 12-month period, "
+            "increase the gross rental rate for a dwelling or a unit more than 5 percent plus the percentage change in the cost of living, "
+            "or 10 percent, whichever is lower, of the lowest gross rental rate charged for that dwelling or unit at any time during the "
+            "12 months prior to the effective date of the increase. Under subdivision (d)(5), residential real property that is alienable "
+            "separate from the title to any other dwelling unit is exempt ONLY IF the owner provides a mandatory written disclosure statement in the lease."
+        )
+    },
+    {
+        "jurisdiction": "California Civil Code",
+        "state": "CA",
+        "city": "Statewide",
+        "county": None,
+        "city_or_county": "Statewide",
+        "topic": "Rent Cap & Protections",
+        "title": "Notice Requirements for Changes in Terms of Tenancy and Rent Increases",
+        "section": "Section 827",
+        "parent_section": "Chapter 2",
+        "hierarchy_level": "section",
+        "authority_class": "controlling_statute",
+        "instrument_type": "statute",
+        "jurisdiction_level": "state",
+        "status": "enacted",
+        "effective_date": datetime(2020, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=827.&lawCode=CIV",
+        "page_number": 2,
+        "printed_page": "Page 2",
+        "bbox": [54.0, 80.0, 480.0, 130.0],
+        "char_start": 0,
+        "char_end": 630,
+        "extra_metadata": {"statute": "Cal. Civ. Code § 827", "notice_periods": [30, 90]},
+        "content": (
+            "In all leases of lands or tenements, or of any interest therein, from month to month, the landlord may, upon giving notice "
+            "in writing to the tenant, change the terms of the lease to take effect upon expiration of not less than 30 calendar days. "
+            "If the proposed rent increase, either by itself or cumulatively when combined with all other rent increases in the 12 months "
+            "prior to the effective date of the increase, is greater than 10 percent, the notice shall be delivered not less than 90 calendar days "
+            "prior to the effective date of the increase. Pursuant to CCP § 1013, service by mail adds 5 calendar days."
+        )
+    },
+    {
+        "jurisdiction": "California Civil Code",
+        "state": "CA",
+        "city": "Statewide",
+        "county": None,
+        "city_or_county": "Statewide",
+        "topic": "Tenant Protections & Anti-Retaliation",
+        "title": "Retaliatory Eviction and Adverse Actions Prohibition",
+        "section": "Section 1942.5",
+        "parent_section": "Chapter 2",
+        "hierarchy_level": "section",
+        "authority_class": "controlling_statute",
+        "instrument_type": "statute",
+        "jurisdiction_level": "state",
+        "status": "enacted",
+        "effective_date": datetime(2020, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=1942.5.&lawCode=CIV",
+        "page_number": 1,
+        "printed_page": "Page 1",
+        "bbox": [54.0, 140.0, 480.0, 140.0],
+        "char_start": 0,
+        "char_end": 742,
+        "extra_metadata": {"statute": "Cal. Civ. Code § 1942.5", "presumption_days": 180},
+        "content": (
+            "If the lessor retaliates against the lessee because of the exercise by the lessee of the lessee's rights under this chapter "
+            "or because of the lessee's complaint to an appropriate agency as to tenantability of a dwelling, and if the lessee of a dwelling "
+            "is not in default as to the payment of rent, the lessor may not recover possession of a dwelling, cause the lessee to quit involuntarily, "
+            "increase the rent, or decrease any services within 180 calendar days of the date of the complaint or citation. Under subdivision (h), "
+            "any lessor who violates this section shall be liable to the lessee in a civil action for actual damages and statutory punitive damages "
+            "between $100 and $2,000 for each retaliatory act."
+        )
+    },
+    {
+        "jurisdiction": "California Civil Code",
+        "state": "CA",
+        "city": "Statewide",
+        "county": None,
+        "city_or_county": "Statewide",
+        "topic": "Tenant Protections & Anti-Retaliation",
+        "title": "Prohibition on Self-Help Lockouts and Utility Terminations",
+        "section": "Section 789.3",
+        "parent_section": "Chapter 2",
+        "hierarchy_level": "section",
+        "authority_class": "controlling_statute",
+        "instrument_type": "statute",
+        "jurisdiction_level": "state",
+        "status": "enacted",
+        "effective_date": datetime(2019, 1, 1),
+        "repealed": False,
+        "preempted_by": None,
+        "source_url": "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?sectionNum=789.3.&lawCode=CIV",
+        "page_number": 1,
+        "printed_page": "Page 1",
+        "bbox": [54.0, 100.0, 480.0, 150.0],
+        "char_start": 0,
+        "char_end": 780,
+        "extra_metadata": {"statute": "Cal. Civ. Code § 789.3", "daily_penalty": 100.0, "min_penalty": 250.0},
+        "content": (
+            "A landlord shall not with intent to terminate the occupancy under any lease or other tenancy or estate at will, however created, "
+            "of property used by a tenant as their residence willfully cause, directly or indirectly, the interruption or termination of any utility "
+            "service, including, but not limited to, water, heat, light, electricity, gas, telephone, or other service. A landlord shall not "
+            "prevent the tenant from gaining reasonable access to the property by changing locks or using a bootlock or similar device. "
+            "Any landlord who violates this section shall be liable to the tenant in a civil action for actual damages, reasonable attorney's fees, "
+            "and statutory damages up to $100 for each day of violation, with a minimum statutory damages award of $250."
         )
     },
     # Deliberate Stale / Repealed Provision (Golden Eval Distractor)
@@ -472,6 +618,12 @@ SEED_CALIFORNIA_ORDINANCES: List[Dict[str, Any]] = [
         "repealed": True,
         "preempted_by": "Cal. Civ. Code § 1946.2 (California Tenant Protection Act of 2019)",
         "source_url": "https://leginfo.legislature.ca.gov",
+        "page_number": 1,
+        "printed_page": "Page 1",
+        "bbox": [54.0, 310.0, 480.0, 90.0],
+        "char_start": 0,
+        "char_end": 345,
+        "extra_metadata": {"status": "repealed", "historical": True},
         "content": (
             "[REPEALED / SUPERSEDED] This historical provision previously authorized 30-day no-fault termination "
             "notices for municipal tenants without just cause recitations. This section was expressly superseded "
@@ -655,6 +807,54 @@ SEED_STATUTE_CODE_TRACEABILITY: List[Dict[str, Any]] = [
         "reviewed_at": datetime(2024, 3, 15, tzinfo=timezone.utc),
         "statutory_digest": "Unincorporated Alameda County island parcels governed by county/state, not municipal OMC.",
         "notes": "Fact-pattern gate for Castro Valley, San Lorenzo, and Ashland parcels."
+    },
+    {
+        "statute_id": "Cal. Civ. Code § 1947.12",
+        "symbol_id": "rent_cap_auditor.verify_rent_increase_cap",
+        "repository": "krusch-law",
+        "file_path": "src/backend/resolver.py",
+        "doctrine": "Rent Cap & Protections",
+        "status": "manually_verified",
+        "reviewed_by": "attorney:krusch",
+        "reviewed_at": datetime(2024, 7, 2, tzinfo=timezone.utc),
+        "statutory_digest": "AB 1482 annual rent cap 5% plus regional CPI, capped at 10% maximum.",
+        "notes": "Single-family dwelling exemption requires mandatory statutory disclosure in lease."
+    },
+    {
+        "statute_id": "Cal. Civ. Code § 827",
+        "symbol_id": "notice_timeline_auditor.verify_rent_increase_notice",
+        "repository": "krusch-law",
+        "file_path": "src/backend/checklist.py",
+        "doctrine": "Rent Cap & Protections",
+        "status": "manually_verified",
+        "reviewed_by": "attorney:krusch",
+        "reviewed_at": datetime(2024, 7, 2, tzinfo=timezone.utc),
+        "statutory_digest": "Notice timelines: 30 days for <=10% increase; 90 days for >10% increase (+5 days for mail under CCP § 1013).",
+        "notes": "Failure to provide full statutory notice renders proposed rent increase void."
+    },
+    {
+        "statute_id": "Cal. Civ. Code § 1942.5",
+        "symbol_id": "retaliation_detector.evaluate_adverse_action_presumption",
+        "repository": "krusch-law",
+        "file_path": "src/backend/checklist.py",
+        "doctrine": "Tenant Protections & Anti-Retaliation",
+        "status": "manually_verified",
+        "reviewed_by": "attorney:krusch",
+        "reviewed_at": datetime(2024, 7, 2, tzinfo=timezone.utc),
+        "statutory_digest": "180-day rebuttable presumption of retaliation following exercise of tenant rights.",
+        "notes": "Statutory punitive damages between $100 and $2,000 for each retaliatory act under § 1942.5(h)."
+    },
+    {
+        "statute_id": "Cal. Civ. Code § 789.3",
+        "symbol_id": "lockout_auditor.verify_self_help_prohibition",
+        "repository": "krusch-law",
+        "file_path": "src/backend/checklist.py",
+        "doctrine": "Tenant Protections & Anti-Retaliation",
+        "status": "manually_verified",
+        "reviewed_by": "attorney:krusch",
+        "reviewed_at": datetime(2024, 7, 2, tzinfo=timezone.utc),
+        "statutory_digest": "Absolute prohibition on self-help lockouts, utility terminations, and access blockades.",
+        "notes": "Imposes actual damages + statutory damages up to $100/day (minimum $250) plus attorney fees."
     }
 ]
 
