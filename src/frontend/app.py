@@ -1179,6 +1179,58 @@ with tab4:
                     except Exception as e:
                         st.error(f"Evidence search failure: {e}")
 
+            st.divider()
+            st.markdown("#### 🌳 Document Structure & Table of Contents (PageIndex-Style Tree)")
+            st.caption("Inspect structural contract clauses, articles, and section hierarchies assembled deterministically (< 5ms) without external LLM latency.")
+
+            tree_col1, tree_col2 = st.columns([3, 1])
+            with tree_col1:
+                tree_doc_id = st.text_input(
+                    "Document Identifier or Filename",
+                    placeholder="e.g., msa_commercial.txt, lease_contract.pdf, or doc ID 1",
+                    key="tree_doc_input"
+                )
+            with tree_col2:
+                st.write("")
+                st.write("")
+                fetch_tree_btn = st.button("Inspect Tree", key="fetch_tree_btn", use_container_width=True)
+
+            if fetch_tree_btn and tree_doc_id.strip():
+                with st.spinner("Extracting structural document hierarchy..."):
+                    try:
+                        t_resp = httpx.get(
+                            f"{BACKEND_URL}/api/cases/{sel_m_id}/evidence/tree",
+                            params={"document": tree_doc_id.strip()},
+                            headers=get_auth_headers(),
+                            timeout=10.0
+                        )
+                        if t_resp.status_code == 200:
+                            tree_payload = t_resp.json()
+                            dtree = tree_payload.get("document_tree", {})
+                            st.success(f"Extracted Table of Contents for **{dtree.get('filename')}** ({dtree.get('total_chunks')} chunks, {dtree.get('total_pages')} pages)")
+
+                            def render_tree_node(node):
+                                title = node.get("title", "Untitled Section")
+                                page_str = f" • p. {node.get('page')}" if node.get("page") else ""
+                                children = node.get("children", [])
+                                if children:
+                                    with st.expander(f"📁 {title}{page_str} ({len(children)} sub-clauses)", expanded=True):
+                                        for ch in children:
+                                            render_tree_node(ch)
+                                else:
+                                    st.markdown(f"📄 **{title}**{page_str}")
+
+                            root_nodes = dtree.get("tree", [])
+                            if root_nodes:
+                                for rn in root_nodes:
+                                    render_tree_node(rn)
+                            else:
+                                st.info("No structural headings detected in this document.")
+                        else:
+                            st.warning(f"Document tree not available ({t_resp.status_code}): {t_resp.text}")
+                    except Exception as ex:
+                        st.error(f"Error fetching document tree: {ex}")
+
 
 # --- Tab 5: Statutory Traceability & Audit Registry ---
 with tab5:
