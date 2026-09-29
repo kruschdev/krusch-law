@@ -295,6 +295,55 @@ class TestNexusIntegration(unittest.TestCase):
         })
         self.assertEqual(resp.status_code, 404)
 
+    def test_07_evidence_document_tree_endpoint(self):
+        """Verify GET /api/cases/{case_id}/evidence/tree endpoint returns hierarchical TOC."""
+        from unittest.mock import patch
+        # 1. Create a matter
+        create_resp = self.client.post("/api/cases", json={
+            "title": "Commercial Lease Dispute",
+            "matter_number": "MATTER-TREE-001",
+            "client_name": "Acme Corp",
+            "description": "Tenant lease violation",
+            "facts": "Commercial tenant lease agreement signed in 2023 with rent escalation clause."
+        })
+        self.assertEqual(create_resp.status_code, 201)
+        case_id = create_resp.json()["id"]
+
+        mock_tree = {
+            "document_id": 101,
+            "filename": "commercial_lease.pdf",
+            "workspace": f"matter_{case_id}",
+            "total_chunks": 5,
+            "total_pages": 3,
+            "tree": [
+                {
+                    "title": "Article 1: Premises",
+                    "level": 1,
+                    "page": 1,
+                    "chunk_id": 1,
+                    "chunk_index": 0,
+                    "locator": "Page 1",
+                    "children": []
+                }
+            ]
+        }
+
+        # 2. Query tree with mock
+        with patch("src.backend.rag.retrieve_matter_document_tree", return_value=mock_tree):
+            resp = self.client.get(f"/api/cases/{case_id}/evidence/tree?document=commercial_lease.pdf")
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["status"], "success")
+            self.assertEqual(data["matter_id"], case_id)
+            self.assertEqual(data["document_tree"]["filename"], "commercial_lease.pdf")
+            self.assertEqual(len(data["document_tree"]["tree"]), 1)
+
+        # 3. Query tree when not found
+        with patch("src.backend.rag.retrieve_matter_document_tree", return_value=None):
+            resp_404 = self.client.get(f"/api/cases/{case_id}/evidence/tree?document=ghost.pdf")
+            self.assertEqual(resp_404.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()
+

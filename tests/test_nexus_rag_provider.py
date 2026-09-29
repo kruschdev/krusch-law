@@ -19,16 +19,17 @@ NEXUS_SRC = os.path.join(os.path.dirname(PROJECT_ROOT), "krusch-nexus", "src")
 if os.path.isdir(NEXUS_SRC) and NEXUS_SRC not in sys.path:
     sys.path.insert(0, NEXUS_SRC)
 
-from krusch_nexus.models import SearchHit, Citation
+from krusch_nexus.models import SearchHit, Citation, TreeNode, DocumentTree
 from krusch_nexus.exceptions import AirGapViolationError
 from src.backend.config import settings
 from src.backend.nexus_rag import (
     is_nexus_available,
     get_nexus_client,
     search_laws_nexus,
-    search_matter_evidence_nexus
+    search_matter_evidence_nexus,
+    get_matter_document_tree_nexus
 )
-from src.backend.rag import retrieve_laws, retrieve_matter_evidence
+from src.backend.rag import retrieve_laws, retrieve_matter_evidence, retrieve_matter_document_tree
 
 
 class TestNexusRagProvider(unittest.TestCase):
@@ -143,6 +144,55 @@ class TestNexusRagProvider(unittest.TestCase):
         mock_client.search.assert_called_once()
         self.assertEqual(mock_client.search.call_args.kwargs["workspace"], "matter_42")
 
+    @patch('src.backend.nexus_rag.get_nexus_client')
+    def test_get_matter_document_tree_nexus(self, mock_get_client):
+        """Verify hierarchical Table of Contents extraction delegation to NexusClient."""
+        mock_tree = DocumentTree(
+            document_id=8,
+            filename="lease_contract.pdf",
+            workspace="matter_42",
+            total_chunks=3,
+            total_pages=2,
+            tree=[
+                TreeNode(
+                    title="Article I: Term",
+                    level=1,
+                    page=1,
+                    chunk_id=1,
+                    chunk_index=0,
+                    children=[
+                        TreeNode(
+                            title="Section 1.1 Commencement",
+                            level=2,
+                            page=1,
+                            chunk_id=2,
+                            chunk_index=1,
+                            children=[]
+                        )
+                    ]
+                )
+            ]
+        )
+
+        mock_client = MagicMock()
+        mock_client.get_document_tree.return_value = mock_tree
+        mock_get_client.return_value = mock_client
+
+        # Direct adapter call
+        tree_dict = get_matter_document_tree_nexus(matter_id=42, document_identifier="lease_contract.pdf")
+        self.assertIsNotNone(tree_dict)
+        self.assertEqual(tree_dict["filename"], "lease_contract.pdf")
+        self.assertEqual(len(tree_dict["tree"]), 1)
+        self.assertEqual(tree_dict["tree"][0]["title"], "Article I: Term")
+        self.assertEqual(len(tree_dict["tree"][0]["children"]), 1)
+        mock_client.get_document_tree.assert_called_once_with("lease_contract.pdf", workspace="matter_42")
+
+        # RAG interface delegation
+        rag_tree = retrieve_matter_document_tree(matter_id=42, document_identifier="lease_contract.pdf")
+        self.assertIsNotNone(rag_tree)
+        self.assertEqual(rag_tree["document_id"], 8)
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from .config import settings
 
@@ -205,3 +205,39 @@ def search_matter_evidence_nexus(
             "created_at": meta.get("created_at")
         })
     return results
+
+
+def get_matter_document_tree_nexus(
+    matter_id: int,
+    document_identifier: Union[int, str]
+) -> Optional[Dict[str, Any]]:
+    """Retrieve PageIndex-style hierarchical Table of Contents document tree for a matter exhibit."""
+    client = get_nexus_client()
+    if not client:
+        return None
+
+    workspace = f"matter_{matter_id}"
+    try:
+        tree = client.get_document_tree(document_identifier, workspace=workspace)
+        return tree.model_dump()
+    except Exception as e:
+        logger.warning(f"Could not retrieve document tree for {document_identifier} in workspace {workspace}: {e}")
+        return None
+
+
+def get_law_document_tree_nexus(
+    document_identifier: Union[int, str],
+    workspace: str = "laws_california"
+) -> Optional[Dict[str, Any]]:
+    """Retrieve hierarchical Table of Contents for statutory codifications or municipal codes."""
+    client = get_nexus_client()
+    if not client:
+        return None
+
+    try:
+        tree = client.get_document_tree(document_identifier, workspace=workspace)
+        return tree.model_dump()
+    except Exception as e:
+        logger.warning(f"Could not retrieve law document tree for {document_identifier} in workspace {workspace}: {e}")
+        return None
+

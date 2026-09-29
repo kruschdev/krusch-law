@@ -9,7 +9,7 @@ import difflib
 from datetime import datetime, timezone
 from collections import OrderedDict
 import httpx
-from typing import List, Dict, Optional, Tuple, Set, Any
+from typing import List, Dict, Optional, Tuple, Set, Any, Union
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -2077,4 +2077,25 @@ def retrieve_matter_evidence(
     finally:
         if close_session:
             db.close()
+
+
+def retrieve_matter_document_tree(
+    matter_id: int,
+    document_identifier: Union[int, str]
+) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve PageIndex-style hierarchical Table of Contents document tree for a matter exhibit.
+    Delegates to KruschNexus if configured/available, enabling fast (< 5ms) structural reasoning.
+    """
+    try:
+        from .nexus_rag import get_matter_document_tree_nexus, is_nexus_available
+        if is_nexus_available():
+            tree = get_matter_document_tree_nexus(matter_id, document_identifier)
+            if tree:
+                return tree
+    except Exception as e:
+        logger.warning(f"Error querying matter document tree via Nexus: {e}")
+
+    return None
+
 

@@ -1271,6 +1271,37 @@ def get_matter_evidence_tags(
     }
 
 
+@app.get("/api/cases/{case_id}/evidence/tree", tags=["Discovery & Evidence"])
+@app.get("/api/matters/{case_id}/evidence/tree", tags=["Discovery & Evidence"])
+def get_matter_evidence_tree(
+    case_id: int,
+    document: str = Query(..., description="Document ID or exact filename to generate hierarchical Table of Contents for"),
+    db: Session = Depends(get_db),
+    _auth: Optional[str] = Depends(verify_api_key)
+):
+    """
+    Extract a PageIndex-style hierarchical Table of Contents document tree for an exhibit
+    uploaded to a designated matter, enabling top-down structural reasoning.
+    """
+    case = db.query(Case).filter(Case.id == case_id, Case.is_deleted.is_(False)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail=f"Matter #{case_id} not found.")
+
+    from .rag import retrieve_matter_document_tree
+    tree = retrieve_matter_document_tree(case_id, document)
+    if not tree:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Document tree could not be assembled for '{document}' in matter #{case_id}."
+        )
+
+    return {
+        "status": "success",
+        "matter_id": case_id,
+        "document_tree": tree
+    }
+
+
 @app.post("/api/consult/export/docx", tags=["Consult & Synthesis"])
 def export_consult_docx(
     payload: ExportDocxRequest,
