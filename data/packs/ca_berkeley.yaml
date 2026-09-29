@@ -1,0 +1,197 @@
+pack_id: ca_berkeley_pack_v1
+version: 1.0.0
+state: CA
+municipality: Berkeley
+county: Alameda County
+code_families:
+- California Civil Code
+- Berkeley Municipal Code
+description: Authoritative California statewide statutes and Berkeley municipal ordinances
+  governing residential tenancy, security deposits, rent control, and just cause evictions.
+publisher: City of Berkeley Rent Stabilization Board & California Office of Legislative
+  Counsel
+edition: BMC Chapter 13.76 / Measure MM (2024 Supp)
+effective_from: '2024-01-01'
+effective_to: null
+source_document_hash: sha256:dda222e65f521490b253eb3e931ddd6e568aa22d83aab974315609a83caa05f6
+retrieved_at: '2026-09-29T23:56:21Z'
+coverage:
+  covered_topics:
+  - Security Deposits
+  - Just Cause Evictions
+  - Rent Control & Preemption
+  - Rent Increases
+  - Utility Shutoff & Lockouts
+  - Owner Move-In
+  known_uncovered_topics:
+  - Commercial Lease Evictions
+  - Mobile Home Residency Law
+  - Agricultural Tenancies
+  - Short-Term Vacation Rentals
+statutes:
+- citation: Cal. Civ. Code § 1950.5(c)
+  section_number: 1950.5(c)
+  title: Residential Security Deposit Limits & Enactment of Assembly Bill 12
+  topic: Security Deposits
+  authority_class: controlling_statute
+  hierarchy_level: subsection
+  effective_date: '2024-07-01'
+  source_url: https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1950.5
+  publisher: California Office of Legislative Counsel
+  edition: Stats. 2023, ch. 290 (AB 12)
+  raw_content: 'Under Section 1950.5(c) as amended by Assembly Bill 12 (effective
+    July 1, 2024), a landlord may not demand or receive security, however denominated,
+    in an amount or value in excess of an amount equal to one month''s rent, in addition
+    to any rent for the first month paid on or before initial occupancy.
+
+
+    This one-month rent limitation applies to both unfurnished and furnished residential
+    rental properties. A limited exception exists for a natural person or family LLC
+    owning no more than two residential rental properties that collectively comprise
+    no more than four units, who may demand up to two months'' rent.
+
+
+    Within 21 calendar days after the tenant has vacated the premises, the landlord
+    shall furnish the tenant with a copy of an itemized statement indicating the basis
+    for, and the amount of, any security received and the disposition of the security,
+    and shall return any remaining portion of the security to the tenant.'
+  statutory_slots:
+    deposit_cap_months: 1.0
+    small_landlord_cap_months: 2.0
+    accounting_days: 21
+    statutory_damages_multiplier: 2.0
+  preempts:
+  - Berkeley Municipal Code Inconsistent Deposit Provisions
+- citation: Cal. Civ. Code § 1954.52
+  section_number: '1954.52'
+  title: Costa-Hawkins Rental Housing Act — Statewide Rent Control Preemption
+  topic: Rent Control & Preemption
+  authority_class: controlling_statute
+  hierarchy_level: section
+  effective_date: '1996-01-01'
+  source_url: https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1954.52
+  publisher: California Office of Legislative Counsel
+  edition: Stats. 1995, ch. 331
+  raw_content: 'Notwithstanding any other provision of law, an owner of residential
+    real property may establish the initial and all subsequent rental rates for a
+    dwelling or a unit about which any of the following is true:
+
+    (1) It has a certificate of occupancy issued after February 1, 1995.
+
+    (2) It has already been exempt from the residential rent control ordinance of
+    any city or county on or before February 1, 1995.
+
+    (3) It is alienable separate from the title to any other dwelling unit, including
+    single-family residences, condominiums, and townhomes.
+
+
+    Statewide preemption under Costa-Hawkins restricts local rent control ordinances
+    from establishing rent ceilings on post-1995 construction or single-family homes,
+    but preserves local authority over eviction grounds and habitability standards.'
+  statutory_slots:
+    vacancy_decontrol: true
+    single_family_exempt: true
+  preempts:
+  - Local Municipal Rent Ceilings on Post-1995 Units
+- citation: Cal. Civ. Code § 1946.2
+  section_number: '1946.2'
+  title: California Tenant Protection Act of 2019 — Statewide Just Cause Evictions
+  topic: Just Cause Evictions
+  authority_class: controlling_statute
+  hierarchy_level: section
+  effective_date: '2020-01-01'
+  source_url: https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1946.2
+  publisher: California Office of Legislative Counsel
+  edition: Stats. 2019, ch. 597 (AB 1482)
+  raw_content: 'Notwithstanding any other law, after a tenant has continuously and
+    lawfully occupied a residential real property for 12 months, the owner of the
+    residential real property shall not terminate the tenancy without just cause,
+    which shall be stated in the written notice to terminate tenancy.
+
+
+    Just cause is divided into At-Fault Just Cause (including nonpayment of rent,
+    material breach of lease, nuisance, waste) and No-Fault Just Cause (including
+    owner move-in, withdrawal under Ellis Act, substantial remodeling).
+
+
+    For a no-fault just cause termination, the owner shall provide relocation assistance
+    equal to one month of the tenant''s rent. Local just cause ordinances providing
+    greater tenant protections are not preempted and remain enforceable.'
+  statutory_slots:
+    occupancy_threshold_months: 12
+    relocation_months: 1.0
+    preserves_local_just_cause: true
+- citation: Cal. Civ. Code § 1947.12
+  section_number: '1947.12'
+  title: California Tenant Protection Act of 2019 — Statewide Rent Increase Caps
+  topic: Rent Increases
+  authority_class: controlling_statute
+  hierarchy_level: section
+  effective_date: '2020-01-01'
+  source_url: https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1947.12
+  publisher: California Office of Legislative Counsel
+  edition: Stats. 2019, ch. 597 (AB 1482)
+  raw_content: An owner of residential real property shall not, over the course of
+    any 12-month period, increase the gross rental rate for a dwelling or a unit more
+    than 5 percent plus the percentage change in the cost of living (CPI), or 10 percent,
+    whichever is lower, of the lowest gross rental rate charged for that unit at any
+    time during the 12 months prior to the effective date of the increase.
+  statutory_slots:
+    base_cap_percent: 5.0
+    max_cap_percent: 10.0
+    max_increases_per_year: 2
+- citation: Cal. Civ. Code § 789.3
+  section_number: '789.3'
+  title: Prohibition of Utility Interruption, Lockout, and Unlawful Eviction Tactics
+  topic: Utility Shutoff & Lockouts
+  authority_class: controlling_statute
+  hierarchy_level: section
+  effective_date: '1979-01-01'
+  source_url: https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=789.3
+  publisher: California Office of Legislative Counsel
+  edition: Stats. 1979, ch. 333
+  raw_content: 'A landlord shall not with intent to terminate the occupancy under
+    any lease willfully cause the interruption or termination of any utility service
+    furnished the tenant, including water, heat, electricity, gas, elevator, or refrigeration.
+
+
+    A landlord who violates this section shall be liable to the tenant for actual
+    damages, plus up to one hundred dollars ($100) for each calendar day of violation,
+    with a minimum statutory damages recovery of $250.'
+  statutory_slots:
+    daily_statutory_penalty: 100.0
+    minimum_statutory_damages: 250.0
+    prevailing_attorney_fees: true
+- citation: Berkeley Municipal Code § 13.76.130
+  section_number: 13.76.130
+  title: Berkeley Eviction Protections & Permissible Grounds
+  topic: Just Cause Evictions
+  authority_class: municipal_ordinance
+  hierarchy_level: section
+  effective_date: '2024-01-01'
+  source_url: https://library.municode.com/
+  publisher: City of Berkeley Rent Stabilization Board & California Office of Legislative
+    Counsel
+  edition: BMC Chapter 13.76 / Measure MM (2024 Supp)
+  raw_content: 'No landlord shall endeavor to recover possession, issue a notice terminating
+    tenancy, or evict a tenant from any residential rental unit subject to the Berkeley
+    rent control and just cause eviction ordinance except upon demonstrating one or
+    more of the enumerated just cause grounds: nonpayment of rent, material violation
+    of lease obligations after written warning notice to cease, substantial damage,
+    nuisance, or owner move-in for use as a principal residence by a natural person
+    holding at least 50.0% recorded ownership interest for a continuous period of
+    not less than 36 consecutive months.'
+  statutory_slots:
+    minimum_ownership_percent_omi: 50.0
+    omi_occupancy_duration_months: 36
+    requires_written_warning_notice: true
+    requires_relocation_payment: true
+  preempts:
+  - Berkeley Municipal Code Prior Inconsistent Eviction Provisions
+  preempted_by: []
+  exceptions_ref: Berkeley Municipal Code Section Exemptions
+  defines_terms:
+  - Covered Unit
+  - Disabled
+  - Catastrophically Ill
+  - Senior Citizen
