@@ -162,6 +162,51 @@ class TestApiMattersIntegration(KruschLawTestCase):
         # Check docx zip signature (PK\x03\x04)
         self.assertTrue(resp.content.startswith(b"PK\x03\x04"))
 
+    @patch('src.backend.rag.retrieve_matter_document_tree')
+    def test_matter_evidence_tree_endpoints(self, mock_tree):
+        """Verify GET /api/cases/{case_id}/evidence/tree and /api/matters/{case_id}/evidence/tree."""
+        mock_tree.return_value = {
+            "document_id": 1,
+            "filename": "lease.pdf",
+            "workspace": "matter_1",
+            "total_chunks": 2,
+            "total_pages": 1,
+            "tree": [
+                {
+                    "title": "Article 1",
+                    "level": 1,
+                    "page": 1,
+                    "char_start": 0,
+                    "char_end": 50,
+                    "bbox": [10.0, 20.0, 100.0, 30.0],
+                    "text_preview": "Premises description",
+                    "children": []
+                }
+            ]
+        }
+        case = Case(title="Tree Test Case", facts="Facts for tree", embedding=self.mock_vector)
+        self.db.add(case)
+        self.db.commit()
+
+        # 1. /api/cases/{case_id}/evidence/tree
+        resp1 = self.client.get(f"/api/cases/{case.id}/evidence/tree?document=lease.pdf")
+        self.assertEqual(resp1.status_code, 200)
+        data1 = resp1.json()
+        self.assertEqual(data1["status"], "success")
+        self.assertEqual(data1["matter_id"], case.id)
+        self.assertEqual(data1["document_tree"]["filename"], "lease.pdf")
+        self.assertEqual(data1["document_tree"]["tree"][0]["bbox"], [10.0, 20.0, 100.0, 30.0])
+
+        # 2. Alias /api/matters/{case_id}/evidence/tree
+        resp2 = self.client.get(f"/api/matters/{case.id}/evidence/tree?document=lease.pdf")
+        self.assertEqual(resp2.status_code, 200)
+        self.assertEqual(resp2.json()["status"], "success")
+
+        # 3. Nonexistent matter returns 404
+        resp_nomatter = self.client.get("/api/cases/99999/evidence/tree?document=lease.pdf")
+        self.assertEqual(resp_nomatter.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()
+
