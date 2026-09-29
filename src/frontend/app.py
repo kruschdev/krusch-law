@@ -1213,12 +1213,24 @@ with tab4:
                                 title = node.get("title", "Untitled Section")
                                 page_str = f" • p. {node.get('page')}" if node.get("page") else ""
                                 children = node.get("children", [])
+                                preview = node.get("text_preview")
+                                span_str = ""
+                                if node.get("char_start") is not None and node.get("char_end") is not None:
+                                    span_str = f" [chars: {node['char_start']}-{node['char_end']}]"
+                                bbox = node.get("bbox")
+
                                 if children:
-                                    with st.expander(f"📁 {title}{page_str} ({len(children)} sub-clauses)", expanded=True):
+                                    with st.expander(f"📁 {title}{page_str}{span_str} ({len(children)} sub-clauses)", expanded=True):
+                                        if preview:
+                                            st.caption(f"📝 {preview}...")
                                         for ch in children:
                                             render_tree_node(ch)
                                 else:
-                                    st.markdown(f"📄 **{title}**{page_str}")
+                                    with st.expander(f"📄 {title}{page_str}{span_str}", expanded=False):
+                                        if preview:
+                                            st.markdown(f"**Verbatim Excerpt:**\n> {preview}...")
+                                        if bbox:
+                                            st.caption(f"📍 72-DPI Grounding Bounding Box: `{bbox}`")
 
                             root_nodes = dtree.get("tree", [])
                             if root_nodes:
