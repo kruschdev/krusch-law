@@ -42,7 +42,11 @@ class StatuteFixture(BaseModel):
     edition: Optional[str] = Field(None, description="Official code supplement or legislative edition")
     raw_content: str = Field(..., description="Unabridged verbatim statutory content")
     statutory_slots: Dict[str, Any] = Field(default_factory=dict, description="Deterministic numeric and temporal terms")
-    preempted_by: Optional[str] = Field(None, description="Citation of parent statute preempting this section")
+    controlling_precedents: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Pinned appellate case holdings from Sovereign Authority Cartridge"
+    )
+    preempted_by: Optional[Union[str, List[str]]] = Field(None, description="Citation(s) of parent statute preempting this section")
     preempts: List[str] = Field(default_factory=list, description="Citations preempted by this section")
     defines_terms: List[str] = Field(default_factory=list, description="Operative legal definitions established")
     exceptions_ref: Optional[str] = Field(None, description="Reference to explicit statutory exception provision")
@@ -78,6 +82,7 @@ class JurisdictionPack(BaseModel):
     """
     pack_id: str = Field(..., description="Unique pack identifier (e.g., 'ca_oakland_pack_v1')")
     version: str = Field("1.0.0", description="Semver version of the pack definition")
+    domain: Optional[str] = Field(None, description="Legal domain classification (e.g., 'criminal', 'commercial_contracts')")
     state: str = Field("CA", description="Two-letter state postal code")
     municipality: Optional[str] = Field(None, description="City name if applicable (e.g., 'Oakland')")
     county: Optional[str] = Field(None, description="County name if applicable (e.g., 'Alameda County')")
@@ -168,7 +173,9 @@ def import_jurisdiction_pack(
         rep_date = parse_iso_date(stat.repeal_date)
 
         metadata_dict = {
+            "domain": pack.domain,
             "statutory_slots": stat.statutory_slots,
+            "controlling_precedents": stat.controlling_precedents,
             "preempted_by": stat.preempted_by,
             "preempts": stat.preempts,
             "defines_terms": stat.defines_terms,

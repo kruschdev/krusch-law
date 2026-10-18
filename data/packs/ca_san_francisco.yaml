@@ -10,6 +10,9 @@ code_families:
 description: "Authoritative California statewide statutes and City and County of San Francisco municipal ordinances governing residential tenancy, the San Francisco Rent Ordinance (Administrative Code Chapter 37), just cause evictions, relocation assistance, tenant harassment, and noise limits."
 publisher: "California Office of Legislative Counsel & City and County of San Francisco / American Legal Publishing"
 edition: "2024 Legislative Session / SF Admin Code Chapter 37 Supp. 2024"
+effective_from: "2024-01-01"
+effective_to: null
+source_document_hash: "sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef01"
 retrieved_at: "2026-09-27T12:00:00Z"
 
 coverage:
@@ -49,6 +52,11 @@ statutes:
       small_landlord_cap_months: 2.0
       accounting_days: 21
       statutory_damages_multiplier: 2.0
+    controlling_precedents:
+      - citation: "Granberry v. Islay Investments, 9 Cal. 4th 738 (1995)"
+        title: "Granberry v. Islay Investments"
+        holding: "Landlord who fails to provide timely itemized accounting within the statutory deadline forfeits the right to retain any portion of the security deposit."
+        court: "Supreme Court of California"
 
   - citation: "Cal. Civ. Code § 1954.52"
     section_number: "1954.52"

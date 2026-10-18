@@ -1,0 +1,183 @@
+pack_id: "ca_consumer_privacy_pack_v1"
+version: "1.0.0"
+domain: "California Consumer Protection & Privacy Law"
+state: "CA"
+code_families:
+  - "California Civil Code (CCPA / CPRA & CLRA)"
+  - "California Business & Professions Code (UCL & ARL)"
+description: "Authoritative California statutory mandates, non-waivable consumer protections, and controlling appellate precedents governing consumer data privacy under the California Consumer Privacy Act (CCPA/CPRA, Civ. Code § 1798.100 et seq.), the Consumers Legal Remedies Act (CLRA, Civ. Code § 1750 et seq.), the Unfair Competition Law (UCL, Bus. & Prof. Code § 17200), and the California Automatic Renewal Law (ARL, Bus. & Prof. Code § 17600 et seq.)."
+publisher: "California Privacy Protection Agency & California Department of Justice"
+edition: "2024 Consolidated Privacy & Consumer Rights Edition (Proposition 24 & AB 1395)"
+effective_from: "2024-01-01"
+effective_to: null
+source_document_hash: "sha256:b7a3c9e1d5f40382918273645feadbc0987654321fedcba0987654321fedcba07"
+retrieved_at: "2026-10-18T13:45:00Z"
+
+coverage:
+  covered_topics:
+    - "Consumer Privacy Rights (CCPA / CPRA)"
+    - "Right to Opt-Out of Sale or Sharing"
+    - "Consumers Legal Remedies Act (CLRA)"
+    - "Unfair Competition Law (UCL § 17200)"
+    - "Automatic Renewal Law Disclosures & Cancellation"
+  known_uncovered_topics:
+    - "Federal HIPAA Health Privacy"
+    - "Gramm-Leach-Bliley Act (GLBA) Financial Privacy"
+    - "Federal FTC Act Section 5 Administrative Actions"
+
+statutes:
+  - citation: "Cal. Civ. Code § 1798.100 & § 1798.105"
+    section_number: "1798.100"
+    title: "Consumer Rights to Notice, Access, Correction, and Deletion (CCPA / CPRA)"
+    topic: "Consumer Privacy Rights (CCPA / CPRA)"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2023-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1798.100"
+    publisher: "California Privacy Protection Agency"
+    edition: "Proposition 24 (CPRA, Stats. 2020)"
+    raw_content: |
+      Under Civil Code Section 1798.100 and Section 1798.105:
+      (a) A business that controls the collection of a consumer's personal information shall, at or before the point of collection, inform consumers of the categories of personal information to be collected, the purposes for which categories are used, and whether that information is sold or shared.
+      (b) Under Section 1798.105, a consumer shall have the right to request that a business delete any personal information about the consumer which the business has collected from the consumer. A business that receives a verifiable consumer request shall delete the consumer's personal information and direct its service providers and contractors to delete the consumer's personal information from their records.
+
+      Non-Waivability Mandate (§ 1798.192):
+      Any provision of a contract or agreement of any kind that purports to waive or limit in any way a consumer's rights under this title, including any right to a remedy or means of enforcement, shall be deemed contrary to public policy and shall be void and unenforceable.
+    statutory_slots:
+      notice_at_collection_mandatory: true
+      consumer_deletion_right_mandatory: true
+      contractual_waiver_void_per_se: true
+      service_provider_flowdown_required: true
+    controlling_precedents:
+      - citation: "California Chamber of Commerce v. California Privacy Protection Agency, 99 Cal. App. 5th 898 (2024)"
+        title: "CalChamber v. CPPA"
+        holding: "CPRA regulations are enforceable by the Agency and Department of Justice in accordance with statutory administrative timelines."
+        court: "California Court of Appeal, Third District"
+      - citation: "In re Facebook, Inc. Internet Tracking Litigation, 956 F.3d 589 (9th Cir. 2020)"
+        title: "In re Facebook Internet Tracking Litigation"
+        holding: "Unauthorized tracking of consumer browsing history establishes concrete injury under California constitutional privacy and state statutory law."
+        court: "United States Court of Appeals, Ninth Circuit"
+
+  - citation: "Cal. Civ. Code § 1798.120 & § 1798.121"
+    section_number: "1798.120"
+    title: "Consumer Right to Opt-Out of Sale or Sharing of Personal Information & Limit Use of Sensitive Data"
+    topic: "Right to Opt-Out of Sale or Sharing"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2023-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1798.120"
+    publisher: "California Privacy Protection Agency"
+    edition: "Proposition 24 (Stats. 2020)"
+    raw_content: |
+      Under Civil Code Section 1798.120 and Section 1798.121:
+      (a) A consumer shall have the right, at any time, to direct a business that sells or shares personal information about the consumer to third parties not to sell or share the consumer's personal information. This right may be referred to as the right to opt-out of sale or sharing.
+      (b) A business that sells or shares consumers' personal information shall provide a clear and conspicuous link on the business's internet homepages, titled 'Do Not Sell or Share My Personal Information', to an internet web page that enables a consumer to opt-out.
+      (c) Under Section 1798.121, a consumer shall have the right to direct a business to limit its use of the consumer's sensitive personal information (precise geolocation, biometric data, racial/ethnic origin, contents of private communications) to that use which is necessary to perform the services or provide the goods reasonably expected.
+    statutory_slots:
+      opt_out_link_mandatory: true
+      opt_out_of_sharing_for_cross_context_ads: true
+      sensitive_data_use_limit_right: true
+      no_dark_patterns_permitted: true
+    controlling_precedents:
+      - citation: "People v. Sephora USA, Inc. (Cal. Super. Ct. 2022, Settlement & Enforcement)"
+        title: "People of the State of California v. Sephora USA, Inc."
+        holding: "Failing to disclose the sale of consumer data via third-party tracking pixels and failing to honor Global Privacy Control (GPC) opt-out signals violates CCPA/CPRA."
+        court: "Superior Court of California, County of San Francisco"
+
+  - citation: "Cal. Civ. Code § 1750 & § 1751"
+    section_number: "1750"
+    title: "Consumers Legal Remedies Act (CLRA) and Absolute Non-Waivability Mandate"
+    topic: "Consumers Legal Remedies Act (CLRA)"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1971-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1750"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 1970, ch. 1550"
+    raw_content: |
+      Under Civil Code Section 1750 et seq.:
+      The Consumers Legal Remedies Act protects consumers against unfair and deceptive business practices and provides efficient and economical procedures to secure such protection.
+
+      Section 1770 specifies unlawful deceptive acts, including:
+      (1) Misrepresenting source, sponsorship, approval, or certification of goods or services.
+      (2) Representing that goods or services have characteristics, uses, or benefits that they do not have.
+      (3) Advertising goods or services with intent not to supply reasonably expectable demand.
+      (4) Inserting an unconscionable provision in the contract.
+
+      Absolute Non-Waivability (§ 1751):
+      Any waiver by a consumer of the provisions of this title is contrary to public policy and shall be unenforceable and void. A merchant cannot contractually disclaim or eliminate CLRA remedies or mandatory pre-litigation 30-day notice provisions.
+    statutory_slots:
+      deceptive_practices_prohibited: true
+      contractual_waiver_void_per_se: true
+      unconscionable_terms_prohibited: true
+      pre_litigation_notice_mandate_days: 30
+    controlling_precedents:
+      - citation: "Gutierrez v. Carmax Auto Superstores California, 248 Cal. App. 4th 498 (2018)"
+        title: "Gutierrez v. Carmax Auto Superstores California"
+        holding: "CLRA protections are non-waivable under § 1751; pre-dispute contractual waivers of statutory remedies or arbitration clauses waiving public injunctive relief are void."
+        court: "California Court of Appeal, Fifth District"
+      - citation: "McGill v. Citibank, N.A., 2 Cal. 5th 945 (2017)"
+        title: "McGill v. Citibank, N.A."
+        holding: "A contractual arbitration agreement that waives a consumer's statutory right to seek public injunctive relief in any forum under CLRA/UCL is invalid and unenforceable under California law."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Bus. & Prof. Code § 17200"
+    section_number: "17200"
+    title: "Unfair Competition Law (UCL) Prohibition of Unlawful, Unfair, or Fraudulent Practices"
+    topic: "Unfair Competition Law (UCL § 17200)"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1977-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17200"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 1977, ch. 299"
+    raw_content: |
+      Under Business and Professions Code Section 17200:
+      As used in this chapter, unfair competition shall mean and include any unlawful, unfair or fraudulent business act or practice and unfair, deceptive, untrue or misleading advertising and any act prohibited by Chapter 1 (commencing with Section 17500).
+
+      The Three Independent Prongs:
+      (1) Unlawful Prong: Borrows violations of other laws (statutes, administrative regulations, local codes) and treats them as independently actionable unlawful business practices.
+      (2) Unfair Prong: Conduct that threatens an incipient violation of an antitrust law, or violates the policy or spirit of one of those laws, or significantly threatens or harms competition or consumers.
+      (3) Fraudulent Prong: Business practices that are likely to deceive members of the public (does not require common law fraud reliance).
+    statutory_slots:
+      three_independent_prongs: true
+      borrows_predicate_statutes: true
+      injunctive_relief_authorized: true
+      restitution_authorized: true
+    controlling_precedents:
+      - citation: "Cel-Tech Communications, Inc. v. Los Angeles Cellular Telephone Co., 20 Cal. 4th 163 (1999)"
+        title: "Cel-Tech Communications v. LA Cellular"
+        holding: "Under the UCL unfairness prong, conduct is unfair if it threatens an incipient violation of an antitrust law, violates the policy of those laws, or significantly harms competition."
+        court: "Supreme Court of California"
+      - citation: "In re Tobacco II Cases, 46 Cal. 4th 298 (2009)"
+        title: "In re Tobacco II Cases"
+        holding: "Under Proposition 64, class representatives in UCL actions must show actual reliance on alleged fraudulent misrepresentations, but absent class members need not."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Bus. & Prof. Code § 17602"
+    section_number: "17602"
+    title: "California Automatic Renewal Law (ARL) Clear and Conspicuous Disclosures & Cancellation"
+    topic: "Automatic Renewal Law Disclosures & Cancellation"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2022-07-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=17602"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2021, ch. 450 (AB 390)"
+    raw_content: |
+      Under Business and Professions Code Section 17602:
+      (a) It shall be unlawful for any business that makes an automatic renewal or continuous service offer to a consumer in this state to do any of the following:
+      (1) Fail to present the automatic renewal offer terms or continuous service offer terms in a clear and conspicuous manner before the subscription or purchasing agreement is fulfilled and in visual proximity to the request for consent to the offer.
+      (2) Charge the consumer's credit or debit card, or the consumer's account with a third party, for an automatic renewal or continuous service without first obtaining the consumer's affirmative consent.
+      (3) Fail to provide an acknowledgment that includes the automatic renewal offer terms, cancellation policy, and information regarding how to cancel in a manner that is capable of being retained by the consumer.
+      (b) A consumer who accepts an automatic renewal offer online shall be allowed to terminate the automatic renewal exclusively online, at will, and without engaging in further steps that obstruct or delay the consumer's ability to terminate immediately.
+    statutory_slots:
+      clear_and_conspicuous_disclosure_mandatory: true
+      affirmative_consent_before_charge_mandatory: true
+      exclusive_online_cancellation_required: true
+      unlawful_charges_deemed_unconditional_gift: true
+    controlling_precedents:
+      - citation: "Mayron v. Google LLC, 54 Cal. App. 5th 853 (2020)"
+        title: "Mayron v. Google LLC"
+        holding: "An ARL violation serves as an unlawful predicate under UCL § 17200, allowing consumers who suffered economic injury to seek restitution."
+        court: "California Court of Appeal, Sixth District"

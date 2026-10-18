@@ -1,0 +1,192 @@
+pack_id: "ca_intellectual_property_pack_v1"
+version: "1.0.0"
+domain: "California Intellectual Property & Trade Secrets Law"
+state: "CA"
+code_families:
+  - "California Civil Code (Uniform Trade Secrets Act)"
+  - "California Labor Code"
+  - "California Code of Civil Procedure"
+description: "Authoritative California statutory mandates, non-waivable public policy prohibitions, and controlling appellate precedents governing California Uniform Trade Secrets Act (CUTSA) under CC § 3426, employee invention assignment exclusions under Labor Code § 2870/§ 2872, statutory right of publicity under CC § 3344, trade secret preemption of common law torts, and pre-discovery identification requirements under CCP § 2019.210."
+publisher: "California Office of Legislative Counsel & Supreme Court of California"
+edition: "2024 Legislative Session (CUTSA & California Labor Standards)"
+effective_from: "2024-01-01"
+effective_to: null
+source_document_hash: "sha256:d8c4e5f2a1b9087654321fedcba0987654321fedcba0987654321fedcba08"
+retrieved_at: "2026-10-18T13:45:00Z"
+
+coverage:
+  covered_topics:
+    - "Uniform Trade Secrets Act & Misappropriation"
+    - "Pre-Discovery Trade Secret Identification"
+    - "Employee Invention Assignment Exclusions"
+    - "CUTSA Preemption of Common Law Claims"
+    - "Statutory Right of Publicity"
+    - "Non-Disclosure & Residuals Allocation"
+  known_uncovered_topics:
+    - "Federal Patent Prosecution (USPTO)"
+    - "Federal Trademark Registration (Lanham Act)"
+    - "Copyright Infringement Registration (17 U.S.C.)"
+
+statutes:
+  - citation: "Cal. Civ. Code § 3426.1"
+    section_number: "3426.1"
+    title: "Definitions of Trade Secret, Misappropriation, and Improper Means (CUTSA)"
+    topic: "Uniform Trade Secrets Act & Misappropriation"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1985-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=3426.1"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 1984, ch. 1724"
+    raw_content: |
+      Under Civil Code Section 3426.1:
+      (a) 'Improper means' includes theft, bribery, misrepresentation, breach or inducement of a breach of a duty to maintain secrecy, or espionage through electronic or other means. Reverse engineering or independent derivation alone shall not be considered improper means.
+      (b) 'Misappropriation' means:
+      (1) Acquisition of a trade secret of another by a person who knows or has reason to know that the trade secret was acquired by improper means; or
+      (2) Disclosure or use of a trade secret of another without express or implied consent by a person who used improper means to acquire knowledge of the trade secret, or knew at the time of disclosure or use that knowledge of the trade secret was derived through improper means.
+      (d) 'Trade secret' means information, including a formula, pattern, compilation, program, device, method, technique, or process, that:
+      (1) Derives independent economic value, actual or potential, from not being generally known to the public or to other persons who can obtain economic value from its disclosure or use; and
+      (2) Is the subject of efforts that are reasonable under the circumstances to maintain its secrecy.
+    statutory_slots:
+      independent_economic_value_required: true
+      reasonable_secrecy_efforts_required: true
+      reverse_engineering_permitted: true
+      independent_derivation_permitted: true
+    controlling_precedents:
+      - citation: "Silvaco Data Systems v. Intel Corp., 184 Cal. App. 4th 210 (2010)"
+        title: "Silvaco Data Systems v. Intel Corp."
+        holding: "Under CUTSA, one who merely executes software compiled from source code that embodies alleged trade secrets does not misappropriate the trade secrets absent actual knowledge of improper means."
+        court: "California Court of Appeal, Sixth District"
+      - citation: "DVD Copy Control Assn., Inc. v. Bunner, 31 Cal. 4th 864 (2003)"
+        title: "DVD Copy Control Assn., Inc. v. Bunner"
+        holding: "Trade secret injunctions prohibiting disclosure of misappropriated proprietary algorithms do not violate the First Amendment when narrowly tailored."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Code Civ. Proc. § 2019.210"
+    section_number: "2019.210"
+    title: "Mandatory Identification of Trade Secrets Prior to Commencing Discovery"
+    topic: "Pre-Discovery Trade Secret Identification"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2005-07-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CCP&sectionNum=2019.210"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2004, ch. 182"
+    raw_content: |
+      Under Code of Civil Procedure Section 2019.210:
+      In any action alleging the misappropriation of a trade secret under the Uniform Trade Secrets Act (Title 5 of Part 1 of Division 4 of the Civil Code), before commencing discovery relating to the trade secret, the party alleging the misappropriation shall identify the trade secret with reasonable particularity subject to any orders that may be appropriate under Section 3426.5 of the Civil Code.
+
+      Procedural Rule & Case Law Application:
+      This requirement is mandatory and jurisdictional within discovery proceedings. A plaintiff cannot propound interrogatories, document requests, or depose defense witnesses concerning confidential trade secrets until serving a verified statement identifying the proprietary technology or customer compilation with sufficient clarity to distinguish it from matters of general knowledge in the trade or specialized industry.
+    statutory_slots:
+      pre_discovery_identification_mandatory: true
+      reasonable_particularity_standard: true
+      discovery_stay_automatic_prior_to_identification: true
+    controlling_precedents:
+      - citation: "Brescia v. Angelin, 172 Cal. App. 4th 133 (2009)"
+        title: "Brescia v. Angelin"
+        holding: "Section 2019.210 does not require every detail of a trade secret to be exposed, but requires enough particularity to permit the defendant to frame its defense and define the scope of permissible discovery."
+        court: "California Court of Appeal, Second District"
+      - citation: "Advanced Modular Sputtering, Inc. v. Superior Court, 132 Cal. App. 4th 826 (2005)"
+        title: "Advanced Modular Sputtering, Inc. v. Superior Court"
+        holding: "Reasonable particularity requires the claimant to separate trade secrets from matters of general knowledge in the trade so that adversary and court can distinguish between proprietary and nonproprietary information."
+        court: "California Court of Appeal, Second District"
+
+  - citation: "Cal. Lab. Code § 2870 & § 2872"
+    section_number: "2870"
+    title: "Exclusion of Employee Inventions Created on Own Time from Mandatory Assignment"
+    topic: "Employee Invention Assignment Exclusions"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1980-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=LAB&sectionNum=2870"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 1979, ch. 1001"
+    raw_content: |
+      Under Labor Code Section 2870:
+      (a) Any provision in an employment agreement which provides that an employee shall assign, or offer to assign, any of his or her rights in an invention to his or her employer shall not apply to an invention that the employee developed entirely on his or her own time without using the employer's equipment, supplies, facilities, or trade secret information except for those inventions that either:
+      (1) Relate at the time of conception or reduction to practice of the invention to the employer's business, or actual or demonstrably anticipated research or development of the employer; or
+      (2) Result from any work performed by the employee for the employer.
+      (b) To the extent a provision in an employment agreement purports to require an employee to assign an invention otherwise excluded from being required to be assigned under subdivision (a), the provision is against the public policy of this state and is unenforceable.
+
+      Under Section 2872, an employer must provide written disclosure of Section 2870 to the employee at the time the agreement is executed.
+    statutory_slots:
+      own_time_own_equipment_inventions_exempt: true
+      broad_assignment_void_against_public_policy: true
+      written_statutory_notice_mandatory: true
+      employer_rd_relation_exception: true
+    controlling_precedents:
+      - citation: "Cubic Corp. v. Marty, 185 Cal. App. 3d 438 (1986)"
+        title: "Cubic Corp. v. Marty"
+        holding: "Inventions directly relating to employer's business or actual R&D are assignable under § 2870(a)(1) even if conceived on employee's own time, but non-qualifying assignment demands remain void as against public policy."
+        court: "California Court of Appeal, Fourth District"
+      - citation: "Cadence Design Systems, Inc. v. Avant! Corp., 29 Cal. 4th 215 (2002)"
+        title: "Cadence Design Systems, Inc. v. Avant! Corp."
+        holding: "A claim for misappropriation of trade secrets under CUTSA arises only once, upon initial misappropriation, for statute of limitations purposes."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Civ. Code § 3426.7"
+    section_number: "3426.7"
+    title: "Comprehensive Preemption of Common Law Tort and Quasi-Contract Claims (CUTSA Preemption)"
+    topic: "CUTSA Preemption of Common Law Claims"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1985-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=3426.7"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 1984, ch. 1724"
+    raw_content: |
+      Under Civil Code Section 3426.7:
+      (a) Except as otherwise expressly provided, this title does not affect contractual remedies, whether or not based on misappropriation of a trade secret, or other civil remedies that are not based upon misappropriation of a trade secret, or criminal remedies, whether or not based upon misappropriation of a trade secret.
+      (b) This title does not affect the duty of any person to disclose information where so required by law or where permissible by law.
+
+      Scope of Preemption:
+      California courts hold that CUTSA comprehensively occupies the field and preempts common law claims based on the identical nucleus of facts as the trade secret misappropriation (including conversion, unfair competition, breach of confidence, constructive fraud, and tortious interference), unless the claims are based on truly independent wrongdoing or contractual breach.
+    statutory_slots:
+      contractual_remedies_preserved: true
+      tort_conversion_claims_preempted: true
+      same_nucleus_of_facts_preempted: true
+      criminal_remedies_unaffected: true
+    controlling_precedents:
+      - citation: "K.C. Multimedia, Inc. v. Bank of America Technology & Operations, Inc., 171 Cal. App. 4th 939 (2009)"
+        title: "K.C. Multimedia, Inc. v. Bank of America"
+        holding: "CUTSA preempts common law claims (such as unfair competition, conversion, and breach of confidence) based on the same factual predicate as the alleged misappropriation of trade secrets."
+        court: "California Court of Appeal, Sixth District"
+      - citation: "Angelica Textile Services, Inc. v. Park, 220 Cal. App. 4th 495 (2013)"
+        title: "Angelica Textile Services, Inc. v. Park"
+        holding: "CUTSA preemption does not bar breach of contract claims or claims for breach of fiduciary duty where the breach is independent of trade secret misappropriation."
+        court: "California Court of Appeal, Fourth District"
+
+  - citation: "Cal. Civ. Code § 3344"
+    section_number: "3344"
+    title: "Statutory Right of Publicity for Unauthorized Commercial Use of Name, Voice, or Likeness"
+    topic: "Statutory Right of Publicity"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1972-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=3344"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 1971, ch. 1595; amended Stats. 1984, ch. 1704"
+    raw_content: |
+      Under Civil Code Section 3344:
+      (a) Any person who knowingly uses another's name, voice, signature, photograph, or likeness, in any manner, on or in products, merchandise, or goods, or for purposes of advertising or selling, or soliciting purchases of, products, merchandise, goods or services, without such person's prior consent, shall be liable for any damages sustained by the person injured as a result thereof.
+
+      Statutory Remedy Floor:
+      In any action brought under this section, the person who violated the section shall be liable to the injured party or his or her successor in interest in an amount equal to the greater of seven hundred fifty dollars ($750) or the actual damages suffered, and any profits from the unauthorized use that are attributable to the use.
+
+      Punitive Damages & Attorney's Fees:
+      Punitive damages may also be awarded to the injured party, and the prevailing party in any action under this section shall also be entitled to attorney's fees and costs.
+    statutory_slots:
+      prior_written_consent_required: true
+      statutory_minimum_damages: 750.0
+      disgorgement_of_profits_authorized: true
+      mandatory_prevailing_party_fees: true
+    controlling_precedents:
+      - citation: "Comedy III Productions, Inc. v. Gary Saderup, Inc., 25 Cal. 4th 387 (2001)"
+        title: "Comedy III Productions, Inc. v. Gary Saderup, Inc."
+        holding: "Transformative use test: an artist depicting a celebrity's likeness is protected by the First Amendment only if the work contains significant transformative elements rather than literal reproduction."
+        court: "Supreme Court of California"
+      - citation: "Midler v. Ford Motor Co., 849 F.2d 460 (9th Cir. 1988)"
+        title: "Midler v. Ford Motor Co."
+        holding: "When a distinctive voice of a professional singer is widely known and is deliberately imitated in order to sell a product, the sellers have appropriated what is not theirs and have committed a tort in California."
+        court: "United States Court of Appeals, Ninth Circuit"

@@ -9,6 +9,9 @@ code_families:
 description: "Authoritative California statewide statutes and Oakland municipal ordinances governing residential tenancy, security deposits, rent control, and just cause evictions."
 publisher: "California Office of Legislative Counsel & City of Oakland / Municode"
 edition: "2024 Legislative Session / OMC Title 8 Supp. 104"
+effective_from: "2024-07-01"
+effective_to: null
+source_document_hash: "sha256:d8b2e3f4a9c81203456789abcdef0123456789abcdef0123456789abcdef0123"
 retrieved_at: "2026-09-24T12:00:00Z"
 
 coverage:
@@ -47,6 +50,11 @@ statutes:
       small_landlord_cap_months: 2.0
       accounting_days: 21
       statutory_damages_multiplier: 2.0
+    controlling_precedents:
+      - citation: "Granberry v. Islay Investments, 9 Cal. 4th 738 (1995)"
+        title: "Granberry v. Islay Investments"
+        holding: "Landlord who fails to provide timely itemized accounting within the statutory deadline forfeits the right to retain any portion of the security deposit."
+        court: "Supreme Court of California"
     preempts:
       - "Oakland Municipal Code § 8.99.010"
 

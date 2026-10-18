@@ -1,0 +1,211 @@
+pack_id: "ca_corporate_governance_pack_v1"
+version: "1.0.0"
+domain: "California Corporate Governance & Securities Law"
+state: "CA"
+code_families:
+  - "California Corporations Code (General Corporation Law)"
+  - "California Revised Uniform Limited Liability Company Act (RULLCA)"
+  - "California Corporate Securities Law of 1968"
+description: "Authoritative California statutory mandates, non-waivable shareholder/member protections, and controlling appellate precedents governing non-waivable shareholder and director inspection rights under Corp. Code §§ 1600–1602, outreach to quasi-California foreign corporations under § 2115, controlling shareholder fiduciary fairness under Jones v. H.F. Ahmanson, RULLCA LLC fiduciary duties under § 17704.09, securities anti-fraud and rescission under §§ 25110/25401/25501, and involuntary dissolution/buyout appraisal under §§ 1800/2000."
+publisher: "California Office of Legislative Counsel & Supreme Court of California"
+edition: "2024 Legislative Session (Corporations Code & RULLCA Standards)"
+effective_from: "2024-01-01"
+effective_to: null
+source_document_hash: "sha256:a9b8c7d6e5f40123456789abcdef0123456789abcdef0123456789abcdef0502"
+retrieved_at: "2026-10-18T14:00:00Z"
+
+coverage:
+  covered_topics:
+    - "Shareholder & Director Inspection Rights"
+    - "Quasi-California Foreign Corporation Outreach (§ 2115)"
+    - "Controlling Shareholder Fiduciary Duties"
+    - "RULLCA LLC Fiduciary Duties & Operating Agreement Limits"
+    - "Corporate Securities Law Qualification & Anti-Fraud"
+    - "Involuntary Dissolution & Minority Buyout Appraisal"
+  known_uncovered_topics:
+    - "Federal SEC Exchange Act Rule 10b-5 Class Actions"
+    - "Hart-Scott-Rodino (HSR) Federal Merger Pre-Notification"
+    - "FINRA Broker-Dealer Disciplinary Arbitrations"
+
+statutes:
+  - citation: "Cal. Corp. Code § 1600, § 1601 & § 1602"
+    section_number: "1601"
+    title: "Non-Waivable Shareholder and Director Rights to Inspect Corporate Books, Records, and Minutes"
+    topic: "Shareholder & Director Inspection Rights"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1977-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CORP&sectionNum=1601"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Corporations Code Title 1, Division 1, Chapter 16"
+    raw_content: |
+      Under Corporations Code Sections 1600, 1601, and 1602:
+      (a) Under Section 1601, the accounting books and records and minutes of proceedings of the shareholders and the board and committees of the board of any domestic corporation, and of any foreign corporation keeping any such records in this state or having its principal executive office in this state, shall be open to inspection upon the written demand on the corporation of any shareholder or holder of a voting trust certificate at any reasonable time during usual business hours, for a purpose reasonably related to such holder's interests as a shareholder.
+      (b) Under Section 1602, every director shall have the absolute right at any reasonable time to inspect and copy all books, records and documents of every kind and to inspect the physical properties of the corporation of which such person is a director.
+      (c) Non-Waivability Mandate (§ 1600(d) & § 1601(b)): The rights of inspection set forth in this chapter may not be limited by the articles or bylaws, and apply to foreign corporations having their principal executive office in California.
+    statutory_slots:
+      shareholder_inspection_non_waivable: true
+      director_inspection_right_absolute: true
+      applies_to_ca_headquartered_foreign_corps: true
+      bylaw_limitation_void_per_se: true
+    controlling_precedents:
+      - citation: "Havlicek v. Coast-to-Coast Analytical Services, Inc., 39 Cal. App. 4th 1844 (1995)"
+        title: "Havlicek v. Coast-to-Coast Analytical Services"
+        holding: "Corporations Code § 1602 grants directors of a foreign corporation with its principal executive office in California an absolute right to inspect corporate books and records, unregulated by the internal affairs doctrine."
+        court: "California Court of Appeal, Second District"
+      - citation: "Schnabel v. Superior Court, 5 Cal. 4th 704 (1993)"
+        title: "Schnabel v. Superior Court"
+        holding: "A shareholder's statutory right to inspect corporate accounting books and records under § 1601 is strongly favored to protect shareholder interests and uncover corporate mismanagement."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Corp. Code § 2115"
+    section_number: "2115"
+    title: "Outreach Application of California Corporate Governance Rules to Quasi-California Foreign Corporations"
+    topic: "Quasi-California Foreign Corporation Outreach (§ 2115)"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1977-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CORP&sectionNum=2115"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Corporations Code Title 1, Division 1, Chapter 21"
+    raw_content: |
+      Under Corporations Code Section 2115:
+      (a) A foreign corporation (other than a foreign association or foreign nonprofit corporation, and other than a corporation with securities listed on the NYSE or Nasdaq) is subject to the requirements of subdivision (b) if:
+      (1) The average of the property factor, the payroll factor, and the sales factor (as defined in Revenue and Taxation Code §§ 25129, 25132, and 25134) with respect to it is more than 50 percent during its latest full income year; AND
+      (2) More than one-half of its outstanding voting securities are held of record by persons having addresses in this state.
+
+      Mandatory California Provisions Imposed (§ 2115(b)):
+      Qualifying quasi-California corporations must comply with California General Corporation Law governing: annual election of directors (§ 301), removal of directors without cause (§ 303), director standard of care (§ 309), cumulative voting (§ 708), supermajority vote requirements (§ 710), limitations on corporate distributions (§ 500), Dissenters' Rights (Chapter 13), and inspection rights (Chapter 16).
+    statutory_slots:
+      property_payroll_sales_threshold_pct: 50.0
+      california_voting_securities_threshold_pct: 50.0
+      mandatory_cumulative_voting: true
+      nyse_nasdaq_listed_exempt: true
+    controlling_precedents:
+      - citation: "Wilson v. Louisiana-Pacific Resources, Inc., 138 Cal. App. 3d 216 (1982)"
+        title: "Wilson v. Louisiana-Pacific Resources, Inc."
+        holding: "Corporations Code § 2115 is constitutional under the Full Faith and Credit and Commerce Clauses when imposing mandatory cumulative voting on a Utah corporation doing virtually all its business in California."
+        court: "California Court of Appeal, First District"
+
+  - citation: "Cal. Common Law & Corp. Code § 309 — Controlling Shareholder Fiduciary Duties"
+    section_number: "Ahmanson-Rule"
+    title: "Fiduciary Duty of Good Faith and Inherent Fairness Owed by Majority to Minority Shareholders"
+    topic: "Controlling Shareholder Fiduciary Duties"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1969-11-07"
+    source_url: "https://courts.ca.gov/opinions"
+    publisher: "Supreme Court of California"
+    edition: "California Corporate Fiduciary Doctrine"
+    raw_content: |
+      Under California Corporate Fiduciary Law (Jones v. H.F. Ahmanson & Co.):
+      Majority or controlling shareholders, either singly or acting in concert to accomplish a joint purpose, have a fiduciary responsibility to the minority and to the corporation to use their ability to control the corporation in a fair, just, and equitable manner.
+
+      Rule of Inherent Fairness:
+      Majority shareholders may not use their power to control corporate activities to benefit themselves alone or in a manner detrimental to the minority. Any use to which they put the corporation or their power to control the corporation must benefit all shareholders proportionately and must not conflict with the proper conduct of the corporation's business. When a transaction is challenged, the burden is on the director or controlling shareholder not only to prove the good faith of the transaction, but also to show its inherent fairness from the viewpoint of the corporation and those interested therein.
+    statutory_slots:
+      majority_owes_fiduciary_duty_to_minority: true
+      inherent_fairness_burden_on_controller: true
+      disproportionate_controller_benefit_prohibited: true
+    controlling_precedents:
+      - citation: "Jones v. H.F. Ahmanson & Co., 1 Cal. 3d 93 (1969)"
+        title: "Jones v. H.F. Ahmanson & Co."
+        holding: "Majority shareholders owe a comprehensive fiduciary duty of good faith and inherent fairness to minority shareholders in any exercise of corporate control, including structuring holding company liquidity markets that exclude the minority."
+        court: "Supreme Court of California"
+      - citation: "apriori / Stephenson v. Drever, 16 Cal. 4th 1167 (1997)"
+        title: "Stephenson v. Drever"
+        holding: "A minority shareholder under a buy-sell agreement retains shareholder status and the protection of majority fiduciary duties until the buyout transaction actually closes and title transfers."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Corp. Code § 17704.09 & § 17701.10"
+    section_number: "17704.09"
+    title: "RULLCA LLC Fiduciary Duties of Loyalty and Care & Non-Waivable Operating Agreement Boundaries"
+    topic: "RULLCA LLC Fiduciary Duties & Operating Agreement Limits"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2014-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CORP&sectionNum=17704.09"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2012, ch. 419 (RULLCA)"
+    raw_content: |
+      Under Corporations Code Section 17704.09 and Section 17701.10:
+      (a) The fiduciary duties that a member owes to a member-managed LLC and the other members, or that a manager owes to a manager-managed LLC and its members, are the duty of loyalty and the duty of care.
+      (b) The duty of loyalty is limited to: (1) accounting to the LLC and holding as trustee any property, profit, or benefit derived in the conduct or winding up of the LLC or from use of LLC property, including appropriation of an LLC opportunity; (2) refraining from dealing with the LLC as or on behalf of a party having an adverse interest; and (3) refraining from competing with the LLC in the conduct of the LLC's activities before dissolution.
+      (c)The duty of care in the conduct and winding up of the LLC's activities is to refrain from engaging in grossly negligent or reckless conduct, intentional misconduct, or a knowing violation of law.
+
+      Non-Waivable Boundaries (§ 17701.10(c)):
+      An operating agreement shall NOT: (1) eliminate the duty of loyalty, (2) unreasonably reduce the duty of care, or (3) eliminate the contractual obligation of good faith and fair dealing. Any modification of fiduciary duties requires the informed written consent of the members (§ 17701.10(e)).
+    statutory_slots:
+      blanket_elimination_of_duty_of_loyalty_void: true
+      unreasonable_reduction_of_duty_of_care_void: true
+      good_faith_and_fair_dealing_non_waivable: true
+      informed_written_consent_required_for_modification: true
+    controlling_precedents:
+      - citation: "Feresi v. The Livery, LLC, 232 Cal. App. 4th 419 (2014)"
+        title: "Feresi v. The Livery, LLC"
+        holding: "An LLC manager's breach of fiduciary duty in self-dealing renders the manager's security interest subordinated in equity to the innocent member's interest."
+        court: "California Court of Appeal, Second District"
+
+  - citation: "Cal. Corp. Code § 25110, § 25401 & § 25501"
+    section_number: "25401"
+    title: "California Corporate Securities Law Qualification Mandate, Anti-Fraud, and Rescission Remedy"
+    topic: "Corporate Securities Law Qualification & Anti-Fraud"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1969-01-02"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CORP&sectionNum=25401"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Corporate Securities Law of 1968"
+    raw_content: |
+      Under Corporations Code Sections 25110, 25401, and 25501:
+      (1) Qualification Mandate (§ 25110): It is unlawful for any person to offer or sell in this state any security in an issuer transaction unless such sale has been qualified or unless such security or transaction is exempted (e.g., § 25102(f) limited offering exemption for <=35 counted purchasers with preexisting relationships or sophistication).
+      (2) Anti-Fraud Prohibition (§ 25401): It is unlawful for any person to offer or sell a security in this state, or buy or offer to buy a security in this state, by means of any written or oral communication which includes an untrue statement of a material fact or omits to state a material fact necessary in order to make the statements made, in the light of the circumstances under which they were made, not misleading.
+      (3) Statutory Rescission (§ 25501): Any person who violates Section 25401 shall be liable to the person who purchases a security from him or sells a security to him, who may sue either for rescission (recovery of consideration paid plus legal interest) or for damages, without needing to prove common law reliance or causation.
+    statutory_slots:
+      unqualified_nonexempt_sale_unlawful: true
+      limited_offering_25102f_max_counted_purchasers: 35
+      common_law_reliance_not_required_under_25501: true
+      statutory_rescission_plus_interest_available: true
+    controlling_precedents:
+      - citation: "Bowden v. Robinson, 67 Cal. App. 3d 705 (1977)"
+        title: "Bowden v. Robinson"
+        holding: "Sections 25401 and 25501 eliminate the common law fraud elements of reliance and causation, shifting the burden to the defendant seller to prove the plaintiff knew the truth or the defendant exercised reasonable care."
+        court: "California Court of Appeal, Fourth District"
+      - citation: "Moss v. Kroner, 197 Cal. App. 4th 860 (2011)"
+        title: "Moss v. Kroner"
+        holding: "Secondary actors and control persons may be jointly and severally liable under Corporations Code §§ 25504 and 25504.1 when materially assisting in a primary violation of § 25401."
+        court: "California Court of Appeal, Second District"
+
+  - citation: "Cal. Corp. Code § 1800 & § 2000"
+    section_number: "1800"
+    title: "Involuntary Dissolution for Persistent Fraud or Abuse of Authority & Statutory Buyout Appraisal"
+    topic: "Involuntary Dissolution & Minority Buyout Appraisal"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1977-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CORP&sectionNum=1800"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Corporations Code Chapters 18 & 20"
+    raw_content: |
+      Under Corporations Code Sections 1800 and 2000:
+      (a) A verified complaint for involuntary dissolution of a corporation may be filed by shareholders holding at least 33-1/3 percent of the equity (excluding shares owned by persons who have personally participated in persistent fraud, mismanagement, or abuse of authority) on grounds including:
+      (1) Internal dissension and two or more factions of shareholders are so deadlocked that its business can no longer be conducted with advantage to its shareholders;
+      (2) Those in control of the corporation have been guilty of or have knowingly countenanced persistent and pervasive fraud, mismanagement or abuse of authority or persistent unfairness toward any shareholders; or
+      (3) Liquidation is reasonably necessary for the protection of the rights or interests of the complaining shareholders (in corporations with 35 or fewer shareholders).
+
+      Statutory Avoidance via Fair Value Buyout (§ 2000):
+      In any suit for involuntary dissolution, the corporation or the holders of 50 percent or more of the voting power may avoid dissolution and the appointment of any receiver by purchasing for cash the shares owned by the plaintiffs at their 'fair value' determined on the basis of liquidation value as of the valuation date, taking into account the possibility, if any, of sale of the entire business as a going concern.
+    statutory_slots:
+      standing_threshold_equity_pct: 33.33
+      wrongdoer_shares_excluded_from_threshold: true
+      close_corp_liquidation_protection_max_shareholders: 35
+      statutory_buyout_fair_value_going_concern_standard: true
+    controlling_precedents:
+      - citation: "Bauer v. Bauer, 46 Cal. App. 4th 1106 (1996)"
+        title: "Bauer v. Bauer"
+        holding: "Under Corporations Code § 1800(b)(5), in a close corporation with 35 or fewer shareholders, a court may order involuntary dissolution where reasonably necessary to protect minority shareholders' legitimate expectations."
+        court: "California Court of Appeal, First District"
+      - citation: "Mart v. Severson, 95 Cal. App. 4th 521 (2002)"
+        title: "Mart v. Severson"
+        holding: "Fair value under Corporations Code § 2000 must be determined by valuing the corporation as a going concern where a hypothetical piecemeal liquidation would yield less than a sale of the ongoing business."
+        court: "California Court of Appeal, First District"

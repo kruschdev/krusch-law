@@ -57,3 +57,41 @@ class TestJurisdictionPack(KruschLawTestCase):
         # Check that vectors still exist and are linked
         vectors_after = self.db.query(LawVector).all()
         self.assertEqual(len(vectors_after), rebuilt_count)
+
+    def test_load_and_import_multi_domain_packs(self):
+        import json
+        packs_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../data/packs"))
+        expected_packs = [
+            "ca_criminal_defense.yaml",
+            "ca_commercial_contracts.yaml",
+            "ca_employment_labor.yaml",
+            "ca_intellectual_property.yaml",
+            "ca_consumer_privacy.yaml",
+            "ca_tort_liability.yaml",
+            "ca_corporate_governance.yaml",
+            "ca_oakland.yaml",
+            "ca_san_francisco.yaml",
+            "ca_los_angeles.yaml",
+            "ca_berkeley.yaml",
+            "ca_santa_monica.yaml",
+            "ca_san_jose.yaml",
+        ]
+        for filename in expected_packs:
+            pack_path = os.path.join(packs_dir, filename)
+            self.assertTrue(os.path.exists(pack_path), f"Missing pack: {filename}")
+            pack = load_jurisdiction_pack(pack_path)
+            self.assertEqual(pack.state, "CA")
+            self.assertGreaterEqual(len(pack.statutes), 5)
+            has_precedents = any(len(s.controlling_precedents) > 0 for s in pack.statutes)
+            self.assertTrue(has_precedents, f"Pack {filename} should include controlling_precedents")
+
+        # Import criminal, tort, and corporate packs and verify metadata_json preserves controlling_precedents
+        tort_stats = import_jurisdiction_pack(os.path.join(packs_dir, "ca_tort_liability.yaml"), self.db)
+        self.assertEqual(tort_stats["artifacts_imported"], 6)
+        rowland_art = self.db.query(StatutoryArtifact).filter_by(citation="Cal. Civ. Code § 1714(a)").first()
+        self.assertIsNotNone(rowland_art)
+        meta = json.loads(rowland_art.metadata_json)
+        self.assertEqual(meta["domain"], "California Tort & Civil Liability Law")
+        self.assertGreaterEqual(len(meta["controlling_precedents"]), 1)
+        self.assertIn("Rowland v. Christian", meta["controlling_precedents"][0]["citation"])
+

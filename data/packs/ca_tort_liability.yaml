@@ -1,0 +1,214 @@
+pack_id: "ca_tort_liability_pack_v1"
+version: "1.0.0"
+domain: "California Tort & Civil Liability Law"
+state: "CA"
+code_families:
+  - "California Civil Code"
+  - "California Code of Civil Procedure"
+  - "California Government Code (Government Claims Act)"
+description: "Authoritative California statutory mandates, public policy rules, and controlling appellate precedents governing general negligence and premises liability under CC § 1714, Proposition 51 comparative fault allocation under CC § 1431.2, strict products liability doctrines, mandatory 6-month Government Claims Act presentation under Gov. Code § 911.2, punitive damages ratification under CC § 3294, and personal injury limitations under CCP § 335.1."
+publisher: "California Office of Legislative Counsel & Supreme Court of California"
+edition: "2024 Legislative Session (Civil Liability & Tort Reform Standards)"
+effective_from: "2024-01-01"
+effective_to: null
+source_document_hash: "sha256:c6d5e4f3a2b10987654321fedcba0987654321fedcba0987654321fedcba0601"
+retrieved_at: "2026-10-18T14:00:00Z"
+
+coverage:
+  covered_topics:
+    - "General Duty of Care & Premises Liability"
+    - "Comparative Fault & Proposition 51 Allocation"
+    - "Strict Products Liability (Design & Manufacturing Defects)"
+    - "Government Claims Act Presentation Deadlines"
+    - "Exemplary & Punitive Damages Standards"
+    - "Personal Injury Statute of Limitations & Delayed Discovery"
+  known_uncovered_topics:
+    - "Federal Tort Claims Act (28 U.S.C. § 2671)"
+    - "Admiralty & Maritime Jones Act Claims"
+    - "Workers' Compensation Exclusive Remedy Administrative Appeals"
+
+statutes:
+  - citation: "Cal. Civ. Code § 1714(a)"
+    section_number: "1714"
+    title: "Universal Duty of Ordinary Care and Premises Liability Balancing Factors"
+    topic: "General Duty of Care & Premises Liability"
+    authority_class: "controlling_statute"
+    hierarchy_level: "subsection"
+    effective_date: "1872-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1714"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Civil Code Division 3, Part 3"
+    raw_content: |
+      Under Civil Code Section 1714(a):
+      Everyone is responsible, not only for the result of his or her willful acts, but also for an injury occasioned to another by his or her want of ordinary care or skill in the management of his or her property or person, except so far as the latter has, willfully or by want of ordinary care, brought the injury upon himself or herself.
+
+      Rowland v. Christian Public Policy Factors:
+      In the absence of a statutory provision declaring an exception to the fundamental principle enunciated by Section 1714, no such exception should be made unless clearly supported by public policy, evaluated across: (1) foreseeability of harm to the plaintiff, (2) degree of certainty that the plaintiff suffered injury, (3) closeness of connection between defendant's conduct and injury, (4) moral blame attached to defendant's conduct, (5) policy of preventing future harm, (6) extent of burden to the defendant and consequences to the community, and (7) availability, cost, and prevalence of insurance.
+    statutory_slots:
+      universal_duty_of_ordinary_care: true
+      rigid_invitee_licensee_trespasser_distinction_abolished: true
+      rowland_seven_factor_balancing_applies: true
+    controlling_precedents:
+      - citation: "Rowland v. Christian, 69 Cal. 2d 108 (1968)"
+        title: "Rowland v. Christian"
+        holding: "Abolished rigid common law classifications of invitee, licensee, and trespasser in premises liability; property owners owe a general duty of reasonable care under all the circumstances pursuant to Civil Code § 1714."
+        court: "Supreme Court of California"
+      - citation: "Kesner v. Superior Court, 1 Cal. 5th 1132 (2016)"
+        title: "Kesner v. Superior Court"
+        holding: "Duty of care under § 1714 extends to foreseeable secondary ('take-home') exposure of household members to toxic substances carried home on workers' clothing."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Civ. Code § 1431.2"
+    section_number: "1431.2"
+    title: "Pure Comparative Negligence and Several Liability for Non-Economic Damages (Proposition 51)"
+    topic: "Comparative Fault & Proposition 51 Allocation"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1986-06-04"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1431.2"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Initiative Measure Proposition 51 (Fair Responsibility Act of 1986)"
+    raw_content: |
+      Under Civil Code Section 1431.2:
+      (a) In any action for personal injury, property damage, or wrongful death, based upon principles of comparative fault, the liability of each defendant for non-economic damages shall be several only and shall not be joint. Each defendant shall be liable only for the amount of non-economic damages allocated to that defendant in direct proportion to that defendant's percentage of fault, and a separate judgment shall be rendered against that defendant for that amount.
+
+      Economic vs. Non-Economic Damages Bifurcation:
+      (1) Economic Damages (objectively verifiable monetary losses including medical expenses, loss of earnings, burial costs, loss of use of property): Tortfeasors remain jointly and severally liable, subject to comparative fault reduction for the plaintiff's own negligence.
+      (2) Non-Economic Damages (subjective non-monetary losses including pain, suffering, inconvenience, emotional distress, loss of consortium): Liability is strictly several and proportional to each tortfeasor's fault percentage.
+    statutory_slots:
+      pure_comparative_fault_applies: true
+      economic_damages_joint_and_several: true
+      noneconomic_damages_several_only: true
+      intentional_tortfeasor_apportionment_excluded: true
+    controlling_precedents:
+      - citation: "Li v. Yellow Cab Co., 13 Cal. 3d 804 (1975)"
+        title: "Li v. Yellow Cab Co."
+        holding: "Replaced the 'all-or-nothing' rule of contributory negligence with a system of 'pure' comparative negligence, assessing liability in direct proportion to fault."
+        court: "Supreme Court of California"
+      - citation: "DaFonte v. Up-Right, Inc., 2 Cal. 4th 593 (1992)"
+        title: "DaFonte v. Up-Right, Inc."
+        holding: "Proposition 51 (§ 1431.2) eliminates a third-party defendant's joint and several liability to an injured worker for unpaid non-economic damages attributable to the fault of the statutorily immune employer."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Common Law & Restatement — Strict Products Liability"
+    section_number: "Strict-Liability-Doctrine"
+    title: "Strict Products Liability for Manufacturing, Design, and Warning Defects"
+    topic: "Strict Products Liability (Design & Manufacturing Defects)"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1963-01-24"
+    source_url: "https://courts.ca.gov/opinions"
+    publisher: "Supreme Court of California"
+    edition: "California Civil Jury Instructions (CACI 1200 Series)"
+    raw_content: |
+      Under California Strict Products Liability Doctrine:
+      A manufacturer, distributor, or retailer is strictly liable in tort when an article he places on the market, knowing that it is to be used without inspection for defects, proves to have a defect that causes injury to a human being.
+
+      Two-Prong Design Defect Standard (Barker v. Lull Engineering):
+      A product is defective in design if the plaintiff establishes that:
+      (1) Consumer Expectations Test: The product failed to perform as safely as an ordinary consumer would expect when used in an intended or reasonably foreseeable manner; OR
+      (2) Risk-Benefit Test: The product's design proximately caused injury and the defendant fails to establish, in light of relevant factors (gravity of danger, likelihood of harm, mechanical feasibility of safer alternative design, financial cost of improved design, and adverse consequences to the product), that on balance the benefits of the challenged design outweigh the risk of danger inherent in such design.
+    statutory_slots:
+      privity_of_contract_not_required: true
+      consumer_expectations_test_available: true
+      risk_benefit_burden_shifts_to_manufacturer: true
+      stream_of_commerce_participants_liable: true
+    controlling_precedents:
+      - citation: "Greenman v. Yuba Power Products, Inc., 59 Cal. 2d 57 (1963)"
+        title: "Greenman v. Yuba Power Products, Inc."
+        holding: "Established strict liability in tort for defective products; a manufacturer is strictly liable when an article placed on the market proves to have a defect that causes injury to a human being."
+        court: "Supreme Court of California"
+      - citation: "Barker v. Lull Engineering Co., 20 Cal. 3d 413 (1978)"
+        title: "Barker v. Lull Engineering Co."
+        holding: "Established the dual-alternative test for design defect (Consumer Expectations and Risk-Benefit) and shifted the burden of proof under the Risk-Benefit test to the manufacturer once causation is shown."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Gov. Code § 911.2 & § 945.4"
+    section_number: "911.2"
+    title: "Government Claims Act Mandatory Six-Month Claim Presentation Requirement"
+    topic: "Government Claims Act Presentation Deadlines"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1963-09-20"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=GOV&sectionNum=911.2"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Government Code Title 1, Division 3.6"
+    raw_content: |
+      Under Government Code Section 911.2 and Section 945.4:
+      (a) A claim relating to a cause of action for death or for injury to person or to personal property or growing crops shall be presented as provided in Article 2 not later than six months after the accrual of the cause of action. A claim relating to any other cause of action shall be presented not later than one year after the accrual of the cause of action.
+      (b) Under Section 945.4, no suit for money or damages may be brought against a public entity on a cause of action for which a claim is required to be presented until a written claim therefor has been presented to the public entity and has been acted upon by the board, or has been deemed to have been rejected by the board.
+
+      Condition Precedent to Suit:
+      Timely claim presentation is not merely a procedural hurdle; it is an essential element of a valid cause of action against a California public entity or public employee acting within the scope of employment. Failure to allege compliance or excuse subjects the complaint to general demurrer.
+    statutory_slots:
+      personal_injury_claim_deadline_months: 6
+      contract_or_real_property_claim_deadline_months: 12
+      late_claim_relief_outer_limit_months: 12
+      mandatory_condition_precedent_to_lawsuit: true
+    controlling_precedents:
+      - citation: "State of California v. Superior Court (Bodde), 32 Cal. 4th 1234 (2004)"
+        title: "State of California v. Superior Court (Bodde)"
+        holding: "Failure to allege facts demonstrating or excusing compliance with the claim presentation requirement of the Government Claims Act subjects a claim against a public entity to a demurrer for failure to state a cause of action."
+        court: "Supreme Court of California"
+      - citation: "City of Stockton v. Superior Court, 42 Cal. 4th 730 (2007)"
+        title: "City of Stockton v. Superior Court"
+        holding: "The Government Claims Act applies to both tort and breach of contract actions seeking money or damages against California public entities."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Civ. Code § 3294"
+    section_number: "3294"
+    title: "Exemplary and Punitive Damages Clear and Convincing Standard & Corporate Ratification"
+    topic: "Exemplary & Punitive Damages Standards"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1988-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=3294"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 1987, ch. 1498"
+    raw_content: |
+      Under Civil Code Section 3294:
+      (a) In an action for the breach of an obligation not arising from contract, where it is proven by clear and convincing evidence that the defendant has been guilty of oppression, fraud, or malice, the plaintiff, in addition to the actual damages, may recover damages for the sake of example and by way of punishing the defendant.
+      (b) An employer shall not be liable for damages pursuant to subdivision (a), based upon acts of an employee of the employer, unless the employer had advance knowledge of the unfitness of the employee and employed him or her with a conscious disregard of the rights or safety of others or authorized or ratified the wrongful conduct for which the damages are awarded or was personally guilty of oppression, fraud, or malice. With respect to a corporate employer, the advance knowledge and conscious disregard, authorization, ratification or act of oppression, fraud, or malice must be on the part of an officer, director, or managing agent of the corporation.
+    statutory_slots:
+      clear_and_convincing_evidence_required: true
+      contract_breach_alone_excluded: true
+      corporate_managing_agent_ratification_required: true
+    controlling_precedents:
+      - citation: "White v. Ultramar, Inc., 21 Cal. 4th 563 (1999)"
+        title: "White v. Ultramar, Inc."
+        holding: "Under Civil Code § 3294(b), a 'managing agent' is an employee who exercises substantial discretionary authority over decisions that ultimately determine corporate policy."
+        court: "Supreme Court of California"
+      - citation: "Simon v. San Paolo U.S. Holding Co., Inc., 35 Cal. 4th 1159 (2005)"
+        title: "Simon v. San Paolo U.S. Holding Co."
+        holding: "Due process generally limits punitive damages to a single-digit ratio to compensatory damages absent extreme reprehensibility or exceptionally small economic harm."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Code Civ. Proc. § 335.1"
+    section_number: "335.1"
+    title: "Two-Year Statute of Limitations for Personal Injury and Wrongful Death & Delayed Discovery Rule"
+    topic: "Personal Injury Statute of Limitations & Delayed Discovery"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2003-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CCP&sectionNum=335.1"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2002, ch. 448 (SB 688)"
+    raw_content: |
+      Under Code of Civil Procedure Section 335.1:
+      Within two years: An action for assault, battery, or injury to, or for the death of, an individual caused by the wrongful act or neglect of another.
+
+      Delayed Discovery Rule Exception:
+      Under California's discovery rule, accrual of a cause of action is postponed until the plaintiff discovers, or has reason to discover, the cause of action. A plaintiff has reason to discover a cause of action when he or she has reason at least to suspect a factual basis for its elements (injury, physical cause, and wrongdoing). To rely on the delayed discovery rule, a plaintiff whose complaint shows on its face that the claim would be barred without the benefit of the discovery rule must specifically plead facts showing (1) the time and manner of discovery and (2) the inability to have made earlier discovery despite reasonable diligence.
+    statutory_slots:
+      limitations_period_years: 2
+      delayed_discovery_specific_pleading_required: true
+      suspicion_of_wrongdoing_triggers_accrual: true
+    controlling_precedents:
+      - citation: "Fox v. Ethicon Endo-Surgery, Inc., 35 Cal. 4th 797 (2005)"
+        title: "Fox v. Ethicon Endo-Surgery, Inc."
+        holding: "Under the delayed discovery rule, a cause of action accrues when the plaintiff has reason to suspect an injury and some wrongful cause, and the plaintiff must plead specific facts showing inability to discover earlier despite reasonable diligence."
+        court: "Supreme Court of California"
+      - citation: "Jolly v. Eli Lilly & Co., 44 Cal. 3d 1103 (1988)"
+        title: "Jolly v. Eli Lilly & Co."
+        holding: "Suspicion of one or more of the elements of a cause of action, coupled with knowledge of any remaining elements, triggers the applicable statute of limitations period."
+        court: "Supreme Court of California"

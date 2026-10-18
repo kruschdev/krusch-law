@@ -61,6 +61,11 @@ statutes:
     small_landlord_cap_months: 2.0
     accounting_days: 21
     statutory_damages_multiplier: 2.0
+  controlling_precedents:
+  - citation: "Granberry v. Islay Investments, 9 Cal. 4th 738 (1995)"
+    title: "Granberry v. Islay Investments"
+    holding: "Landlord who fails to provide timely itemized accounting within the statutory deadline forfeits the right to retain any portion of the security deposit."
+    court: "Supreme Court of California"
   preempts:
   - Santa Monica City Charter Inconsistent Deposit Provisions
 - citation: Cal. Civ. Code § 1954.52
