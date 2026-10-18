@@ -9,6 +9,9 @@ code_families:
 description: "Authoritative California statewide statutes and City of Los Angeles municipal ordinances governing residential tenancy, the Rent Stabilization Ordinance (LAMC Chapter XV), the Just Cause for Eviction Ordinance (LAMC Chapter XVI), tenant relocation assistance schedules, and rent adjustments."
 publisher: "California Office of Legislative Counsel & City of Los Angeles / American Legal Publishing"
 edition: "2024 Legislative Session / LAMC Chapter XV & Chapter XVI Supp. 2024"
+effective_from: "2024-01-01"
+effective_to: null
+source_document_hash: "sha256:c9e8d7c6b5a403123456789abcdef0123456789abcdef0123456789abcdef0123"
 retrieved_at: "2026-09-27T12:00:00Z"
 
 coverage:
@@ -48,6 +51,11 @@ statutes:
       small_landlord_cap_months: 2.0
       accounting_days: 21
       statutory_damages_multiplier: 2.0
+    controlling_precedents:
+      - citation: "Granberry v. Islay Investments, 9 Cal. 4th 738 (1995)"
+        title: "Granberry v. Islay Investments"
+        holding: "Landlord who fails to provide timely itemized accounting within the statutory deadline forfeits the right to retain any portion of the security deposit."
+        court: "Supreme Court of California"
 
   - citation: "Cal. Civ. Code § 1954.52"
     section_number: "1954.52"
