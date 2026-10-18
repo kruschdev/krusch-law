@@ -176,6 +176,23 @@ class TestGraphInvariants(KruschLawTestCase):
             self.db.commit()
         self.db.rollback()
 
+    def test_06_system1_doctrine_routing(self):
+        """
+        Verify System 1 statutory doctrine pre-router accurately classifies California preemption doctrines.
+        """
+        from src.backend.resolver import decide_statutory_doctrine
+
+        res_ch = decide_statutory_doctrine("Does single-family home vacancy decontrol preempt local rent caps?")
+        self.assertEqual(res_ch["choice"], "costa_hawkins")
+        self.assertGreaterEqual(res_ch["confidence"], 0.85)
+        self.assertIn("1954.50", res_ch["statute"])
+
+        res_ab12 = decide_statutory_doctrine("Can a landlord charge two months security deposit after July 2024?")
+        self.assertEqual(res_ab12["choice"], "ab_12")
+        self.assertGreaterEqual(res_ab12["confidence"], 0.85)
+        self.assertIn("1950.5", res_ab12["statute"])
+
 
 if __name__ == "__main__":
     unittest.main()
+

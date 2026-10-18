@@ -294,7 +294,8 @@ def get_embeddings_batch(queries: List[str]) -> List[List[float]]:
 
     payload = {
         "model": settings.OLLAMA_EMBED_MODEL,
-        "input": miss_texts
+        "input": miss_texts,
+        "keep_alive": -1
     }
     fetched: List[List[float]] = []
     try:
@@ -330,7 +331,8 @@ def get_embedding(query: str) -> List[float]:
 
     payload = {
         "model": settings.OLLAMA_EMBED_MODEL,
-        "input": query
+        "input": query,
+        "keep_alive": -1
     }
 
     try:
@@ -339,7 +341,7 @@ def get_embedding(query: str) -> List[float]:
             if resp.status_code == 404:
                 resp = client.post(
                     f"{settings.OLLAMA_EMBED_HOST}/api/embeddings",
-                    json={"model": settings.OLLAMA_EMBED_MODEL, "prompt": query}
+                    json={"model": settings.OLLAMA_EMBED_MODEL, "prompt": query, "keep_alive": -1}
                 )
                 resp.raise_for_status()
                 embedding = resp.json().get("embedding", [])
@@ -1860,9 +1862,10 @@ Draft the legal analysis following the required headings. Conclude with an ethic
                     "system": system_prompt,
                     "prompt": user_prompt,
                     "stream": False,
+                    "keep_alive": -1,
                     "options": {
                         "temperature": 0.2,
-                        "num_ctx": 8192
+                        "num_ctx": 4096
                     }
                 }
             )

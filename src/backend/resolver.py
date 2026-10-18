@@ -24,7 +24,9 @@ Features:
 
 from __future__ import annotations
 
+import os
 import re
+import sys
 import json
 import logging
 from datetime import date, datetime, timezone
@@ -35,6 +37,16 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .db import LawVector, SessionLocal
+
+# Ensure monorepo lib-py is discoverable when running inside homelab
+_MONOREPO_LIB_PY = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "lib-py"))
+if os.path.isdir(_MONOREPO_LIB_PY) and _MONOREPO_LIB_PY not in sys.path:
+    sys.path.insert(0, _MONOREPO_LIB_PY)
+
+try:
+    from krusch_toolkit.decide import System1Decider
+except ImportError:
+    System1Decider = None  # type: ignore
 
 logger = logging.getLogger("kruschlaw.resolver")
 
@@ -100,6 +112,52 @@ STATEWIDE_PREEMPTION_REGISTRY = {
         "keywords": ["1942.1", "habitability waiver", "waive 1941", "waive 1942", "as-is lease"]
     }
 }
+
+
+def decide_statutory_doctrine(query: str, use_system1_llm: bool = False) -> Dict[str, Any]:
+    """
+    Fast-path System 1 statutory doctrine pre-router for California tenancy & preemption analysis.
+    Uses deterministic keyword gates first and falls back to `krusch_toolkit.decide.System1Decider`
+    single-token logprob marginalization. Never bypasses the deterministic DAG in `resolve_controlling_law`.
+    """
+    text_lower = (query or "").lower()
+    choices = list(STATEWIDE_PREEMPTION_REGISTRY.keys())
+
+    for key, entry in STATEWIDE_PREEMPTION_REGISTRY.items():
+        if any(kw in text_lower for kw in entry.get("keywords", [])):
+            return {
+                "choice": key,
+                "doctrine": entry["doctrine"],
+                "statute": entry["statute"],
+                "confidence": 0.95,
+                "mode": "deterministic_gate",
+            }
+
+    if System1Decider is not None:
+        decider = System1Decider(deterministic=not use_system1_llm)
+        res = decider.decide(
+            state=f"California Legal Fact Pattern: {query}",
+            question="Which statewide California statutory doctrine applies?",
+            choices=choices,
+        )
+        chosen = res.get("choice", choices[0])
+        entry = STATEWIDE_PREEMPTION_REGISTRY.get(chosen, {})
+        return {
+            "choice": chosen,
+            "doctrine": entry.get("doctrine", chosen),
+            "statute": entry.get("statute", ""),
+            "confidence": res.get("confidence", 0.0),
+            "distribution": res.get("distribution", {}),
+            "mode": res.get("mode", "deterministic_fallback"),
+        }
+
+    return {
+        "choice": "ab_1482",
+        "doctrine": STATEWIDE_PREEMPTION_REGISTRY["ab_1482"]["doctrine"],
+        "statute": STATEWIDE_PREEMPTION_REGISTRY["ab_1482"]["statute"],
+        "confidence": 0.5,
+        "mode": "fallback",
+    }
 
 
 def to_utc_date(val: Any) -> date:

@@ -14,8 +14,8 @@
 **KruschLaw** is a sovereign, local-first legal research, statutory issue analysis, and ordinance intelligence platform.
 - **Backend API**: Python 3.11+, FastAPI (`src/backend/main.py`), SQLAlchemy, pgvector
 - **Ingestion Spine**: **KruschNexus** (`krusch_nexus.parsers` & `krusch_nexus.chunking`) — replaces LlamaIndex entirely
-- **Embeddings**: Local Ollama (`bge-large`, 1024-dim, batch embeddings via `/api/embed`)
-- **Reasoning**: Local Ollama (`qwen2.5:14b` or `qwen2.5:7b`) with air-gapped zero cloud egress
+- **Embeddings**: Local Ollama (`bge-large:latest`, 1024-dim, batch embeddings via `/api/embed` with `keep_alive: -1`)
+- **Reasoning**: Local Ollama (`qwen2.5-coder:7b` on `krusch` or `hermes3:latest` on `kruschserv`) with air-gapped zero cloud egress
 - **Database**: PostgreSQL 16 with `pgvector` HNSW cosine similarity & `tsvector` cover-density lexical ranking fused via Reciprocal Rank Fusion ($k=60$)
 - **Frontend**: Streamlit (`src/frontend/app.py`) with cyber-legal theme, 3-tab workflow (Legal Research & Memoranda, Matter Evidence & Client Narrative, Defense Checklist & Statutory Demand Letter)
 - **Protocol**: Stdio Model Context Protocol (MCP) server (`src/mcp/server.py`) and 5-verb Cross-Domain Gateway Router (`src/mcp/gateway.py` in companion krusch-biz)

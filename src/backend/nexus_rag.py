@@ -75,6 +75,42 @@ def get_nexus_client() -> Any:
     return _NEXUS_CLIENT
 
 
+def search_legal_cartridge(
+    text_query: str,
+    limit: int = 5,
+    jurisdiction: Optional[str] = None,
+    source_table: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Query the KruschNexus Sovereign Legal Authority Cartridge (cases and local codes)."""
+    try:
+        from krusch_nexus.legal_cartridge import LegalAuthorityCartridge
+        cart = LegalAuthorityCartridge()
+        hits = cart.search(query=text_query, limit=limit, jurisdiction=jurisdiction, source_table=source_table)
+        results = []
+        for h in hits:
+            results.append({
+                "id": h["chunk_id"],
+                "jurisdiction": h.get("jurisdiction", "California"),
+                "state": "CA",
+                "city": None,
+                "topic": "Case Law Precedent" if h.get("source_table") == "cases" else "Municipal Code",
+                "title": h["title"],
+                "section": h["citation"],
+                "content": h["text"],
+                "chunk_index": h.get("chunk_index", 0),
+                "authority_class": "judicial_precedent" if h.get("source_table") == "cases" else "municipal_ordinance",
+                "instrument_type": "court_opinion" if h.get("source_table") == "cases" else "municipal_code",
+                "status": "published",
+                "decision_year": h.get("decision_year"),
+                "court": h.get("court"),
+                "similarity": float(h.get("score", 0.0))
+            })
+        return results
+    except Exception as e:
+        logger.debug(f"Cartridge search: {e}")
+        return []
+
+
 def search_laws_nexus(
     text_query: str,
     limit: int = 5,
@@ -84,69 +120,79 @@ def search_laws_nexus(
     as_of_date: Optional[Any] = None,
     workspace: str = "laws_california"
 ) -> List[Dict[str, Any]]:
-    """Retrieve laws using KruschNexus / Wondersearch provider."""
+    """Retrieve laws using KruschNexus / Wondersearch provider and Sovereign Legal Cartridge."""
     client = get_nexus_client()
-    if not client:
-        return []
-
-    filters = {}
-    if state_filter:
-        filters["state"] = state_filter
-    if city_filter:
-        filters["city"] = city_filter
-    if topic_filter:
-        filters["topic"] = topic_filter
-
-    hits = client.search(
-        query=text_query,
-        workspace=workspace,
-        limit=limit,
-        filters=filters if filters else None
-    )
-
     results = []
-    for hit in hits:
-        meta = hit.score_vector or {}
-        section_name = hit.locator or hit.header or "§ General"
-        title_name = hit.citation or hit.header or "Statutory Provision"
-        results.append({
-            "id": hit.chunk_id,
-            "jurisdiction": meta.get("jurisdiction", "California"),
-            "state": meta.get("state", state_filter or "CA"),
-            "city": meta.get("city", city_filter),
-            "county": meta.get("county"),
-            "city_or_county": meta.get("city_or_county", city_filter),
-            "topic": meta.get("topic", topic_filter or "General"),
-            "title": title_name,
-            "section": section_name,
-            "content": hit.text,
-            "chunk_index": hit.chunk_index or 0,
-            "parent_section": meta.get("parent_section"),
-            "hierarchy_level": meta.get("hierarchy_level", 1),
-            "authority_class": meta.get("authority_class", "controlling_statute"),
-            "instrument_type": meta.get("instrument_type", "statute"),
-            "status": meta.get("status", "enacted"),
-            "effective_from": meta.get("effective_from"),
-            "effective_to": meta.get("effective_to"),
-            "preempts": meta.get("preempts"),
-            "implements_ref": meta.get("implements_ref"),
-            "defines_terms": meta.get("defines_terms"),
-            "exception_to": meta.get("exception_to"),
-            "applies_if": meta.get("applies_if"),
-            "definitions_ref": meta.get("definitions_ref"),
-            "exceptions_ref": meta.get("exceptions_ref"),
-            "repealed": meta.get("repealed", False),
-            "preempted_by": meta.get("preempted_by"),
-            "effective_date": meta.get("effective_date"),
-            "source_url": meta.get("source_url"),
-            "page_number": hit.page_number,
-            "printed_page": hit.printed_page,
-            "bbox": hit.bbox,
-            "char_start": hit.char_start,
-            "char_end": hit.char_end,
-            "extra_metadata": meta.get("extra_metadata"),
-            "similarity": float(hit.score)
-        })
+
+    if client:
+        filters = {}
+        if state_filter:
+            filters["state"] = state_filter
+        if city_filter:
+            filters["city"] = city_filter
+        if topic_filter:
+            filters["topic"] = topic_filter
+
+        try:
+            hits = client.search(
+                query=text_query,
+                workspace=workspace,
+                limit=limit,
+                filters=filters if filters else None
+            )
+            for hit in hits:
+                meta = hit.score_vector or {}
+                section_name = hit.locator or hit.header or "§ General"
+                title_name = hit.citation or hit.header or "Statutory Provision"
+                results.append({
+                    "id": hit.chunk_id,
+                    "jurisdiction": meta.get("jurisdiction", "California"),
+                    "state": meta.get("state", state_filter or "CA"),
+                    "city": meta.get("city", city_filter),
+                    "county": meta.get("county"),
+                    "city_or_county": meta.get("city_or_county", city_filter),
+                    "topic": meta.get("topic", topic_filter or "General"),
+                    "title": title_name,
+                    "section": section_name,
+                    "content": hit.text,
+                    "chunk_index": hit.chunk_index or 0,
+                    "parent_section": meta.get("parent_section"),
+                    "hierarchy_level": meta.get("hierarchy_level", 1),
+                    "authority_class": meta.get("authority_class", "controlling_statute"),
+                    "instrument_type": meta.get("instrument_type", "statute"),
+                    "status": meta.get("status", "enacted"),
+                    "effective_from": meta.get("effective_from"),
+                    "effective_to": meta.get("effective_to"),
+                    "preempts": meta.get("preempts"),
+                    "implements_ref": meta.get("implements_ref"),
+                    "defines_terms": meta.get("defines_terms"),
+                    "exception_to": meta.get("exception_to"),
+                    "applies_if": meta.get("applies_if"),
+                    "definitions_ref": meta.get("definitions_ref"),
+                    "exceptions_ref": meta.get("exceptions_ref"),
+                    "repealed": meta.get("repealed", False),
+                    "preempted_by": meta.get("preempted_by"),
+                    "effective_date": meta.get("effective_date"),
+                    "source_url": meta.get("source_url"),
+                    "page_number": hit.page_number,
+                    "printed_page": hit.printed_page,
+                    "bbox": hit.bbox,
+                    "char_start": hit.char_start,
+                    "char_end": hit.char_end,
+                    "extra_metadata": meta.get("extra_metadata"),
+                    "similarity": float(hit.score)
+                })
+        except Exception as e:
+            logger.debug(f"Nexus client search error: {e}")
+
+    # Supplement or fallback with Sovereign Legal Authority Cartridge (cases & local codes)
+    if len(results) < limit:
+        cartridge_hits = search_legal_cartridge(
+            text_query=text_query,
+            limit=limit - len(results),
+            jurisdiction=state_filter or "California"
+        )
+        results.extend(cartridge_hits)
     return results
 
 
