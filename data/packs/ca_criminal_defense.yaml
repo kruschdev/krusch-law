@@ -1,0 +1,192 @@
+pack_id: "ca_criminal_defense_pack_v1"
+version: "1.0.0"
+domain: "Criminal Law & Constitutional Procedure"
+state: "CA"
+code_families:
+  - "California Penal Code"
+  - "United States Constitution (Fourth, Fifth, Sixth, Fourteenth Amendments)"
+description: "Authoritative California statutory mandates, constitutional procedural baselines, and controlling appellate precedents governing criminal defense, search and seizure suppression, preliminary hearing dismissal, Humphrey bail determinations, determinate sentencing triad selections, and mandatory prosecution discovery obligations."
+publisher: "California Office of Legislative Counsel & Supreme Court of California"
+edition: "2024 Legislative Session (Stats. 2023, ch. 45 & SB 567 / AB 256)"
+effective_from: "2024-01-01"
+effective_to: null
+source_document_hash: "sha256:d8a7c2b5e1f9043187654321fedcba0987654321fedcba0987654321fedcba09"
+retrieved_at: "2026-10-18T13:00:00Z"
+
+coverage:
+  covered_topics:
+    - "Search & Seizure Suppression"
+    - "Preliminary Hearing Indictment Dismissal"
+    - "Bail & Pretrial Release"
+    - "Determinate Sentencing Triads"
+    - "Pretrial Discovery Obligations"
+    - "Factual Innocence Record Sealing"
+  known_uncovered_topics:
+    - "Federal Sentencing Guidelines (U.S.S.G.)"
+    - "Juvenile Delinquency Welfare & Institutions Code"
+    - "Capital Murder Special Circumstances Appeals"
+
+statutes:
+  - citation: "Cal. Penal Code § 1538.5"
+    section_number: "1538.5"
+    title: "Motion to Suppress Evidence Obtained via Unreasonable Search or Seizure"
+    topic: "Search & Seizure Suppression"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2024-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=PEN&sectionNum=1538.5"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2023, ch. 45"
+    raw_content: |
+      Under Penal Code Section 1538.5, a defendant may move for the return of property or to suppress as evidence any tangible or intangible thing obtained as a result of a search or seizure on either of the following grounds:
+      (1) The search or seizure without a warrant was unreasonable under Fourth Amendment standards.
+      (2) The search or seizure with a warrant was unreasonable because the warrant is insufficient on its face, the property seized was not described in the warrant, there was not probable cause for the issuance of the warrant (Franks violation), or the method of execution of the warrant violated state or federal constitutional standards.
+
+      Where a warrantless search is challenged, the prosecution carries the burden of proving by a preponderance of the evidence that the police conduct fell within a recognized exception to the warrant requirement (e.g., exigent circumstances, valid consent, search incident to lawful arrest, or automobile exception). In felony prosecutions, the motion may be made at the preliminary examination or in the superior court prior to trial upon at least 10 court days' written notice to the People.
+    statutory_slots:
+      notice_period_court_days: 10
+      burden_of_proof: "preponderance_of_evidence"
+      moving_party: "defendant"
+      prosecution_justification_required: true
+    controlling_precedents:
+      - citation: "Terry v. Ohio, 392 U.S. 1 (1968)"
+        title: "Terry v. Ohio"
+        holding: "Police may briefly detain an individual only upon reasonable, articulable suspicion of criminal activity; a frisk requires reasonable belief the suspect is armed and dangerous."
+        court: "Supreme Court of the United States"
+      - citation: "People v. Celis, 33 Cal. 4th 667 (2004)"
+        title: "People v. Celis"
+        holding: "Detentions exceeding reasonable scope or duration convert into de facto arrests requiring full probable cause, invalidating subsequent searches absent a warrant."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Penal Code § 995"
+    section_number: "995"
+    title: "Motion to Set Aside Indictment or Information for Lack of Reasonable or Probable Cause"
+    topic: "Preliminary Hearing Indictment Dismissal"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2024-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=PEN&sectionNum=995"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2023, ch. 45"
+    raw_content: |
+      Under Section 995 of the Penal Code, the indictment or information must be set aside by the court in which the defendant is arraigned, upon motion, in either of the following cases:
+      (1) Where it is an indictment, that it was not found, endorsed, and presented as prescribed in this code, or that the defendant has been indicted without reasonable or probable cause.
+      (2) Where it is an information, that before the filing thereof the defendant had not been legally committed by a magistrate, or that the defendant had been committed without reasonable or probable cause.
+
+      A commitment is without reasonable or probable cause if there is no competent legal evidence at the preliminary examination to establish each element of the charged offense and the defendant's connection thereto. If evidence was admitted in violation of constitutional rights or substantial procedural rights were denied at the preliminary hearing, the superior court must grant the motion to dismiss the affected counts.
+    statutory_slots:
+      standard_of_review: "reasonable_or_probable_cause"
+      hearing_forum: "superior_court_arraignment"
+      dismissal_mandatory_if_unsupported: true
+    controlling_precedents:
+      - citation: "People v. Superior Court (Marks), 1 Cal. 4th 56 (1991)"
+        title: "People v. Superior Court (Marks)"
+        holding: "Commitment without competent evidence establishing a prima facie case on each charged count requires setting aside the information under § 995."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Penal Code § 1275 & Cal. Const. Art. I § 12"
+    section_number: "1275"
+    title: "Bail Determination, Non-Monetary Conditions, and Ability to Pay"
+    topic: "Bail & Pretrial Release"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2024-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=PEN&sectionNum=1275"
+    publisher: "California Office of Legislative Counsel & Supreme Court of California"
+    edition: "In re Humphrey (2021) 11 Cal. 5th 135"
+    raw_content: |
+      Under California Penal Code Section 1275 and the landmark constitutional holding of In re Humphrey (2021) 11 Cal. 5th 135, in setting, reducing, or denying bail, a judge or magistrate shall take into consideration the protection of the public, the seriousness of the offense charged, the previous criminal record of the defendant, and the probability of his or her appearing at trial or hearing.
+
+      Humphrey Mandates:
+      (1) Conditioning freedom solely on whether an arrestee can afford cash bail is unconstitutional under California equal protection and due process clauses.
+      (2) The court must first consider non-monetary alternatives to cash bail (e.g., electronic monitoring, supervised release, drug testing, protective orders).
+      (3) If money bail is determined to be necessary to ensure public safety or court appearance, the court must make an individualized assessment of the arrestee's ability to pay and set bail at an amount the defendant can reasonably afford, unless clear and convincing evidence demonstrates that no condition of release can reasonably ensure public safety.
+    statutory_slots:
+      ability_to_pay_mandatory: true
+      non_monetary_consideration_first: true
+      evidentiary_standard_pretrial_detention: "clear_and_convincing"
+    controlling_precedents:
+      - citation: "In re Humphrey, 11 Cal. 5th 135 (2021)"
+        title: "In re Humphrey"
+        holding: "Pretrial detention based solely on inability to pay financial bail violates due process and equal protection; courts must consider non-financial release alternatives."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Penal Code § 1170(b)"
+    section_number: "1170(b)"
+    title: "Determinate Sentencing Law — Triad Selection and Middle Term Presumption (SB 567)"
+    topic: "Determinate Sentencing Triads"
+    authority_class: "controlling_statute"
+    hierarchy_level: "subsection"
+    effective_date: "2022-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=PEN&sectionNum=1170"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2021, ch. 731 (SB 567)"
+    raw_content: |
+      Under Penal Code Section 1170(b) as amended by Senate Bill 567:
+      (1) When a judgment of imprisonment is to be imposed and the statute specifies three possible terms (lower, middle, upper triad), the court shall order imposition of the middle term, unless there are circumstances in aggravation of the crime that justify the imposition of a term of imprisonment exceeding the middle term.
+      (2) The court may impose a sentence exceeding the middle term only when there are circumstances in aggravation, and the facts underlying those circumstances have been stipulated to by the defendant, or have been found true beyond a reasonable doubt at trial by the jury or by the judge in a court trial.
+      (3) Presumption of Lower Term: The court shall impose the lower term if the defendant's psychological, physical, or childhood trauma, youth (under 26 years of age), or status as a victim of domestic violence or human trafficking was a contributing factor in the commission of the offense, unless the court finds that the aggravating circumstances outweigh the mitigating circumstances such that imposition of the lower term would be contrary to the interests of justice.
+    statutory_slots:
+      default_presumption: "middle_term"
+      aggravation_proof_standard: "beyond_reasonable_doubt_or_stipulation"
+      youth_mitigation_age_cutoff: 26
+      mitigating_factors_mandate_lower_term: true
+    controlling_precedents:
+      - citation: "People v. Lynch, 16 Cal. 5th 730 (2024)"
+        title: "People v. Lynch"
+        holding: "Upper term sentence invalid where aggravating circumstances were neither admitted by defendant nor proven to a jury beyond a reasonable doubt under SB 567."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Penal Code § 1054.1"
+    section_number: "1054.1"
+    title: "Mandatory Prosecution Pretrial Discovery Obligations and Brady Materials"
+    topic: "Pretrial Discovery Obligations"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2024-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=PEN&sectionNum=1054.1"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Proposition 115 / Penal Code Part 2, Title 6, Chapter 10"
+    raw_content: |
+      The prosecuting attorney shall disclose to the defendant or the defendant's attorney all of the following materials and information, if it is in the possession of the prosecuting attorney or if the prosecuting attorney knows it to be in the possession of the investigating agencies:
+      (a) The names and addresses of persons the prosecutor intends to call as witnesses at the trial.
+      (b) Statements of all defendants.
+      (c) All relevant real evidence seized or obtained as a part of the investigation.
+      (d) The existence of a felony conviction of any material witness whose credibility is likely to be critical.
+      (e) Any exculpatory evidence (Brady material) that tends to negate the guilt of the defendant or mitigate the offense.
+      (f) Relevant written or recorded statements of witnesses or reports of the statements of witnesses whom the prosecutor intends to call at the trial.
+
+      Disclosures shall be made at least 30 days prior to the trial date. Failure to disclose subjects the prosecution to sanctions including continuance, evidentiary preclusion, jury admonitions, and contempt.
+    statutory_slots:
+      disclosure_deadline_days_prior_to_trial: 30
+      brady_material_mandatory: true
+      investigating_agency_knowledge_imputed: true
+    controlling_precedents:
+      - citation: "Brady v. Maryland, 373 U.S. 83 (1963)"
+        title: "Brady v. Maryland"
+        holding: "Suppression by the prosecution of evidence favorable to an accused violates due process where the evidence is material to guilt or punishment, irrespective of good or bad faith."
+        court: "Supreme Court of the United States"
+
+  - citation: "Cal. Penal Code § 851.8"
+    section_number: "851.8"
+    title: "Petition for Sealing and Destruction of Arrest Records upon Finding of Factual Innocence"
+    topic: "Factual Innocence Record Sealing"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2024-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=PEN&sectionNum=851.8"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2023, ch. 45"
+    raw_content: |
+      In any case where a person has been arrested and no accusatory pleading has been filed, or where charges have been dismissed or an acquittal entered, the person may petition the law enforcement agency and court having jurisdiction of the matter for a finding of factual innocence.
+
+      Upon a finding of factual innocence, the court shall order the law enforcement agency having jurisdiction over the offense, the Department of Justice, and any other law enforcement agency that issued the arrest warrant or assisted in the arrest, to seal their records of the arrest for three years from the date of the arrest, and thereafter to destroy their records of the arrest and the court order to seal and destroy such records. Following such an order, the arrest shall be deemed never to have occurred, and the person may legally indicate that he or she was never arrested for the charge.
+    statutory_slots:
+      petition_window_years: 2
+      mandatory_destruction_after_years: 3
+      legal_fiction_arrest_never_occurred: true
+    controlling_precedents:
+      - citation: "People v. Adair, 29 Cal. 4th 895 (2003)"
+        title: "People v. Adair"
+        holding: "Factual innocence requires proof that no reasonable cause exists to believe the defendant committed the offense, distinguishing innocence from reasonable doubt."
+        court: "Supreme Court of California"

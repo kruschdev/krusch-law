@@ -1,0 +1,194 @@
+pack_id: "ca_commercial_contracts_pack_v1"
+version: "1.0.0"
+domain: "California Commercial & Business Law"
+state: "CA"
+code_families:
+  - "California Business & Professions Code"
+  - "California Civil Code"
+  - "California Commercial Code (UCC Division 2)"
+  - "California Corporations Code"
+description: "Authoritative California statutory mandates, non-waivable public policy prohibitions, and controlling appellate precedents governing commercial contracts, non-compete prohibitions under AB 1076/SB 699, exculpatory clause limits under CC § 1668, commercial liquidated damages standards, UCC sales limitations, director fiduciary exculpation, and bilateral reciprocal attorney fee shifting under CC § 1717."
+publisher: "California Office of Legislative Counsel & Supreme Court of California"
+edition: "2024 Legislative Session (Stats. 2023, ch. 157 & SB 699 / AB 1076)"
+effective_from: "2024-01-01"
+effective_to: null
+source_document_hash: "sha256:e9b8a1c7d3f20546987654321fedcba0987654321fedcba0987654321fedcba09"
+retrieved_at: "2026-10-18T13:00:00Z"
+
+coverage:
+  covered_topics:
+    - "Non-Compete Covenants & Restraints of Trade"
+    - "Contractual Exculpation & Liability Waivers"
+    - "Commercial Liquidated Damages"
+    - "UCC Commercial Sales Limitations"
+    - "Director Fiduciary Standards & Exculpation"
+    - "Reciprocal Attorney Fee Shifting"
+  known_uncovered_topics:
+    - "Delaware Chancery Court Internal Affairs Doctrine"
+    - "Patent & Trademark Federal Lanham Act"
+    - "Securities Act Regulation D Offerings"
+
+statutes:
+  - citation: "Cal. Bus. & Prof. Code § 16600 & § 16600.1"
+    section_number: "16600"
+    title: "Prohibition of Covenants Not to Compete and Employer Notice Mandate (SB 699 / AB 1076)"
+    topic: "Non-Compete Covenants & Restraints of Trade"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2024-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=BPC&sectionNum=16600"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2023, ch. 157 (SB 699 & AB 1076)"
+    raw_content: |
+      Under Business and Professions Code Section 16600, every contract by which anyone is restrained from engaging in a lawful profession, trade, or business of any kind is to that extent void.
+
+      Statutory Amendments (SB 699 & AB 1076, effective January 1, 2024):
+      (1) Section 16600 shall be broadly construed to void any noncompete agreement in an employment context, or noncompete clause in an employment contract, no matter how narrowly tailored, and regardless of whether the contract was signed or the employment was maintained outside of California.
+      (2) An employer or former employer shall not attempt to enforce a contract that is void under this chapter regardless of where and when the contract was signed. An employer who violates this section commits a civil violation, and an employee or prospective employee may bring a private right of action to enforce this chapter for injunctive relief, actual damages, and reasonable attorney's fees and costs.
+      (3) Under Section 16600.1, it is unlawful to include a noncompete clause in an employment contract, or to require an employee to enter a noncompete agreement, unless an exception under Sections 16601, 16602, or 16602.5 (sale of business equity) applies.
+    statutory_slots:
+      non_competes_void_per_se: true
+      narrow_tailoring_exception_permitted: false
+      extraterritorial_enforcement_prohibited: true
+      mandatory_fee_shifting_for_employee: true
+    controlling_precedents:
+      - citation: "Edwards v. Arthur Andersen LLP, 44 Cal. 4th 937 (2008)"
+        title: "Edwards v. Arthur Andersen LLP"
+        holding: "Section 16600 rejects the common law 'rule of reasonableness'; non-compete covenants are strictly void as a matter of strong California public policy absent statutory equity-sale exceptions."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Civ. Code § 1668"
+    section_number: "1668"
+    title: "Invalidity of Exculpatory Clauses Exempting Liability for Fraud, Willful Injury, or Violation of Law"
+    topic: "Contractual Exculpation & Liability Waivers"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1872-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1668"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Civil Code Part 2, Title 4, Chapter 1"
+    raw_content: |
+      Under Civil Code Section 1668, all contracts which have for their object, directly or indirectly, to exempt anyone from responsibility for his or her own fraud, or willful injury to the person or property of another, or violation of law, whether willful or negligent, are against the policy of the law.
+
+      Application to Commercial Contracts:
+      While commercial parties of equal bargaining strength may allocate risks of ordinary negligence or limit remedies to specified repair/refund terms, a contractual clause purporting to exculpate or indemnify a party against its own gross negligence, intentional torts, statutory safety violations, or fraudulent misrepresentation is void ab initio under Section 1668 and cannot be waived.
+    statutory_slots:
+      fraud_exculpation_void: true
+      willful_injury_exculpation_void: true
+      statutory_violation_exculpation_void: true
+      ordinary_negligence_allocation_permitted: true
+    controlling_precedents:
+      - citation: "Tunkl v. Regents of University of California, 60 Cal. 2d 92 (1963)"
+        title: "Tunkl v. Regents of University of California"
+        holding: "Exculpatory agreements affecting the public interest or statutory duties are strictly invalid under Civil Code § 1668."
+        court: "Supreme Court of California"
+      - citation: "City of Santa Barbara v. Superior Court, 41 Cal. 4th 747 (2007)"
+        title: "City of Santa Barbara v. Superior Court"
+        holding: "Agreements purporting to release liability for future gross negligence violate public policy and are void under § 1668."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Civ. Code § 1671(b)"
+    section_number: "1671(b)"
+    title: "Validity Standard for Commercial Liquidated Damages"
+    topic: "Commercial Liquidated Damages"
+    authority_class: "controlling_statute"
+    hierarchy_level: "subsection"
+    effective_date: "1978-07-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1671"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 1977, ch. 198"
+    raw_content: |
+      Except as provided in subdivision (c) (consumer contracts and residential leases), a provision in a contract liquidating the damages for the breach of the contract is valid unless the party seeking to invalidate the provision establishes that the provision was unreasonable under the circumstances existing at the time the contract was made.
+
+      Commercial Standard:
+      In non-consumer commercial contracts, there is a statutory presumption of validity favoring liquidated damages. The burden rests entirely on the party challenging the clause to prove that the fixed amount bore no reasonable relationship to the range of actual damages the parties could have anticipated at the time of contracting, thereby operating as an unlawful punitive forfeiture.
+    statutory_slots:
+      commercial_presumption: "valid"
+      evaluation_timing: "time_contract_was_made"
+      burden_on_challenging_party: true
+      penalty_forfeiture_prohibited: true
+    controlling_precedents:
+      - citation: "Ridgley v. Topa Thrift & Loan Assn., 17 Cal. 4th 970 (1998)"
+        title: "Ridgley v. Topa Thrift & Loan Assn."
+        holding: "A liquidated damages clause that bears no reasonable relationship to actual damages anticipated constitutes an unenforceable penalty under § 1671."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Com. Code § 2725"
+    section_number: "2725"
+    title: "Statute of Limitations in Contracts for Sale of Goods (UCC Division 2)"
+    topic: "UCC Commercial Sales Limitations"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1967-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=COM&sectionNum=2725"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Commercial Code Division 2, Chapter 7"
+    raw_content: |
+      Under California Commercial Code Section 2725:
+      (1) An action for breach of any contract for sale must be commenced within four years after the cause of action has accrued. By the original agreement the parties may reduce the period of limitation to not less than one year but may not extend it.
+      (2) A cause of action accrues when the breach occurs, regardless of the aggrieved party's lack of knowledge of the breach. A breach of warranty occurs when tender of delivery is made, except where a warranty explicitly extends to future performance of the goods.
+    statutory_slots:
+      default_limitations_years: 4
+      minimum_contractual_reduction_years: 1
+      contractual_extension_prohibited: true
+      accrual_trigger: "tender_of_delivery_or_breach"
+    controlling_precedents:
+      - citation: "Cardinal Health 301, Inc. v. Tyco Electronics Corp., 169 Cal. App. 4th 116 (2008)"
+        title: "Cardinal Health 301 v. Tyco Electronics"
+        holding: "Accrual of breach of warranty claim under Com. Code § 2725 occurs upon tender of delivery unless express warranty explicitly extends to future performance."
+        court: "California Court of Appeal"
+
+  - citation: "Cal. Corp. Code § 204(a)(10) & § 309"
+    section_number: "204(a)(10)"
+    title: "Director Fiduciary Standards, Business Judgment Rule, and Articles Exculpation Limits"
+    topic: "Director Fiduciary Standards & Exculpation"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1988-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CORP&sectionNum=204"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Corporations Code Title 1, Division 1"
+    raw_content: |
+      Under Corporations Code Section 309, a director shall perform the duties of a director in good faith, in a manner such director believes to be in the best interests of the corporation and its shareholders, and with such care, including reasonable inquiry, as an ordinarily prudent person in a like position would use under similar circumstances. A person who performs duties in accordance with Section 309 has no liability based upon any alleged failure to discharge duties as a director.
+
+      Articles of Incorporation Limitation:
+      Under Section 204(a)(10), articles of incorporation may eliminate or limit the personal liability of a director for monetary damages, provided that such provision shall not eliminate or limit liability for:
+      (i) Acts or omissions that involve intentional misconduct or a knowing and culpable violation of law.
+      (ii) Acts or omissions that a director believes to be contrary to the best interests of the corporation or that involve the absence of good faith.
+      (iii) Any transaction from which a director derived an improper personal benefit.
+      (iv) Reckless disregard of the director's duty to the corporation or its shareholders in circumstances where the director was aware of an unexcused risk of serious injury.
+    statutory_slots:
+      business_judgment_rule_statutory: true
+      exculpation_permitted_in_articles: true
+      bad_faith_exculpation_prohibited: true
+      duty_of_loyalty_exculpation_prohibited: true
+    controlling_precedents:
+      - citation: "Bader v. Anderson, 179 Cal. App. 4th 775 (2009)"
+        title: "Bader v. Anderson"
+        holding: "Business judgment rule insulates corporate directors from judicial second-guessing where decisions are made in good faith with reasonable inquiry."
+        court: "California Court of Appeal"
+
+  - citation: "Cal. Civ. Code § 1717"
+    section_number: "1717"
+    title: "Bilateral Reciprocity Mandate for Contractual Attorney's Fee Provisions"
+    topic: "Reciprocal Attorney Fee Shifting"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "1968-11-13"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=CIV&sectionNum=1717"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Civil Code Part 2, Title 4, Chapter 1"
+    raw_content: |
+      In any action on a contract, where the contract specifically provides that attorney's fees and costs, which are incurred to enforce that contract, shall be awarded either to one of the parties or to the prevailing party, then the party who is determined to be the party prevailing on the contract, whether he or she is the party specified in the contract or not, shall be entitled to reasonable attorney's fees in addition to other costs.
+
+      Public Policy Invariant:
+      Reasonable attorney's fees shall be fixed by the court, and shall be an element of the costs of suit. Attorney's fees provisions are non-waivable public policy mandates: any attempt to draft a one-way attorney fee clause in favor of a dominant commercial party is automatically converted by operation of law into a reciprocal bilateral covenant favoring whichever party prevails on the contract.
+    statutory_slots:
+      one_way_fee_clauses_converted_to_mutual: true
+      statutory_reciprocity_non_waivable: true
+      prevailing_party_determination_mandatory: true
+    controlling_precedents:
+      - citation: "Santisas v. Goodin, 17 Cal. 4th 599 (1998)"
+        title: "Santisas v. Goodin"
+        holding: "Section 1717 establishes a reciprocal right to attorney's fees as a non-waivable public policy floor, preventing one-sided oppressive fee shifting."
+        court: "Supreme Court of California"

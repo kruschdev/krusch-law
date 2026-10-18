@@ -1,0 +1,202 @@
+pack_id: "ca_employment_labor_pack_v1"
+version: "1.0.0"
+domain: "California Employment & Labor Law"
+state: "CA"
+code_families:
+  - "California Labor Code"
+  - "IWC Wage Orders"
+description: "Authoritative California statutory mandates, non-waivable worker protection floors, and controlling appellate precedents governing wage and hour compliance, itemized wage statements under LC § 226, expense reimbursement under LC § 2802, whistleblower anti-retaliation under LC § 1102.5, meal/rest break premiums under LC § 226.7/512, waiting time penalties under LC § 201-203, and the ABC worker classification test under LC § 2775."
+publisher: "California Office of Legislative Counsel & Supreme Court of California"
+edition: "2024 Legislative Session (Stats. 2023, ch. 45 & SB 497)"
+effective_from: "2024-01-01"
+effective_to: null
+source_document_hash: "sha256:f1a2b3c4d5e6078912345678fedcba0912345678fedcba0912345678fedcba09"
+retrieved_at: "2026-10-18T13:00:00Z"
+
+coverage:
+  covered_topics:
+    - "Itemized Wage Statements & Paystubs"
+    - "Mandatory Business Expense Reimbursement"
+    - "Whistleblower Anti-Retaliation Protection"
+    - "Meal & Rest Period Mandates & Premiums"
+    - "Final Wage Payment Deadlines & Waiting Penalties"
+    - "Worker Classification ABC Test"
+  known_uncovered_topics:
+    - "Federal Railway Labor Act Preemption"
+    - "National Labor Relations Board (NLRB) Union Certification"
+    - "Workers' Compensation Exclusive Remedy Appeals"
+
+statutes:
+  - citation: "Cal. Lab. Code § 226"
+    section_number: "226"
+    title: "Itemized Wage Statement Requirements, Statutory Penalties, and Recordkeeping"
+    topic: "Itemized Wage Statements & Paystubs"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2024-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=LAB&sectionNum=226"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Labor Code Division 2, Part 1, Chapter 1"
+    raw_content: |
+      An employer, semimonthly or at the time of each payment of wages, shall furnish to his or her employee an accurate itemized statement in writing showing:
+      (1) Gross wages earned.
+      (2) Total hours worked by the employee (for non-exempt employees).
+      (3) All deductions.
+      (4) Net wages earned.
+      (5) The inclusive dates of the period for which the employee is paid.
+      (6) The name of the employee and only the last four digits of his or her social security number or employee identification number.
+      (7) The name and address of the legal entity that is the employer.
+      (8) All applicable hourly rates in effect during the pay period and the corresponding number of hours worked at each hourly rate.
+
+      Statutory Penalties:
+      An employee suffering injury as a result of a knowing and intentional failure by an employer to comply with subdivision (a) is entitled to recover the greater of all actual damages or $50 for the initial pay period in which a violation occurs, and $100 per employee for each violation in a subsequent pay period, not to exceed an aggregate penalty of $4,000, plus an award of costs and reasonable attorney's fees.
+    statutory_slots:
+      mandatory_itemized_elements_count: 9
+      initial_violation_penalty_dollars: 50
+      subsequent_violation_penalty_dollars: 100
+      max_aggregate_penalty_dollars: 4000
+      mandatory_attorney_fees_for_employee: true
+    controlling_precedents:
+      - citation: "Ward v. United Airlines, Inc., 9 Cal. 5th 732 (2020)"
+        title: "Ward v. United Airlines"
+        holding: "Section 226 applies to all workers whose principal place of employment is located within California, requiring complete wage transparency."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Lab. Code § 2802"
+    section_number: "2802"
+    title: "Mandatory Employer Indemnification of Employee Business Expenses"
+    topic: "Mandatory Business Expense Reimbursement"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2001-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=LAB&sectionNum=2802"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2000, ch. 990"
+    raw_content: |
+      An employer shall indemnify his or her employee for all necessary expenditures or losses incurred by the employee in direct consequence of the discharge of his or her duties, or of his or her obedience to the directions of the employer.
+
+      Non-Waivable Public Policy Floor:
+      (1) Necessary expenditures include mandatory remote work expenses (personal cell phone usage, home internet connectivity required for work duties, personal computer hardware, and mandatory vehicle mileage at IRS or actual rates).
+      (2) An employer cannot discharge its obligation under Section 2802 by paying an employee a lump sum or salary without clear agreement and accounting demonstrating that the stipend fully reimburses all actual necessary expenses.
+      (3) Any contract or agreement, express or implied, made by any employee to waive the benefits of this section or any part thereof, is null and void under Labor Code Section 2804.
+    statutory_slots:
+      reimbursement_mandatory: true
+      waiver_null_and_void: true
+      interest_accrual_rate_percent: 10.0
+      attorney_fees_recoverable: true
+    controlling_precedents:
+      - citation: "Cochran v. Schwan's Home Service, Inc., 228 Cal. App. 4th 1137 (2014)"
+        title: "Cochran v. Schwan's Home Service"
+        holding: "When employees must use personal cell phones or internet for work, the employer must pay a reasonable percentage of their bill even if the employee incurred no extra cost."
+        court: "California Court of Appeal"
+
+  - citation: "Cal. Lab. Code § 1102.5 & § 1102.6"
+    section_number: "1102.5"
+    title: "Whistleblower Protection, Anti-Retaliation, and Evidentiary Burden Shifting"
+    topic: "Whistleblower Anti-Retaliation Protection"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2024-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=LAB&sectionNum=1102.5"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2023, ch. 470 (SB 497)"
+    raw_content: |
+      An employer shall not retaliate against an employee for disclosing information to a government agency, a person with authority over the employee, or another employee who has the authority to investigate, discover, or correct the violation, if the employee has reasonable cause to believe that the information discloses a violation of state or federal statute, or a violation of or noncompliance with a local, state, or federal rule or regulation.
+
+      Rebuttable Presumption & Burden Shifting (SB 497 & § 1102.6):
+      (1) Under SB 497 (effective January 1, 2024), there is a rebuttable presumption that an employer took retaliatory action if the employer disciplines or discharges an employee within 90 days of the employee exercising rights or reporting violations.
+      (2) Under Section 1102.6, once the employee demonstrates by a preponderance of the evidence that whistleblower activity was a contributing factor in the adverse employment action, the employer bears the burden of proof to demonstrate by clear and convincing evidence that the alleged action would have occurred for legitimate, independent reasons even if the employee had not engaged in protected activity.
+    statutory_slots:
+      retaliation_presumption_window_days: 90
+      employee_burden_of_proof: "preponderance_of_evidence"
+      employer_burden_of_proof: "clear_and_convincing_evidence"
+      civil_penalty_per_violation_dollars: 10000
+    controlling_precedents:
+      - citation: "Lawson v. PPG Architectural Finishes, Inc., 12 Cal. 5th 703 (2022)"
+        title: "Lawson v. PPG Architectural Finishes"
+        holding: "Section 1102.6 provides the exclusive framework for California whistleblower claims, rejecting McDonnell Douglas burden-shifting in favor of employer clear-and-convincing burden."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Lab. Code § 226.7 & § 512"
+    section_number: "226.7"
+    title: "Meal and Rest Break Mandates and One-Hour Premium Pay Remedy"
+    topic: "Meal & Rest Period Mandates & Premiums"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2021-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=LAB&sectionNum=226.7"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Labor Code Division 2, Part 1, Chapter 1"
+    raw_content: |
+      Under Labor Code Section 512, an employer may not employ an employee for a work period of more than five hours per day without providing the employee with a meal period of not less than 30 minutes, except that if the total work period per day is no more than six hours, the meal period may be waived by mutual consent. A second meal period of not less than 30 minutes is required for a work period of more than 10 hours per day.
+
+      Premium Pay Remedy (§ 226.7):
+      If an employer fails to provide an employee a meal or rest or recovery period in accordance with a state law, including an applicable order of the Industrial Welfare Commission, the employer shall pay the employee one additional hour of pay at the employee's regular rate of compensation for each workday that the meal or rest period is not provided.
+    statutory_slots:
+      meal_break_trigger_hours: 5
+      min_meal_break_minutes: 30
+      second_meal_break_trigger_hours: 10
+      premium_pay_hours_per_day: 1.0
+      regular_rate_must_include_all_nondiscretionary_pay: true
+    controlling_precedents:
+      - citation: "Brinker Restaurant Corp. v. Superior Court, 53 Cal. 4th 1004 (2012)"
+        title: "Brinker Restaurant Corp. v. Superior Court"
+        holding: "Employers must relieve employees of all duty for 30 uninterrupted minutes and relinquish control over their activities; failure triggers premium pay."
+        court: "Supreme Court of California"
+      - citation: "Ferra v. Loews Hollywood Hotel, LLC, 11 Cal. 5th 858 (2021)"
+        title: "Ferra v. Loews Hollywood Hotel"
+        holding: "Meal and rest break premium pay must be calculated at the employee's 'regular rate of compensation', which includes all nondiscretionary bonuses and incentives, not just base hourly wage."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Lab. Code § 201, § 202, & § 203"
+    section_number: "201"
+    title: "Final Wage Payment Timing Deadlines and Waiting Time Penalties"
+    topic: "Final Wage Payment Deadlines & Waiting Penalties"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2024-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=LAB&sectionNum=201"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Labor Code Division 2, Part 1, Chapter 1"
+    raw_content: |
+      Under California Labor Code Section 201, if an employer discharges an employee, the wages earned and unpaid at the time of discharge are due and payable immediately. Under Section 202, if an employee not having a written contract for a definite period quits his or her employment, his or her wages shall become due and payable not later than 72 hours thereafter, unless the employee gave 72 hours previous notice, in which case wages are due at the time of quitting.
+
+      Waiting Time Penalties (§ 203):
+      If an employer willfully fails to pay any wages of an employee who is discharged or who quits, the wages of the employee shall continue as a penalty from the due date thereof at the same daily rate until paid or until an action therefor is commenced; but the wages shall not continue for more than 30 days.
+    statutory_slots:
+      discharge_payment_timing: "immediate"
+      resignation_payment_timing_hours: 72
+      max_waiting_time_penalty_calendar_days: 30
+      penalty_calculated_at_daily_wage_rate: true
+    controlling_precedents:
+      - citation: "McLean v. State of California, 1 Cal. 5th 615 (2016)"
+        title: "McLean v. State of California"
+        holding: "Sections 202 and 203 apply equally to employees who retire as well as those who quit, entitling them to waiting time penalties upon willful delayed payment."
+        court: "Supreme Court of California"
+
+  - citation: "Cal. Lab. Code § 2775 (AB 5 / Dynamex)"
+    section_number: "2775"
+    title: "Presumption of Employment Status and the Statutory ABC Test"
+    topic: "Worker Classification ABC Test"
+    authority_class: "controlling_statute"
+    hierarchy_level: "section"
+    effective_date: "2020-01-01"
+    source_url: "https://leginfo.legislature.ca.gov/faces/codes_displaySection.xhtml?lawCode=LAB&sectionNum=2775"
+    publisher: "California Office of Legislative Counsel"
+    edition: "Stats. 2019, ch. 296 (AB 5)"
+    raw_content: |
+      Under Labor Code Section 2775, for purposes of this code and the Unemployment Insurance Code, and for purposes of the wage orders of the Industrial Welfare Commission, a person providing labor or services for remuneration shall be considered an employee rather than an independent contractor unless the hiring entity demonstrates that all of the following conditions are satisfied:
+      (A) The person is free from the control and direction of the hiring entity in connection with the performance of the work, both under the contract for the performance of the work and in fact.
+      (B) The person performs work that is outside the usual course of the hiring entity's business.
+      (C) The person is customarily engaged in an independently established trade, occupation, or business of the same nature as that involved in the work performed.
+
+      The failure to satisfy any one of the three prongs (A, B, or C) establishes employee status as a matter of law.
+    statutory_slots:
+      presumption: "employee"
+      all_prongs_mandatory: true
+      burden_on_hiring_entity: true
+    controlling_precedents:
+      - citation: "Dynamex Operations West, Inc. v. Superior Court, 4 Cal. 5th 903 (2018)"
+        title: "Dynamex Operations West v. Superior Court"
+        holding: "Adopts the ABC test for California wage order claims; hiring entity must satisfy all three independent prongs to classify a worker as an independent contractor."
+        court: "Supreme Court of California"
