@@ -38,7 +38,16 @@ class EvidenceEncryptor:
     @classmethod
     def _get_cipher(cls) -> Fernet:
         if cls._cipher is None:
-            raw_key = getattr(settings, "EVIDENCE_ENCRYPTION_KEY", None) or settings.API_KEY or "kruschlaw-default-secret-salt-2026"
+            raw_key = (
+                getattr(settings, "EVIDENCE_ENCRYPTION_KEY", None)
+                or settings.API_KEY
+                or os.getenv("EVIDENCE_ENCRYPTION_KEY")
+                or os.getenv("API_KEY")
+            )
+            if not raw_key or not str(raw_key).strip():
+                raise RuntimeError(
+                    "Security Error: Neither EVIDENCE_ENCRYPTION_KEY nor API_KEY is configured for EvidenceEncryptor."
+                )
             # Derive deterministic 32-byte urlsafe base64 Fernet key using PBKDF2
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
@@ -46,7 +55,7 @@ class EvidenceEncryptor:
                 salt=b"kruschlaw_evidence_salt_v1",
                 iterations=100_000,
             )
-            derived_key = base64.urlsafe_b64encode(kdf.derive(raw_key.encode("utf-8")))
+            derived_key = base64.urlsafe_b64encode(kdf.derive(str(raw_key).encode("utf-8")))
             cls._cipher = Fernet(derived_key)
         return cls._cipher
 

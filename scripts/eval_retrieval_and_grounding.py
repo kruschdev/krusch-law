@@ -29,7 +29,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-if "DATABASE_URL" not in os.environ:
+if not os.environ.get("DATABASE_URL", "").strip():
     os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 import src.backend.db as db_mod

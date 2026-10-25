@@ -370,6 +370,8 @@ def resolve_controlling_law(
       4. Statutory Exception nodes (Evaluating client fact patterns against statutory carve-outs).
       5. Operative Definitions hydration.
     """
+    if not isinstance(doctrine_or_topic, str) or not doctrine_or_topic.strip():
+        raise ValueError("doctrine_or_topic must be a non-empty string")
     target_date = to_utc_date(as_of_date)
     matter_facts = matter_facts or {}
     close_db = False

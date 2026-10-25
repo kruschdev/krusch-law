@@ -1,3 +1,4 @@
+import asyncio
 import re
 import uuid
 import time
@@ -986,6 +987,13 @@ def ingest_parquet(
     try:
         inserted = ingest_locus_parquet(payload.file_path, db=db, limit=payload.limit)
         return IngestResponse(status="success", inserted_records=inserted)
+    except HTTPException:
+        raise
+    except ImportError:
+        raise HTTPException(
+            status_code=501,
+            detail="Parquet engine not installed; install pyarrow or fastparquet",
+        )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except ValueError as e:
@@ -1025,6 +1033,9 @@ def ingest_document(
         raise HTTPException(status_code=500, detail=f"Document ingestion failed: {str(e)}")
 
 
+UPLOAD_TIMEOUT_SECONDS = 30
+
+
 @app.post("/api/ingest/upload", response_model=DocumentIngestResponse, tags=["Ingestion"])
 async def upload_document(
     file: UploadFile = File(...),
@@ -1035,7 +1046,16 @@ async def upload_document(
 ):
     """Directly upload a lawyer's document via KruschNexus's parsing and chunking pipeline."""
     try:
-        contents = await file.read()
+        max_upload_bytes = 25 * 1024 * 1024
+        try:
+            contents = await asyncio.wait_for(
+                file.read(max_upload_bytes + 1),
+                timeout=UPLOAD_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=408, detail="Upload timed out")
+        if len(contents) > max_upload_bytes:
+            raise HTTPException(status_code=413, detail="Upload exceeds maximum allowed size (25 MiB)")
         report = ingest_uploaded_matter_file(
             file_bytes=contents,
             filename=file.filename or "uploaded_document",
@@ -1044,6 +1064,8 @@ async def upload_document(
             db=db
         )
         return DocumentIngestResponse(**report)
+    except HTTPException:
+        raise
     except ValueError as e:
         logger.warning(f"Invalid uploaded document request: {e}")
         raise HTTPException(status_code=400, detail=str(e))

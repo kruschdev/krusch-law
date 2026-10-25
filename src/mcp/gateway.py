@@ -22,21 +22,26 @@ import os
 import sys
 from typing import Any, Dict, List, Optional
 
-# Ensure repository paths are importable with KruschLaw prioritized
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 LAW_ROOT = os.path.dirname(os.path.dirname(CURRENT_DIR))
 BIZ_ROOT = os.path.join(os.path.dirname(LAW_ROOT), "krusch-biz")
 
-if LAW_ROOT not in sys.path:
-    sys.path.insert(0, LAW_ROOT)
-if BIZ_ROOT not in sys.path:
-    sys.path.append(BIZ_ROOT)
-
-from src.backend import db as db_mod  # noqa: E402
-from src.backend.db import LawVector  # noqa: E402
-from src.backend.crypto import execute_verifiable_purge  # noqa: E402
-from src.backend.rag import retrieve_laws  # noqa: E402
-from src.backend.resolver import resolve_controlling_law  # noqa: E402
+try:
+    from .interfaces import (
+        LawVector,
+        db_mod,
+        execute_verifiable_purge,
+        resolve_controlling_law,
+        retrieve_laws,
+    )
+except ImportError:
+    from src.mcp.interfaces import (  # noqa: E402
+        LawVector,
+        db_mod,
+        execute_verifiable_purge,
+        resolve_controlling_law,
+        retrieve_laws,
+    )
 
 # Logging to stderr keeps stdout pure JSON-RPC
 logging.basicConfig(

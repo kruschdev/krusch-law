@@ -9,6 +9,7 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["OLLAMA_EMBED_HOST"] = "http://mock-ollama:11434"
 os.environ["OLLAMA_BASE_URL"] = "http://mock-ollama:11434"
 os.environ["ENVIRONMENT"] = "test"
+os.environ.setdefault("EVIDENCE_ENCRYPTION_KEY", "kruschlaw-test-only-evidence-key-2026")
 
 # Add project root to sys.path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

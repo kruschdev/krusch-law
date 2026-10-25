@@ -295,6 +295,7 @@ def get_embeddings_batch(queries: List[str]) -> List[List[float]]:
     payload = {
         "model": settings.OLLAMA_EMBED_MODEL,
         "input": miss_texts,
+        "truncate": True,
         "keep_alive": -1
     }
     fetched: List[List[float]] = []
@@ -332,6 +333,7 @@ def get_embedding(query: str) -> List[float]:
     payload = {
         "model": settings.OLLAMA_EMBED_MODEL,
         "input": query,
+        "truncate": True,
         "keep_alive": -1
     }
 
@@ -1865,7 +1867,7 @@ Draft the legal analysis following the required headings. Conclude with an ethic
                     "keep_alive": -1,
                     "options": {
                         "temperature": 0.2,
-                        "num_ctx": 4096
+                        "num_ctx": 16384
                     }
                 }
             )

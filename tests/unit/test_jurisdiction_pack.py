@@ -95,3 +95,20 @@ class TestJurisdictionPack(KruschLawTestCase):
         self.assertGreaterEqual(len(meta["controlling_precedents"]), 1)
         self.assertIn("Rowland v. Christian", meta["controlling_precedents"][0]["citation"])
 
+    def test_parquet_missing_engine_returns_501(self):
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp:
+            tmp.write(b"PAR1")
+            tmp_path = tmp.name
+        try:
+            with patch("src.backend.ingest.settings.ALLOWED_INGEST_DIRS", os.path.dirname(tmp_path)), \
+                 patch("src.backend.ingest.pd.read_parquet", side_effect=ImportError("No pyarrow")):
+                resp = self.client.post("/api/ingest/parquet", json={"file_path": tmp_path, "limit": 5})
+                self.assertEqual(resp.status_code, 501)
+                self.assertIn("Parquet engine not installed", resp.json()["detail"])
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+

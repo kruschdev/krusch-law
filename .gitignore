@@ -39,3 +39,5 @@ htmlcov/
 .DS_Store
 *.swp
 .agent/
+*INFLIGHT*.md
+scratch/

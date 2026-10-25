@@ -214,6 +214,36 @@ class TestSecurityHardening(KruschLawTestCase):
         self.assertIn("bundle_sha256", data)
         self.assertEqual(len(data["bundle_sha256"]), 64)
 
+    def test_11_precompiled_citation_patterns_extract_slots(self):
+        """Verify PERF-01 pre-compiled COMPILED_CITATION_PATTERNS extract statutory citations deterministically."""
+        from src.backend.tagger import CITATION_PATTERNS, COMPILED_CITATION_PATTERNS, extract_legal_slots
+
+        self.assertIsInstance(CITATION_PATTERNS, tuple)
+        self.assertIsInstance(COMPILED_CITATION_PATTERNS, tuple)
+        self.assertEqual(len(CITATION_PATTERNS), len(COMPILED_CITATION_PATTERNS))
+        slots = extract_legal_slots(
+            "Under Cal. Civ. Code § 1950.5(g) and OMC § 8.22.360, the landlord must return the deposit within 21 days."
+        )
+        self.assertIn("statutory_citations", slots)
+        self.assertIn("1950.5(g)", slots["statutory_citations"])
+        self.assertIn("8.22.360", slots["statutory_citations"])
+
+    def test_12_local_session_token_validation_and_no_hardcoded_secret(self):
+        """Verify SEC-01: LOCAL_SESSION_TOKEN has no static default and raises RuntimeError when blank or missing."""
+        from src.backend.config import require_local_session_token
+
+        s_default = Settings()
+        self.assertTrue(len(s_default.LOCAL_SESSION_TOKEN) >= 32)
+        with self.assertRaises(RuntimeError) as ctx:
+            require_local_session_token({})
+        self.assertIn("LOCAL_SESSION_TOKEN must be set in the environment", str(ctx.exception))
+
+        s_empty = Settings(LOCAL_SESSION_TOKEN="   ")
+        with self.assertRaises(RuntimeError) as ctx2:
+            validate_security_invariants(s_empty)
+        self.assertIn("LOCAL_SESSION_TOKEN must be set in the environment", str(ctx2.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
+

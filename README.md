@@ -344,10 +344,11 @@ Supported claims include verbatim supporting authority spans, ensuring full trac
                     SQL / pgvector │                        │ Local HTTP
                                    │                        │
             ┌──────────────────────▼───────┐       ┌────────▼────────────────────┐
-            │   PostgreSQL 16 + pgvector   │       │      Local Ollama Node      │
-            │   (Laws & Case Fact Vectors) │       │  ├─ bge-large (Embeddings)  │
-            │        127.0.0.1:5435        │       │  └─ qwen2.5:14b / 7b (LLM)  │
-            └──────────────────────────────┘       └─────────────────────────────┘
+            │   PostgreSQL 16 + pgvector   │       │      Local Ollama Node       │
+            │   (Laws & Case Fact Vectors) │       │  ├─ snowflake-arctic-embed2  │
+            │        127.0.0.1:5435        │       │  └─ qwen2.5-coder:7b /       │
+            └──────────────────────────────┘       │     hermes3:latest (LLM)     │
+                                                   └──────────────────────────────┘
 ```
 
 ---
@@ -356,14 +357,14 @@ Supported claims include verbatim supporting authority spans, ensuring full trac
 
 | Profile | Recommended Model | Minimum Hardware | Expected Speed | Suitable Use Case |
 |---|---|---|---|---|
-| **CPU / Lightweight** | `qwen2.5:7b` + `bge-large` | 16GB System RAM (8 threads) | ~10–18 tok/s | Air-gapped laptops, small office CPU nodes, rapid exploration |
-| **GPU / Standard** | `qwen2.5:14b` + `bge-large` | 12GB+ VRAM (RTX 3060/4070, Apple Silicon 16GB+) | ~35–55 tok/s | High-precision legal synthesis, nuanced exception spotting |
-| **Workstation / Heavy** | `qwen2.5:32b` + `bge-large` | 24GB+ VRAM (RTX 3090/4090, Apple Silicon 36GB+) | ~20–30 tok/s | Complex multi-code statutory conflicts & lengthy appellate synthesis |
+| **Fast / Tagger** | `qwen2.5-coder:7b` + `snowflake-arctic-embed2` | 11GB+ VRAM (RTX 2080 Ti / 3060) or 16GB RAM | ~45–65 tok/s | Statutory ensemble tagging, rapid lookup, local IDE exploration |
+| **Legal Prose & Referee** | `hermes3:latest` + `gemma4:e4b` | 24GB VRAM (Dual RTX 3060 / RTX 3090) | ~35–55 tok/s | High-precision legal brief synthesis, cross-family Referee audits |
+| **Workstation / Heavy** | `qwen3-coder-30b-moe:latest` | 22GB+ VRAM (Dual 2080 Ti / RTX 4090 / Apple Silicon 36GB+) | ~115 tok/s | Complex multi-code statutory conflicts & appellate synthesis |
 
 To switch models, configure `OLLAMA_LLM_MODEL` in your `.env` file:
 ```env
-OLLAMA_LLM_MODEL=qwen2.5:14b
-OLLAMA_EMBED_MODEL=bge-large
+OLLAMA_LLM_MODEL=qwen2.5-coder:7b
+OLLAMA_EMBED_MODEL=snowflake-arctic-embed2
 ```
 
 ---
@@ -374,8 +375,8 @@ OLLAMA_EMBED_MODEL=bge-large
 * [Docker](https://docs.docker.com/get-docker/) & Docker Compose
 * Local [Ollama](https://ollama.com/) instance (or use the containerized profile below):
   ```bash
-  ollama pull bge-large
-  ollama pull qwen2.5:14b
+  ollama pull snowflake-arctic-embed2
+  ollama pull qwen2.5-coder:7b
   ```
 
 ### 1. Clone & Configure

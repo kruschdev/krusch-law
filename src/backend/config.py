@@ -1,6 +1,18 @@
 import os
-from typing import Optional
+import secrets
+from typing import Mapping, Optional
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def require_local_session_token(env: Optional[Mapping[str, str]] = None) -> str:
+    """Require an explicit non-empty LOCAL_SESSION_TOKEN from the environment mapping."""
+    source = os.environ if env is None else env
+    token = (source.get("LOCAL_SESSION_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError("LOCAL_SESSION_TOKEN must be set in the environment")
+    return token
+
 
 class Settings(BaseSettings):
     """Centralized configuration for KruschLaw backend."""
@@ -10,7 +22,7 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://kruschlaw:kruschlaw_secret@localhost:5435/kruschlaw_db"
+        "postgresql://kruschlaw@localhost:5435/kruschlaw_db"
     )
 
     # Ollama Endpoints
@@ -18,7 +30,7 @@ class Settings(BaseSettings):
     OLLAMA_EMBED_HOST: str = os.getenv("OLLAMA_EMBED_HOST", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
 
     # Models
-    OLLAMA_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "bge-large")
+    OLLAMA_EMBED_MODEL: str = os.getenv("OLLAMA_EMBED_MODEL", "snowflake-arctic-embed2")
     OLLAMA_LLM_MODEL: str = os.getenv("OLLAMA_LLM_MODEL", "qwen2.5-coder:7b")
     TAGGER_MODEL: str = os.getenv("TAGGER_MODEL", "qwen2.5-coder:7b")
     EMBEDDING_DIM: int = int(os.getenv("EMBEDDING_DIM", "1024"))
@@ -40,7 +52,9 @@ class Settings(BaseSettings):
     USE_MOCK_EMBEDDINGS: bool = os.getenv("USE_MOCK_EMBEDDINGS", "0") in ("1", "true", "True")
     HEADLESS_MODE: bool = os.getenv("HEADLESS_MODE", "0") in ("1", "true", "True")
     REQUIRE_API_KEY: bool = os.getenv("REQUIRE_API_KEY", "true").lower() in ("true", "1", "yes")
-    LOCAL_SESSION_TOKEN: str = os.getenv("LOCAL_SESSION_TOKEN", "kruschlaw-local-dev-session")
+    LOCAL_SESSION_TOKEN: str = Field(
+        default_factory=lambda: os.getenv("LOCAL_SESSION_TOKEN") or secrets.token_urlsafe(32)
+    )
     API_KEY: Optional[str] = os.getenv("API_KEY", None)
     EVIDENCE_ENCRYPTION_KEY: Optional[str] = os.getenv("EVIDENCE_ENCRYPTION_KEY", None)
     CORS_ORIGINS: str = os.getenv(
@@ -129,6 +143,8 @@ def is_strict_loopback(url_or_host: str) -> bool:
 def validate_security_invariants(s: Settings) -> None:
     """Enforce API key requirement outside development, loopback binding, and loopback Ollama hosts unless ALLOW_LAN is set."""
     disallowed_keys = ("", "default", "changeme", "secret", "kruschlaw_secret", "replace_me")
+    if not s.LOCAL_SESSION_TOKEN or not s.LOCAL_SESSION_TOKEN.strip() or s.LOCAL_SESSION_TOKEN.strip().lower() in disallowed_keys:
+        raise RuntimeError("LOCAL_SESSION_TOKEN must be set in the environment")
     env = (s.APP_ENV or s.ENVIRONMENT or "development").lower()
     if env != "development" and (not s.API_KEY or not s.API_KEY.strip() or s.API_KEY.strip().lower() in disallowed_keys):
         raise RuntimeError(

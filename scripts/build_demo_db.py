@@ -19,8 +19,8 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-os.environ["USE_MOCK_EMBEDDINGS"] = "1"
-os.environ["HEADLESS_MODE"] = "1"
+os.environ.setdefault("USE_MOCK_EMBEDDINGS", "1")
+os.environ.setdefault("HEADLESS_MODE", "1")
 
 demo_db_path = os.path.join(PROJECT_ROOT, "data", "demo.db")
 os.environ["DATABASE_URL"] = f"sqlite:///{demo_db_path}"

@@ -30,40 +30,56 @@ Rules:
 - Output ONLY valid raw JSON. No markdown fences, no backticks, no explanatory text.
 """
 
-# Common legal taxonomy keywords for high-speed offline/heuristic fallback
-DOCTRINE_PATTERNS = [
+# Common legal taxonomy keywords for high-speed offline/heuristic fallback (immutable tuple, ARCH-01)
+DOCTRINE_PATTERNS = (
     (
         "Security Deposits",
         re.compile(r'\b(security\s+deposit|deposit|1950\.5|ab\s*12|itemized\s+accounting|trust\s+account|cleaning\s+fee|deduction)\b', re.IGNORECASE),
-        ["security-deposit", "deposit-accounting", "statutory-limit"]
+        ("security-deposit", "deposit-accounting", "statutory-limit")
     ),
     (
         "Just Cause",
         re.compile(r'\b(just\s+cause|1946\.2|ab\s*1482|owner\s+(?:move-in|occupancy)|relocation\s+payment|notice\s+to\s+quit|at-fault|no-fault)\b', re.IGNORECASE),
-        ["just-cause", "eviction-defense", "notice-to-quit"]
+        ("just-cause", "eviction-defense", "notice-to-quit")
     ),
     (
         "Habitability",
         re.compile(r'\b(habitab|1941\.1|substandard|mold|waterproof|plumbing|hot\s+water|heating|weatherproof|infest)\b', re.IGNORECASE),
-        ["habitability", "substandard-housing", "implied-warranty"]
+        ("habitability", "substandard-housing", "implied-warranty")
     ),
     (
         "Rent Control",
         re.compile(r'\b(rent\s+(?:adjustment|increase|cap|board|stabilization)|8\.22|allowable\s+rent|cpi|banked\s+rent)\b', re.IGNORECASE),
-        ["rent-control", "rent-increase", "ordinance-compliance"]
+        ("rent-control", "rent-increase", "ordinance-compliance")
     ),
     (
         "Self-Help Eviction",
         re.compile(r'\b(lockout|lock\s+out|shut\s+off|789\.3|utility\s+shutoff|interruption\s+of\s+service)\b', re.IGNORECASE),
-        ["self-help-eviction", "lockout", "statutory-penalty"]
+        ("self-help-eviction", "lockout", "statutory-penalty")
     ),
     (
         "Lease Terms",
         re.compile(r'\b(lease|tenancy|agreement|covenant|premises|term\s+of\s+lease|tenant\s+shall|landlord\s+shall)\b', re.IGNORECASE),
-        ["lease-terms", "contract-clause", "tenancy-rules"]
-    )
-]
+        ("lease-terms", "contract-clause", "tenancy-rules")
+    ),
+)
 
+
+def get_doctrine_patterns():
+    """Return immutable compiled doctrine patterns (ARCH-01)."""
+    return DOCTRINE_PATTERNS
+
+
+CITATION_PATTERNS = (
+    r'Cal(?:ifornia)?\.?\s*Civ(?:il)?\.?\s*Code\s*§*\s*([0-9\.\(\)a-zA-Z]+)',
+    r'Cal(?:ifornia)?\.?\s*C\.?C\.?P\.?\s*§*\s*([0-9\.\(\)a-zA-Z]+)',
+    r'OMC\s*§*\s*([0-9\.\(\)a-zA-Z]+)',
+    r'Oakland\s*Municipal\s*Code\s*§*\s*([0-9\.\(\)a-zA-Z]+)',
+)
+
+COMPILED_CITATION_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE) for pattern in CITATION_PATTERNS
+)
 
 
 def extract_legal_slots(content: str) -> Dict[str, Any]:
@@ -126,15 +142,10 @@ def extract_legal_slots(content: str) -> Dict[str, Any]:
         if "relocation" in content_lower:
             slots["relocation_assistance_months"] = 1.0
 
-    # 7. Normalized Citations
+    # 7. Normalized Citations (pre-compiled, PERF-01)
     cites = []
-    for pattern in [
-        r'Cal(?:ifornia)?\.?\s*Civ(?:il)?\.?\s*Code\s*§*\s*([0-9\.\(\)a-zA-Z]+)',
-        r'Cal(?:ifornia)?\.?\s*C\.?C\.?P\.?\s*§*\s*([0-9\.\(\)a-zA-Z]+)',
-        r'OMC\s*§*\s*([0-9\.\(\)a-zA-Z]+)',
-        r'Oakland\s*Municipal\s*Code\s*§*\s*([0-9\.\(\)a-zA-Z]+)'
-    ]:
-        found = re.findall(pattern, content, re.IGNORECASE)
+    for compiled in COMPILED_CITATION_PATTERNS:
+        found = compiled.findall(content)
         for f in found:
             cites.append(f.strip())
     if cites:
@@ -235,7 +246,7 @@ def tag_chunk_with_llm(
                         "temperature": 0.1,
                         "num_predict": 150,
                         "top_p": 0.9,
-                        "num_ctx": 4096
+                        "num_ctx": 16384
                     }
                 }
             )

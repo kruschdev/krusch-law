@@ -7,7 +7,13 @@ import hashlib
 import logging
 from typing import Optional, List, Dict, Tuple, Any
 from datetime import datetime, timezone
-import pandas as pd
+# Optional dependency: pandas is only required for Parquet dataset ingestion (`pip install .[ingest]`).
+try:
+    import pandas as pd
+    HAS_PANDAS = True
+except ImportError:
+    pd = None  # type: ignore[assignment]
+    HAS_PANDAS = False
 from sqlalchemy.orm import Session
 
 from .config import settings
@@ -1191,7 +1197,12 @@ def ingest_locus_parquet(
         own_session = True
 
     try:
-        df = pd.read_parquet(file_path)
+        if not HAS_PANDAS or pd is None:
+            raise ImportError("Parquet engine not installed; install pyarrow or fastparquet")
+        try:
+            df = pd.read_parquet(file_path)
+        except ImportError as imp_err:
+            raise ImportError("Parquet engine not installed; install pyarrow or fastparquet") from imp_err
         logger.info(f"Loaded Parquet dataset from '{file_path}' ({len(df)} total rows). Processing limit: {limit}")
 
         col_map: Dict[str, str] = {}
@@ -1335,6 +1346,8 @@ def process_parquet_job(job_id: str, file_path: str, limit: int = 250):
         job.stage = "parsing"
         db.commit()
 
+        if not HAS_PANDAS or pd is None:
+            raise RuntimeError("pandas is required for Parquet ingestion (`pip install pandas pyarrow`).")
         df = pd.read_parquet(file_path)
         job.total_rows = min(len(df), limit)
         job.stage = "embedding"

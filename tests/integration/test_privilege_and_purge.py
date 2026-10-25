@@ -84,6 +84,32 @@ class TestPrivilegeAndPurgeIntegration(KruschLawTestCase):
         # Legacy plaintext pass-through
         self.assertEqual(EvidenceEncryptor.decrypt_text("legacy plaintext"), "legacy plaintext")
 
+    def test_encrypt_at_rest_fails_without_configured_key(self):
+        """
+        SEC-01: EvidenceEncryptor must raise RuntimeError when neither
+        EVIDENCE_ENCRYPTION_KEY nor API_KEY is configured (no hardcoded secret fallback).
+        """
+        orig_cipher = EvidenceEncryptor._cipher
+        orig_ev_key = getattr(src.backend.config.settings, "EVIDENCE_ENCRYPTION_KEY", None)
+        orig_api_key = src.backend.config.settings.API_KEY
+        orig_env_ev = os.environ.pop("EVIDENCE_ENCRYPTION_KEY", None)
+        orig_env_api = os.environ.pop("API_KEY", None)
+        try:
+            EvidenceEncryptor._cipher = None
+            src.backend.config.settings.EVIDENCE_ENCRYPTION_KEY = None
+            src.backend.config.settings.API_KEY = None
+            with self.assertRaises(RuntimeError) as ctx:
+                EvidenceEncryptor.encrypt_text("confidential exhibit")
+            self.assertIn("Neither EVIDENCE_ENCRYPTION_KEY nor API_KEY is configured", str(ctx.exception))
+        finally:
+            EvidenceEncryptor._cipher = orig_cipher
+            src.backend.config.settings.EVIDENCE_ENCRYPTION_KEY = orig_ev_key
+            src.backend.config.settings.API_KEY = orig_api_key
+            if orig_env_ev is not None:
+                os.environ["EVIDENCE_ENCRYPTION_KEY"] = orig_env_ev
+            if orig_env_api is not None:
+                os.environ["API_KEY"] = orig_env_api
+
     def test_verifiable_cryptographic_purge_flow(self):
         """
         Verifiable Purge must:
