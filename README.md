@@ -232,7 +232,7 @@ KruschLaw is built under the assumption that law office infrastructure handles s
 ### 2. Threat Model Boundaries
 | Asset / Threat | KruschLaw Countermeasure | Operator Responsibility |
 |---|---|---|
-| **Cloud LLM Data Leakage** | 100% on-premise local Ollama inference (`bge-large`, `qwen2.5-coder`). Zero cloud egress. | Verify host Ollama does not bind to public external interfaces. |
+| **Cloud LLM Data Leakage** | 100% on-premise local Ollama inference (`snowflake-arctic-embed2`, `qwen2.5-coder`). Zero cloud egress. | Verify host Ollama does not bind to public external interfaces. |
 | **SaaS Vector DB Subpoenas** | All embeddings stored in local PostgreSQL 16 + pgvector or local SQLite instance. | Enable full-disk encryption (LUKS / FileVault) on host machines. |
 | **Cross-Matter Contamination** | Strict relational foreign key partitioning and query isolation between matters. | Restrict matter access via distinct attorney session tokens. |
 | **Silent Temporal Law Drift** | First-class `as_of_date` gating on all search and resolution calls. | Ensure user supplies accurate lease/incident dates for historical claims. |
@@ -564,8 +564,8 @@ Evaluates 25 realistic municipal and statutory fact patterns from `data/eval/gol
 | **Distractor / Stale Law Leaks** | 0 | **0** | Repealed or inapplicable statutes leaking as controlling |
 | **Mean Retrieval Latency** | < 250 ms | **127.2 ms** | Hybrid lexical + semantic ranking latency |
 
-### [Gate 2] Unmocked Embedding Gate (Real BGE-Large 1024-d Vectors)
-Evaluates pure dense vector similarity across frozen, unmocked `bge-large` 1024-dimensional embeddings checked into `data/eval/embeddings/`:
+### [Gate 2] Unmocked Embedding Gate (Real `snowflake-arctic-embed2` 1024-d Vectors)
+Evaluates pure dense vector similarity across frozen, unmocked `snowflake-arctic-embed2` (`8K` ctx) 1024-dimensional embeddings checked into `data/eval/embeddings/`:
 
 | Metric | Target | Measured Score | Evaluation Description |
 |---|---|---|---|
