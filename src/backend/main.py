@@ -1,10 +1,13 @@
 import asyncio
-import re
-import uuid
-import time
 import hashlib
+import inspect
 import json
 import logging
+import os
+import re
+import sys
+import time
+import uuid
 from contextlib import asynccontextmanager
 from typing import Optional, List, Dict, Any
 from fastapi import (
@@ -12,7 +15,6 @@ from fastapi import (
     BackgroundTasks, UploadFile, File, Form, Request, Response
 )
 from fastapi.security import APIKeyHeader
-from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -38,6 +40,355 @@ from .ingest import (
 )
 from .checklist import generate_defense_checklist, assemble_statutory_letter
 
+_MONOREPO_LIB_PY = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "lib-py")
+)
+if os.path.isdir(_MONOREPO_LIB_PY) and _MONOREPO_LIB_PY not in sys.path:
+    sys.path.insert(0, _MONOREPO_LIB_PY)
+
+try:
+    from krusch_toolkit.fastapi_app import create_fastapi_app, error_envelope, ok_envelope
+except ImportError:  # pragma: no cover - standalone CI clone fallback without monorepo lib-py
+    _FALLBACK_HTTP_CODES: Dict[int, str] = {
+        400: "BAD_REQUEST",
+        401: "UNAUTHORIZED",
+        403: "FORBIDDEN",
+        404: "NOT_FOUND",
+        405: "METHOD_NOT_ALLOWED",
+        408: "REQUEST_TIMEOUT",
+        409: "CONFLICT",
+        413: "PAYLOAD_TOO_LARGE",
+        422: "VALIDATION_ERROR",
+        423: "LOCKED",
+        424: "FAILED_DEPENDENCY",
+        429: "RATE_LIMITED",
+        500: "INTERNAL_ERROR",
+        502: "BAD_GATEWAY",
+        503: "SERVICE_UNAVAILABLE",
+        504: "GATEWAY_TIMEOUT",
+    }
+
+    def ok_envelope(
+        tool: str, summary: str, data: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        return {
+            "ok": True,
+            "tool": str(tool or "fastapi"),
+            "summary": str(summary or "OK"),
+            "data": {} if data is None else data,
+        }
+
+    def error_envelope(
+        code: str, message: str, details: Any = None, tool: str = "fastapi"
+    ) -> Dict[str, Any]:
+        resolved_code = str(code or "INTERNAL_ERROR")
+        resolved_message = str(message or "Request failed")
+        return {
+            "ok": False,
+            "tool": str(tool or "fastapi"),
+            "summary": str(message or code or "Request failed"),
+            "error": {
+                "code": resolved_code,
+                "message": resolved_message,
+                **({"details": details} if details is not None else {}),
+            },
+        }
+
+    def _build_standalone_fastapi_app(
+        title: str = "Krusch Service",
+        version: str = "1.0.0",
+        *,
+        description: str = "",
+        docs_url: Optional[str] = "/docs",
+        redoc_url: Optional[str] = "/redoc",
+        service_name: Optional[str] = None,
+        cors_origins: Optional[List[str]] = None,
+        allow_credentials: Optional[bool] = None,
+        lifespan: Any = None,
+        health_check: Any = None,
+        flatten_health_payload: bool = False,
+        legacy_error_detail: bool = False,
+        startup_hooks: Optional[List[Any]] = None,
+        shutdown_hooks: Optional[List[Any]] = None,
+        logger: Any = None,
+    ) -> FastAPI:
+        from fastapi.encoders import jsonable_encoder
+        from fastapi.exceptions import RequestValidationError
+        from fastapi.middleware.cors import CORSMiddleware
+        from fastapi.responses import JSONResponse
+        from starlette.exceptions import HTTPException as StarletteHTTPException
+
+        resolved_name = (
+            service_name.strip()
+            if service_name and service_name.strip()
+            else (
+                re.sub(r"[^a-z0-9]+", "-", (title or "krusch-service").lower()).strip("-")
+                or "krusch-service"
+            )
+        )
+        active_logger = logger or logging.getLogger(resolved_name)
+
+        if cors_origins is None:
+            resolved_origins = ["*"]
+        else:
+            resolved_origins = [
+                o.strip()
+                for o in cors_origins
+                if isinstance(o, str)
+                and "\r" not in o
+                and "\n" not in o
+                and o.strip()
+                and o.strip().lower() not in ("null", "false")
+            ]
+        safe_for_creds = len(resolved_origins) > 0 and "*" not in resolved_origins
+        resolved_allow_creds = (
+            safe_for_creds
+            if allow_credentials is None
+            else (bool(allow_credentials) and safe_for_creds)
+        )
+
+        start_list = list(startup_hooks or [])
+        stop_list = list(shutdown_hooks or [])
+
+        if start_list or stop_list:
+            @asynccontextmanager
+            async def _composed_lifespan(app_obj: Any):
+                primary_exc: Optional[BaseException] = None
+                try:
+                    for hook in start_list:
+                        res = hook()
+                        if inspect.isawaitable(res):
+                            await res
+                    if lifespan is not None:
+                        async with lifespan(app_obj):
+                            yield
+                    else:
+                        yield
+                except BaseException as exc:
+                    primary_exc = exc
+                    raise
+                finally:
+                    first_err: Optional[Exception] = None
+                    for hook in stop_list:
+                        try:
+                            res = hook()
+                            if inspect.isawaitable(res):
+                                await res
+                        except Exception as exc:
+                            active_logger.exception("Shutdown hook failed in %s", resolved_name)
+                            if first_err is None:
+                                first_err = exc
+                    if first_err is not None and primary_exc is None:
+                        raise first_err
+
+            effective_lifespan: Any = _composed_lifespan
+        else:
+            effective_lifespan = lifespan
+
+        app_instance = FastAPI(
+            title=title,
+            description=description,
+            version=version,
+            docs_url=docs_url,
+            redoc_url=redoc_url,
+            lifespan=effective_lifespan,
+        )
+        app_instance.add_middleware(
+            CORSMiddleware,
+            allow_origins=resolved_origins,
+            allow_credentials=resolved_allow_creds,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
+        def _clean_token(raw: Optional[str]) -> str:
+            return raw.replace("\r", "").replace("\n", "").strip() if raw else ""
+
+        def _attach_headers(req: Any, resp: Any) -> None:
+            state = getattr(req, "state", None)
+            req_id = getattr(state, "request_id", None)
+            if not req_id:
+                req_id = _clean_token(req.headers.get("x-request-id")) or str(uuid.uuid4())
+                if state is not None:
+                    state.request_id = req_id
+            started = getattr(state, "request_start_time", None)
+            elapsed_ms = (
+                max(0.0, (time.perf_counter() - started) * 1000.0)
+                if started is not None
+                else 0.0
+            )
+            resp.headers["X-Request-ID"] = str(req_id)
+            resp.headers["X-Response-Time-Ms"] = f"{elapsed_ms:.2f}"
+            resp.headers["X-Content-Type-Options"] = "nosniff"
+
+        def _attach_cors_fallback(req: Any, resp: Any) -> None:
+            if not resolved_origins or "access-control-allow-origin" in resp.headers:
+                return
+            if "*" in resolved_origins:
+                resp.headers["Access-Control-Allow-Origin"] = "*"
+                return
+            existing_vary = resp.headers.get("vary", "")
+            vary_tokens = [v.strip().lower() for v in existing_vary.split(",") if v.strip()]
+            if "origin" not in vary_tokens:
+                resp.headers["Vary"] = f"{existing_vary}, Origin" if existing_vary else "Origin"
+            raw_origin = req.headers.get("origin")
+            if isinstance(raw_origin, str) and "\r" not in raw_origin and "\n" not in raw_origin:
+                clean_origin = raw_origin.strip()
+                if (
+                    clean_origin
+                    and clean_origin.lower() not in ("null", "false")
+                    and clean_origin in resolved_origins
+                ):
+                    resp.headers["Access-Control-Allow-Origin"] = clean_origin
+                    if resolved_allow_creds:
+                        resp.headers["Access-Control-Allow-Credentials"] = "true"
+
+        @app_instance.middleware("http")
+        async def _request_context_middleware(req: Any, call_next: Any) -> Any:
+            req.state.request_id = _clean_token(req.headers.get("x-request-id")) or str(uuid.uuid4())
+            req.state.request_start_time = time.perf_counter()
+            resp = await call_next(req)
+            _attach_headers(req, resp)
+            return resp
+
+        @app_instance.exception_handler(StarletteHTTPException)
+        async def _http_exception_handler(req: Any, exc: Any) -> Any:
+            status_code = int(getattr(exc, "status_code", 500) or 500)
+            code = _FALLBACK_HTTP_CODES.get(status_code, f"HTTP_{status_code}")
+            raw_detail = getattr(exc, "detail", None)
+            details: Any = None
+            if isinstance(raw_detail, str):
+                message = raw_detail
+            elif isinstance(raw_detail, dict):
+                code = str(raw_detail.get("code") or code)
+                message = str(
+                    raw_detail.get("message") or raw_detail.get("detail") or f"HTTP {status_code}"
+                )
+                details = raw_detail.get("details", raw_detail)
+            elif raw_detail is not None:
+                message = f"HTTP {status_code}"
+                details = jsonable_encoder(raw_detail)
+            else:
+                message = f"HTTP {status_code}"
+
+            err_content = error_envelope(code, message, details=details, tool=resolved_name)
+            if legacy_error_detail:
+                err_content["detail"] = (
+                    jsonable_encoder(raw_detail) if raw_detail is not None else message
+                )
+            resp = JSONResponse(
+                status_code=status_code,
+                content=err_content,
+                headers=dict(getattr(exc, "headers", None) or {}),
+            )
+            _attach_headers(req, resp)
+            _attach_cors_fallback(req, resp)
+            return resp
+
+        @app_instance.exception_handler(RequestValidationError)
+        async def _validation_exception_handler(req: Any, exc: Any) -> Any:
+            encoded_errors = jsonable_encoder(exc.errors())
+            err_content = error_envelope(
+                "VALIDATION_ERROR",
+                "Request validation failed",
+                details=encoded_errors,
+                tool=resolved_name,
+            )
+            if legacy_error_detail:
+                err_content["detail"] = encoded_errors
+            resp = JSONResponse(status_code=422, content=err_content)
+            _attach_headers(req, resp)
+            _attach_cors_fallback(req, resp)
+            return resp
+
+        @app_instance.exception_handler(Exception)
+        async def _unhandled_exception_handler(req: Any, _exc: Exception) -> Any:
+            active_logger.exception(
+                "Unhandled exception in %s on %s %s",
+                resolved_name,
+                getattr(req, "method", "UNKNOWN"),
+                getattr(getattr(req, "url", None), "path", "/"),
+            )
+            resp = JSONResponse(
+                status_code=500,
+                content=error_envelope(
+                    "INTERNAL_ERROR", "Internal server error", tool=resolved_name
+                ),
+            )
+            _attach_headers(req, resp)
+            _attach_cors_fallback(req, resp)
+            return resp
+
+        accepts_req = False
+        if health_check is not None:
+            try:
+                sig = inspect.signature(health_check)
+                accepts_req = any(
+                    p.kind
+                    in (
+                        inspect.Parameter.POSITIONAL_ONLY,
+                        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                        inspect.Parameter.VAR_POSITIONAL,
+                    )
+                    for p in sig.parameters.values()
+                )
+            except (TypeError, ValueError):
+                accepts_req = False
+
+        async def _evaluate_health(req: Any, *, flatten: bool) -> Any:
+            extra: Any = None
+            if health_check is not None:
+                try:
+                    extra = health_check(req) if accepts_req else health_check()
+                    if inspect.isawaitable(extra):
+                        extra = await extra
+                except Exception as exc:
+                    active_logger.warning("Health check failed in %s: %s", resolved_name, exc)
+                    msg = str(exc) or "Service unhealthy"
+                    err_body = error_envelope("UNHEALTHY", msg, tool=resolved_name)
+                    if legacy_error_detail:
+                        err_body["detail"] = msg
+                    return JSONResponse(status_code=503, content=err_body)
+
+                if extra is False or (isinstance(extra, dict) and extra.get("ok") is False):
+                    msg = (
+                        str(extra.get("summary") or extra.get("message") or "Service unhealthy")
+                        if isinstance(extra, dict)
+                        else "Service unhealthy"
+                    )
+                    err_body = error_envelope(
+                        "UNHEALTHY",
+                        msg,
+                        details=extra if isinstance(extra, dict) else None,
+                        tool=resolved_name,
+                    )
+                    if legacy_error_detail:
+                        err_body["detail"] = msg
+                    return JSONResponse(status_code=503, content=err_body)
+
+            payload = {
+                "service": resolved_name,
+                "version": version,
+                **(extra if isinstance(extra, dict) else {}),
+            }
+            env = ok_envelope(resolved_name, "Service healthy", payload)
+            body = {**payload, **env} if flatten else env
+            return JSONResponse(status_code=200, content=body)
+
+        async def _probe_health(request: Request) -> Any:
+            return await _evaluate_health(request, flatten=bool(flatten_health_payload))
+
+        async def _probe_doctor(request: Request) -> Any:
+            return await _evaluate_health(request, flatten=False)
+
+        app_instance.add_api_route("/health", _probe_health, methods=["GET"], tags=["ops"])
+        app_instance.add_api_route("/doctor", _probe_doctor, methods=["GET"], tags=["ops"])
+        return app_instance
+
+    create_fastapi_app = _build_standalone_fastapi_app
+
+_LEGO_ENVELOPE_EXPORTS = (ok_envelope, error_envelope)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("kruschlaw.api")
 
@@ -57,13 +408,56 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(
+def health_check():
+    """Health check endpoint with verified runtime security and inference inspection."""
+    is_dev = getattr(settings, "ENVIRONMENT", "development").lower() in ("development", "dev", "test")
+    ollama_local = is_loopback_or_private_host(settings.OLLAMA_BASE_URL)
+    embed_local = is_loopback_or_private_host(settings.OLLAMA_EMBED_HOST)
+
+    if not is_dev:
+        return {
+            "status": "healthy",
+            "service": "kruschlaw-backend",
+            "version": "0.3.0",
+            "auth_enforced": True,
+            "air_gap_verified": bool(ollama_local and embed_local)
+        }
+
+    return {
+        "status": "healthy",
+        "service": "kruschlaw-backend",
+        "version": "0.3.0",
+        "security": {
+            "auth_enabled": bool(settings.API_KEY),
+            "ollama_host_is_local_or_private": ollama_local,
+            "embed_host_is_local_or_private": embed_local,
+            "network_isolation_assessment": (
+                "Verified loopback / private network inference endpoints."
+                if (ollama_local and embed_local)
+                else "Caution: One or more inference endpoints resolve outside private subnets."
+            )
+        },
+        "models": {
+            "embeddings": settings.OLLAMA_EMBED_MODEL,
+            "reasoning": settings.OLLAMA_LLM_MODEL
+        }
+    }
+
+
+app = create_fastapi_app(
     title="KruschLaw API",
     description="Air-Gapped, Privacy-First Legal RAG & Ordinance Intelligence Engine (Research Prototype)",
     version="0.3.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan
+    service_name="kruschlaw-backend",
+    cors_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    lifespan=lifespan,
+    health_check=health_check,
+    flatten_health_payload=True,
+    legacy_error_detail=True,
+    logger=logger,
 )
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -105,15 +499,6 @@ def verify_api_key(
             detail="Unauthorized: Missing or invalid X-API-Key or X-Session-Token header. Loopback is not authentication."
         )
     return token
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 def get_db():
@@ -408,42 +793,6 @@ class StatuteRelationResponse(BaseModel):
 
 
 # --- API Endpoints ---
-
-@app.get("/health", tags=["System"])
-def health_check():
-    """Health check endpoint with verified runtime security and inference inspection."""
-    is_dev = getattr(settings, "ENVIRONMENT", "development").lower() in ("development", "dev", "test")
-    ollama_local = is_loopback_or_private_host(settings.OLLAMA_BASE_URL)
-    embed_local = is_loopback_or_private_host(settings.OLLAMA_EMBED_HOST)
-
-    if not is_dev:
-        return {
-            "status": "healthy",
-            "service": "kruschlaw-backend",
-            "version": "0.3.0",
-            "auth_enforced": True,
-            "air_gap_verified": bool(ollama_local and embed_local)
-        }
-
-    return {
-        "status": "healthy",
-        "service": "kruschlaw-backend",
-        "version": "0.3.0",
-        "security": {
-            "auth_enabled": bool(settings.API_KEY),
-            "ollama_host_is_local_or_private": ollama_local,
-            "embed_host_is_local_or_private": embed_local,
-            "network_isolation_assessment": (
-                "Verified loopback / private network inference endpoints."
-                if (ollama_local and embed_local)
-                else "Caution: One or more inference endpoints resolve outside private subnets."
-            )
-        },
-        "models": {
-            "embeddings": settings.OLLAMA_EMBED_MODEL,
-            "reasoning": settings.OLLAMA_LLM_MODEL
-        }
-    }
 
 
 @app.post("/api/cases", response_model=CaseResponse, status_code=201, tags=["Cases"])
