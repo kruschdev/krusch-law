@@ -30,4 +30,4 @@ If you identify a security vulnerability, privilege escalation risk, or potentia
 
 1. Please do **NOT** disclose the vulnerability in public GitHub issues or forums.
 2. Email the maintainer directly at **security@krusch.io** (or open a confidential GitHub Security Advisory) with detailed reproduction steps, proof of concept, and impact assessment.
-3. We will acknowledge receipt within 48 hours and work with you on a coordinated fix and patch release.
+3. I will acknowledge receipt within 48 hours and work with you on a coordinated fix and patch release.

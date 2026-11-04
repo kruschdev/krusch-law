@@ -2,7 +2,7 @@
 
 Welcome, and thank you for contributing to KruschLaw!
 
-KruschLaw is an air-gapped, sovereign legal intelligence engine and versioned statutory graph. Because our users rely on deterministic legal precedence and strict statutory grounding, all contributions must uphold non-negotiable architectural invariants.
+KruschLaw is an air-gapped, sovereign legal intelligence engine and versioned statutory graph. Because users rely on deterministic legal precedence and strict statutory grounding, all contributions must uphold non-negotiable architectural invariants.
 
 ---
 
